@@ -7,7 +7,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Pencil, Plus } from "lucide-react";
 
-import { farmerSchema, type FarmerInput } from "@/server/farmers/schema";
+import {
+  farmerSchema,
+  type FarmerContacts,
+  type FarmerInput,
+} from "@/server/farmers/schema";
 import { createFarmer, updateFarmer } from "@/server/farmers/actions";
 import type { Farmer } from "@/lib/generated/prisma/client";
 import { Button } from "@/components/ui/button";
@@ -38,11 +42,22 @@ export function FarmerFormDialog({ mode, farmer }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
+  // contacts теперь объект в Json-колонке — читаем безопасно.
+  const c =
+    farmer?.contacts && typeof farmer.contacts === "object"
+      ? (farmer.contacts as Partial<FarmerContacts>)
+      : {};
+
   const form = useForm<FarmerInput>({
     resolver: zodResolver(farmerSchema),
     defaultValues: {
       name: farmer?.name ?? "",
-      contacts: typeof farmer?.contacts === "string" ? farmer.contacts : "",
+      contacts: {
+        phone: c.phone ?? "",
+        contactPerson: c.contactPerson ?? "",
+        messenger: c.messenger ?? "",
+        email: c.email ?? "",
+      },
       notes: farmer?.notes ?? "",
     },
   });
@@ -112,12 +127,55 @@ export function FarmerFormDialog({ mode, farmer }: Props) {
             />
             <FormField
               control={form.control}
-              name="contacts"
+              name="contacts.phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Контакты</FormLabel>
+                  <FormLabel>Телефон *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Телефон, e-mail…" {...field} />
+                    <Input
+                      type="tel"
+                      placeholder="+7 (900) 123-45-67"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contacts.contactPerson"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Контактное лицо</FormLabel>
+                  <FormControl>
+                    <Input placeholder="ФИО" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contacts.messenger"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Мессенджер</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Telegram / WhatsApp" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="contacts.email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>E-mail</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="mail@example.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

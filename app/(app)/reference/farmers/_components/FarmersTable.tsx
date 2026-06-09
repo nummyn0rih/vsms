@@ -2,10 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { RotateCcw, Trash2 } from "lucide-react";
 
 import type { Farmer } from "@/lib/generated/prisma/client";
-import { deactivateFarmer } from "@/server/farmers/actions";
+import type { FarmerContacts } from "@/server/farmers/schema";
+import { setFarmerActive } from "@/server/farmers/actions";
+import { normalizePhone } from "@/lib/validators";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,15 +32,33 @@ import {
 } from "@/components/ui/alert-dialog";
 import { FarmerFormDialog } from "./FarmerFormDialog";
 
-function contactsText(value: Farmer["contacts"]) {
-  return typeof value === "string" && value.length > 0 ? value : "—";
+// contacts хранится объектом в Json-колонке.
+function readContacts(value: Farmer["contacts"]): Partial<FarmerContacts> {
+  return value && typeof value === "object"
+    ? (value as Partial<FarmerContacts>)
+    : {};
+}
+
+function ContactsCell({ farmer }: { farmer: Farmer }) {
+  const c = readContacts(farmer.contacts);
+  if (!c.phone) return <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-col">
+      <a href={`tel:${normalizePhone(c.phone)}`} className="hover:underline">
+        {c.phone}
+      </a>
+      {c.contactPerson && (
+        <span className="text-xs text-muted-foreground">{c.contactPerson}</span>
+      )}
+    </div>
+  );
 }
 
 function DeactivateButton({ farmer }: { farmer: Farmer }) {
   const router = useRouter();
 
   async function onConfirm() {
-    const res = await deactivateFarmer(farmer.id);
+    const res = await setFarmerActive(farmer.id, false);
     if (res.ok) {
       toast.success("Фермер деактивирован");
       router.refresh();
@@ -71,6 +91,26 @@ function DeactivateButton({ farmer }: { farmer: Farmer }) {
   );
 }
 
+function ActivateButton({ farmer }: { farmer: Farmer }) {
+  const router = useRouter();
+
+  async function onClick() {
+    const res = await setFarmerActive(farmer.id, true);
+    if (res.ok) {
+      toast.success("Фермер активирован");
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  return (
+    <Button variant="ghost" size="icon-sm" title="Активировать" onClick={onClick}>
+      <RotateCcw className="size-4" />
+    </Button>
+  );
+}
+
 export function FarmersTable({ farmers }: { farmers: Farmer[] }) {
   return (
     <Table>
@@ -93,7 +133,9 @@ export function FarmersTable({ farmers }: { farmers: Farmer[] }) {
         {farmers.map((farmer) => (
           <TableRow key={farmer.id}>
             <TableCell className="font-medium">{farmer.name}</TableCell>
-            <TableCell>{contactsText(farmer.contacts)}</TableCell>
+            <TableCell>
+              <ContactsCell farmer={farmer} />
+            </TableCell>
             <TableCell>
               {farmer.active ? (
                 <Badge variant="secondary">Активен</Badge>
@@ -105,7 +147,11 @@ export function FarmersTable({ farmers }: { farmers: Farmer[] }) {
               <RoleGate allow={["admin"]}>
                 <div className="flex justify-end gap-1">
                   <FarmerFormDialog mode="edit" farmer={farmer} />
-                  {farmer.active && <DeactivateButton farmer={farmer} />}
+                  {farmer.active ? (
+                    <DeactivateButton farmer={farmer} />
+                  ) : (
+                    <ActivateButton farmer={farmer} />
+                  )}
                 </div>
               </RoleGate>
             </TableCell>

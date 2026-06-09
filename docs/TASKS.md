@@ -68,6 +68,10 @@
 > Каждый справочник по одному паттерну. Soft delete (active=false), не физическое удаление (BR-15).
 
 - [x] Фермеры (Farmer): список с фильтром, создание, правка, деактивация — ЭТАЛОН паттерна (`server/farmers/`, `app/(app)/reference/farmers/`)
+  - Эталон зафиксирован. Паттерны для копирования на остальные справочники:
+    1. `lib/validators.ts` — общий `phoneSchema` + `normalizePhone` (для tel:).
+    2. contacts — структурированный объект `{phone*, contactPerson?, messenger?, email?}` в Json-колонке (не плоская строка); раздельные поля формы через RHF dot-notation `contacts.phone`.
+    3. Soft-delete двусторонний: `setFarmerActive(id, active)` (одна server-action туда-обратно) + кнопка по статусу строки (Деактивировать с AlertDialog / Активировать). ChangeLog по полю active.
 - [ ] Культуры (Culture): + цветовая метка (color picker), + acceptance_type, + привязка PackagingType
 - [ ] Транспортные компании (TransportCompany)
 - [ ] Водители (Driver): сплошной список, фильтр по компании и фамилии, кликабельный телефон (`tel:`), поле info
