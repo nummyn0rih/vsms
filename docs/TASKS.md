@@ -31,16 +31,17 @@
 ### A1. Схема данных (Prisma)
 > Источник: DOMAIN.md раздел 2. Закладываем СРАЗУ все таблицы (схема заморожена), даже если UI к ним появится позже — это избавит от миграций в середине проекта.
 
-- [ ] Описать в `schema.prisma` справочники: Farmer, Culture, TransportCompany, Driver, PackagingType, Ingredient
-- [ ] Описать настройки: PackagingNorm, TripWeightNorm, IngredientRecipe, CalibreScheme, CalibreRange, SeasonConfig, AlertRule
-- [ ] Описать контракты: Contract, ContractLine
-- [ ] Описать операции: Shipment, ShipmentItem, AcceptanceAct, CalibreResult, MaterialShipment, MaterialShipmentItem, WeeklyPlan
-- [ ] Описать StockMovement (единый движок)
-- [ ] Описать доступ: User, ChangeLog
-- [ ] Проставить enums: status, role, kind, movement_type, acceptance_type, unit, item_kind
-- [ ] Проставить связи (FK), уникальные индексы (PackagingNorm уникум farmer+culture; act_number уникум)
-- [ ] `npx prisma migrate dev --name init` — первая миграция
-- [ ] `npx prisma studio` — проверить, что таблицы создались
+- [x] Описать в `schema.prisma` справочники: Farmer, Culture, TransportCompany, Driver, PackagingType, Ingredient
+- [x] Описать настройки: PackagingNorm, TripWeightNorm, IngredientRecipe, CalibreScheme, CalibreRange, SeasonConfig, AlertRule
+- [x] Описать контракты: Contract, ContractLine
+- [x] Описать операции: Shipment, ShipmentItem, AcceptanceAct, CalibreResult, MaterialShipment, MaterialShipmentItem, WeeklyPlan
+- [x] Описать StockMovement (единый движок)
+- [x] Описать доступ: User, ChangeLog (с этапа A2)
+- [x] Проставить enums: ShipmentStatus, Role, ItemKind, MovementType, AcceptanceType, IngredientUnit, PackagingKind, StockState, SourceDocType
+- [x] Проставить связи (FK), уникальные индексы (PackagingNorm/TripWeightNorm уникум farmer+culture; IngredientRecipe уникум culture+ingredient; CalibreScheme.culture_id; act_number; WeeklyPlan уникум year+week+culture)
+- [x] CHECK-констрейнты полиморфизма (StockMovement, MaterialShipmentItem) — raw SQL в миграции
+- [x] `npx prisma migrate dev --name full_schema` — миграция применена
+- [x] Проверка: CHECK срабатывает (smoke-insert отклонён), таблицы созданы
 
 **Критерий:** вся модель из DOMAIN.md существует в БД, миграция прошла.
 

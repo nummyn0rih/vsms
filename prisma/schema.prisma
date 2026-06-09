@@ -12,14 +12,411 @@ datasource db {
   provider = "postgresql"
 }
 
-// --- Доступ (DOMAIN.md разд. 2). Только то, что нужно для auth.
-// Остальная модель — в задаче A1.
+// =====================================================================
+// ENUMS (DOMAIN.md разд. 2-3)
+// =====================================================================
 
 enum Role {
   admin
   operator
   user
 }
+
+enum ShipmentStatus {
+  planned
+  sent
+  arrived
+  accepted
+}
+
+enum AcceptanceType {
+  simple
+  calibre
+}
+
+enum PackagingKind {
+  box
+  barrel
+}
+
+enum IngredientUnit {
+  kg
+  l
+}
+
+// Дискриминатор тары/ингредиента. Общий для StockMovement.kind и
+// MaterialShipmentItem.item_kind (одинаковые значения — DRY).
+enum ItemKind {
+  packaging
+  ingredient
+}
+
+// Типы движения склада (DOMAIN.md разд. 3).
+enum MovementType {
+  return // фермер→завод, авто из Shipment
+  delivery // завод→фермер, из MaterialShipment
+  transfer // фермер→фермер
+  scrap // годная→лом, та же локация
+  disposal // лом→out, утилизация
+  adjustment // ручная правка
+}
+
+// Состояние тары. Лом — это СОСТОЯНИЕ, не локация (DOMAIN.md разд. 3).
+// Для ингредиентов всегда null.
+enum StockState {
+  good // годная
+  scrap // лом
+}
+
+// Тип документа-источника движения (полиморфный, НЕ FK).
+enum SourceDocType {
+  shipment
+  material_shipment
+  manual
+}
+
+// =====================================================================
+// СПРАВОЧНИКИ (soft delete через active, BR-15)
+// =====================================================================
+
+model Farmer {
+  id       Int     @id @default(autoincrement())
+  name     String
+  contacts Json?
+  notes    String?
+  active   Boolean @default(true)
+
+  contracts             Contract[]
+  shipmentItems         ShipmentItem[]
+  packagingNorms        PackagingNorm[]
+  tripWeightNorms       TripWeightNorm[]
+  materialShipmentItems MaterialShipmentItem[]
+}
+
+model Culture {
+  id                Int            @id @default(autoincrement())
+  name              String
+  color             String // hex
+  acceptance_type   AcceptanceType
+  // nullable: учёт ведём только по переиспользуемой таре, не у всех культур она есть.
+  packaging_type_id Int?
+  active            Boolean        @default(true)
+
+  packagingType     PackagingType?     @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
+  calibreScheme     CalibreScheme? // 1:1, если acceptance_type = calibre
+  contractLines     ContractLine[]
+  shipmentItems     ShipmentItem[]
+  packagingNorms    PackagingNorm[]
+  tripWeightNorms   TripWeightNorm[]
+  ingredientRecipes IngredientRecipe[]
+  weeklyPlans       WeeklyPlan[]
+}
+
+model TransportCompany {
+  id     Int     @id @default(autoincrement())
+  name   String
+  notes  String?
+  active Boolean @default(true)
+
+  drivers Driver[]
+}
+
+model Driver {
+  id                   Int     @id @default(autoincrement())
+  full_name            String
+  phone                String?
+  transport_company_id Int
+  info                 String?
+  active               Boolean @default(true) // работает/уволен (BR-15)
+
+  transportCompany  TransportCompany   @relation(fields: [transport_company_id], references: [id], onDelete: Restrict)
+  shipments         Shipment[]
+  materialShipments MaterialShipment[]
+}
+
+model PackagingType {
+  id          Int           @id @default(autoincrement())
+  name        String
+  kind        PackagingKind
+  capacity_kg Decimal?      @db.Decimal(12, 3) // 200/250 для бочки; null для ящика
+  active      Boolean       @default(true)
+
+  cultures              Culture[]
+  stockMovements        StockMovement[]
+  materialShipmentItems MaterialShipmentItem[]
+}
+
+model Ingredient {
+  id     Int            @id @default(autoincrement())
+  name   String
+  unit   IngredientUnit
+  active Boolean        @default(true)
+
+  recipes               IngredientRecipe[]
+  stockMovements        StockMovement[]
+  materialShipmentItems MaterialShipmentItem[]
+}
+
+// =====================================================================
+// НАСТРОЙКИ
+// =====================================================================
+
+model PackagingNorm {
+  id                 Int     @id @default(autoincrement())
+  farmer_id          Int
+  culture_id         Int
+  avg_unit_weight_kg Decimal @db.Decimal(12, 3)
+
+  farmer  Farmer  @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+
+  @@unique([farmer_id, culture_id])
+}
+
+model TripWeightNorm {
+  id                     Int     @id @default(autoincrement())
+  farmer_id              Int
+  culture_id             Int
+  planned_trip_weight_kg Decimal @db.Decimal(12, 3)
+
+  farmer  Farmer  @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+
+  @@unique([farmer_id, culture_id])
+}
+
+model IngredientRecipe {
+  id                 Int     @id @default(autoincrement())
+  culture_id         Int
+  ingredient_id      Int
+  qty_per_kg_product Decimal @db.Decimal(12, 6)
+
+  culture    Culture    @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  ingredient Ingredient @relation(fields: [ingredient_id], references: [id], onDelete: Restrict)
+
+  @@unique([culture_id, ingredient_id])
+}
+
+model CalibreScheme {
+  id         Int @id @default(autoincrement())
+  culture_id Int @unique // Culture 1───1 CalibreScheme
+
+  culture Culture        @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  ranges  CalibreRange[]
+}
+
+model CalibreRange {
+  id          Int      @id @default(autoincrement())
+  scheme_id   Int
+  label       String
+  min_cm      Decimal? @db.Decimal(5, 2)
+  max_cm      Decimal? @db.Decimal(5, 2)
+  is_accepted Boolean
+
+  scheme  CalibreScheme   @relation(fields: [scheme_id], references: [id], onDelete: Cascade)
+  results CalibreResult[]
+}
+
+model SeasonConfig {
+  id              Int      @id @default(autoincrement())
+  season_year     Int      @unique // год начала сезона (июнь), BR-17
+  summer_start    DateTime
+  summer_end      DateTime
+  summer_workdays Int // дней/неделю летом (6, BR-18)
+  winter_workdays Int // дней/неделю зимой (5, BR-18)
+}
+
+model AlertRule {
+  id             Int      @id @default(autoincrement())
+  item_kind      ItemKind
+  item_id        Int // мягкий указатель (не FK): PackagingType.id или Ingredient.id
+  location_scope Int? // id локации (0=завод, Farmer.id) или null = все
+  threshold      Decimal  @db.Decimal(12, 3)
+}
+
+// =====================================================================
+// КОНТРАКТЫ
+// =====================================================================
+
+model Contract {
+  id          Int      @id @default(autoincrement())
+  farmer_id   Int
+  season_year Int
+  created_at  DateTime @default(now())
+  notes       String?
+
+  farmer Farmer         @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  lines  ContractLine[]
+}
+
+model ContractLine {
+  id           Int      @id @default(autoincrement())
+  contract_id  Int
+  culture_id   Int
+  volume_tons  Decimal  @db.Decimal(12, 3)
+  price_per_kg Decimal  @db.Decimal(12, 4)
+  created_at   DateTime @default(now())
+
+  contract      Contract       @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  culture       Culture        @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  shipmentItems ShipmentItem[]
+}
+
+// =====================================================================
+// ОПЕРАЦИИ — ядро отгрузок
+// =====================================================================
+
+model Shipment {
+  id             Int            @id @default(autoincrement())
+  code           String
+  departure_date DateTime?
+  arrival_date   DateTime?
+  status         ShipmentStatus @default(planned)
+  driver_id      Int
+  created_by     Int?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  driver Driver         @relation(fields: [driver_id], references: [id], onDelete: Restrict)
+  items  ShipmentItem[]
+}
+
+model ShipmentItem {
+  id                 Int      @id @default(autoincrement())
+  shipment_id        Int
+  farmer_id          Int
+  culture_id         Int
+  planned_weight_kg  Decimal  @db.Decimal(12, 3)
+  actual_weight_kg   Decimal? @db.Decimal(12, 3) // после перевески на воротах
+  contract_line_id   Int? // nullable до accepted (BR-8)
+  // СНИМОК результата приёмки = actual × Σ(принятых %). Перезаписывается ТОЛЬКО
+  // логикой пересчёта из акта (задача C). Напрямую не редактируется.
+  accepted_weight_kg Decimal? @db.Decimal(12, 3)
+
+  shipment      Shipment       @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
+  farmer        Farmer         @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  culture       Culture        @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  contractLine  ContractLine?  @relation(fields: [contract_line_id], references: [id], onDelete: Restrict)
+  acceptanceAct AcceptanceAct? // 1:1
+}
+
+model AcceptanceAct {
+  id               Int       @id @default(autoincrement())
+  shipment_item_id Int       @unique // 1:1
+  brak_percent     Decimal?  @db.Decimal(5, 2)
+  accepted_percent Decimal?  @db.Decimal(5, 2) // для simple
+  // СНИМОК = actual × brak% (та же логика перезаписи, что accepted_weight_kg).
+  brak_weight_kg   Decimal?  @db.Decimal(12, 3)
+  comment          String?
+  act_number       String    @unique // номер партии (BR-9)
+  weighed_at       DateTime?
+
+  shipmentItem   ShipmentItem    @relation(fields: [shipment_item_id], references: [id], onDelete: Cascade)
+  calibreResults CalibreResult[]
+}
+
+model CalibreResult {
+  id                Int     @id @default(autoincrement())
+  acceptance_act_id Int
+  calibre_range_id  Int
+  percent           Decimal @db.Decimal(5, 2)
+
+  acceptanceAct AcceptanceAct @relation(fields: [acceptance_act_id], references: [id], onDelete: Cascade)
+  calibreRange  CalibreRange  @relation(fields: [calibre_range_id], references: [id], onDelete: Restrict)
+}
+
+// =====================================================================
+// ОПЕРАЦИИ — логистика материалов
+// =====================================================================
+
+model MaterialShipment {
+  id             Int            @id @default(autoincrement())
+  code           String
+  departure_date DateTime?
+  arrival_date   DateTime?
+  status         ShipmentStatus @default(planned)
+  driver_id      Int
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  driver Driver                 @relation(fields: [driver_id], references: [id], onDelete: Restrict)
+  items  MaterialShipmentItem[]
+}
+
+model MaterialShipmentItem {
+  id                   Int      @id @default(autoincrement())
+  material_shipment_id Int
+  farmer_id            Int
+  item_kind            ItemKind
+  // Полиморфизм: ровно один FK заполнен, согласован с item_kind (CHECK в миграции).
+  packaging_type_id    Int?
+  ingredient_id        Int?
+  quantity             Decimal  @db.Decimal(12, 3)
+
+  materialShipment MaterialShipment @relation(fields: [material_shipment_id], references: [id], onDelete: Cascade)
+  farmer           Farmer           @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  packagingType    PackagingType?   @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
+  ingredient       Ingredient?      @relation(fields: [ingredient_id], references: [id], onDelete: Restrict)
+}
+
+// =====================================================================
+// ПЛАН
+// =====================================================================
+
+model WeeklyPlan {
+  id          Int     @id @default(autoincrement())
+  iso_year    Int
+  iso_week    Int
+  culture_id  Int
+  target_tons Decimal @db.Decimal(12, 3)
+
+  culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+
+  @@unique([iso_year, iso_week, culture_id])
+}
+
+// =====================================================================
+// СКЛАД-ДВИЖОК (единый, DOMAIN.md разд. 3)
+// =====================================================================
+
+model StockMovement {
+  id   Int      @id @default(autoincrement())
+  date DateTime @default(now())
+
+  kind              ItemKind // дискриминатор тары/ингредиента
+  // Полиморфизм: ровно один FK заполнен, согласован с kind (CHECK в миграции).
+  packaging_type_id Int?
+  ingredient_id     Int?
+
+  quantity Decimal @db.Decimal(12, 3)
+
+  // Локации — НЕ FK на отдельную таблицу. Локация = завод (фикс. id=0) ∪ Farmer.id.
+  // null = вне системы (например, утиль наружу). Лом/утиль — НЕ локации.
+  from_location_id Int?
+  to_location_id   Int?
+
+  // Состояние тары (годная/лом). Для ингредиентов всегда null.
+  from_state StockState?
+  to_state   StockState?
+
+  movement_type MovementType
+
+  // Источник движения — полиморфный мягкий указатель (НЕ FK).
+  source_doc_type SourceDocType?
+  source_doc_id   Int?
+
+  packagingType PackagingType? @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
+  ingredient    Ingredient?    @relation(fields: [ingredient_id], references: [id], onDelete: Restrict)
+
+  @@index([kind, packaging_type_id])
+  @@index([kind, ingredient_id])
+  @@index([from_location_id])
+  @@index([to_location_id])
+}
+
+// =====================================================================
+// ДОСТУП (этап A2, не трогаем структуру)
+// =====================================================================
 
 model User {
   id            Int         @id @default(autoincrement())
