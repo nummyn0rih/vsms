@@ -42,7 +42,7 @@ export const NAV: NavItem[] = [
     roles: ["admin"],
     children: [
       { href: "/reference/farmers", label: "Фермеры", enabled: true },
-      { href: "/reference/cultures", label: "Культуры" },
+      { href: "/reference/cultures", label: "Культуры", enabled: true },
       { href: "/reference/transport-companies", label: "Транспортные компании" },
       { href: "/reference/drivers", label: "Водители" },
       { href: "/reference/packaging-types", label: "Типы тары", enabled: true },
