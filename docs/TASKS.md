@@ -75,7 +75,7 @@
 - [ ] Культуры (Culture): + цветовая метка (color picker), + acceptance_type, + привязка PackagingType
 - [ ] Транспортные компании (TransportCompany)
 - [ ] Водители (Driver): сплошной список, фильтр по компании и фамилии, кликабельный телефон (`tel:`), поле info
-- [ ] Типы тары (PackagingType): ящик/бочка, capacity_kg
+- [x] Типы тары (PackagingType): ящик/бочка, capacity_kg — условная валидация zod (barrel→capacity обязателен, box→null), поле ёмкости условно по kind (`server/packaging-types/`, `app/(app)/reference/packaging-types/`)
 - [ ] Ингредиенты (Ingredient)
 
 **Критерий:** все справочники заполняемы, фильтры работают, телефон кликабелен.

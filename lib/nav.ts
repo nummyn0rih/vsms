@@ -45,7 +45,7 @@ export const NAV: NavItem[] = [
       { href: "/reference/cultures", label: "Культуры" },
       { href: "/reference/transport-companies", label: "Транспортные компании" },
       { href: "/reference/drivers", label: "Водители" },
-      { href: "/reference/packaging-types", label: "Типы тары" },
+      { href: "/reference/packaging-types", label: "Типы тары", enabled: true },
       { href: "/reference/ingredients", label: "Ингредиенты" },
     ],
   },
