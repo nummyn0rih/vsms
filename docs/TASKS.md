@@ -12,10 +12,10 @@
 
 - [x] Создать Next.js проект (App Router + TypeScript): `npx create-next-app@latest`
 - [x] Установить Tailwind (идёт с create-next-app) и инициализировать shadcn/ui: `npx shadcn@latest init`
-- [ ] Поднять PostgreSQL (выбрать Neon или Supabase) — получить connection string
+- [x] Поднять PostgreSQL (выбрать Neon или Supabase) — получить connection string
 - [x] Установить Prisma: `npm i -D prisma` + `npm i @prisma/client`, `npx prisma init`
-- [ ] Прописать DATABASE_URL в `.env`, проверить подключение
-- [ ] Установить Auth.js (NextAuth)
+- [x] Прописать DATABASE_URL в `.env`, проверить подключение
+- [x] Установить Auth.js (NextAuth)
 - [x] Создать структуру папок: `app/`, `server/`, `prisma/`, `components/ui/`
 - [x] Инициализировать git, первый коммит
 - [x] Завести `.env.example` (без секретов) для памяти о нужных переменных
@@ -45,13 +45,13 @@
 **Критерий:** вся модель из DOMAIN.md существует в БД, миграция прошла.
 
 ### A2. Аутентификация и роли
-- [ ] Настроить Auth.js: вход по логину/паролю
-- [ ] Хранить роль (admin/operator/user) в сессии
-- [ ] Хеширование паролей (bcrypt/argon2)
-- [ ] Серверный guard: helper для проверки роли в server-функциях
-- [ ] Клиентский helper: скрытие элементов по роли
-- [ ] Создать первого admin-пользователя (сидом или вручную в Studio)
-- [ ] Страница логина, редирект неавторизованных
+- [x] Настроить Auth.js: вход по логину/паролю (Auth.js v5, Credentials)
+- [x] Хранить роль (admin/operator/user) в сессии (jwt/session callbacks)
+- [x] Хеширование паролей (bcrypt/argon2) — bcryptjs
+- [x] Серверный guard: helper для проверки роли в server-функциях (`server/auth/session.ts` requireRole)
+- [x] Клиентский helper: скрытие элементов по роли (`components/auth/RoleGate.tsx`)
+- [x] Создать первого admin-пользователя — сид `prisma/seed.ts` (создан admin, role=admin)
+- [x] Страница логина, редирект неавторизованных (`/login`, `proxy.ts`)
 
 **Критерий:** вход работает, роль определяется, RBAC проверяется на сервере (не только пряча кнопки).
 

@@ -11,3 +11,34 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// --- Доступ (DOMAIN.md разд. 2). Только то, что нужно для auth.
+// Остальная модель — в задаче A1.
+
+enum Role {
+  admin
+  operator
+  user
+}
+
+model User {
+  id            Int         @id @default(autoincrement())
+  login         String      @unique
+  password_hash String
+  role          Role        @default(user)
+  active        Boolean     @default(true)
+  created_at    DateTime    @default(now())
+  changelogs    ChangeLog[]
+}
+
+model ChangeLog {
+  id        Int      @id @default(autoincrement())
+  entity    String
+  entity_id Int
+  field     String
+  old_value String?
+  new_value String?
+  user_id   Int?
+  user      User?    @relation(fields: [user_id], references: [id])
+  timestamp DateTime @default(now())
+}
