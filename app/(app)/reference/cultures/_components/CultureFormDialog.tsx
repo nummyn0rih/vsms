@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 import {
   cultureSchema,
@@ -35,6 +35,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -61,8 +62,31 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
       acceptance_type: row?.acceptance_type ?? "simple",
       packaging_type_id:
         row?.packaging_type_id != null ? String(row.packaging_type_id) : NO_PACKAGING,
+      ranges: row?.ranges ?? [],
     },
   });
+
+  // Блок калибров показываем только при acceptance_type=calibre (RHF watch).
+  const acceptanceType = useWatch({ control: form.control, name: "acceptance_type" });
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "ranges",
+  });
+
+  // Предупреждение о «дырах» между диапазонами — НЕ блокирует сохранение
+  // (бизнес может намеренно оставить пропуск). Считаем по отсортированным min.
+  const watchedRanges = useWatch({ control: form.control, name: "ranges" });
+  const hasGap = (() => {
+    const sorted = (watchedRanges ?? [])
+      .map((r) => ({ min: Number(r.min_cm), max: r.max_cm ? Number(r.max_cm) : null }))
+      .filter((r) => Number.isFinite(r.min))
+      .sort((a, b) => a.min - b.min);
+    for (let k = 1; k < sorted.length; k++) {
+      const prevMax = sorted[k - 1].max;
+      if (prevMax != null && sorted[k].min > prevMax) return true;
+    }
+    return false;
+  })();
 
   // В edit-режиме культура может ссылаться на уже деактивированный тип тары
   // (его нет в active-списке). Добавляем его опцией, чтобы значение не терялось
@@ -221,6 +245,126 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
                 </FormItem>
               )}
             />
+
+            {/* Блок калибров — только для acceptance_type=calibre. Здесь задаются
+                ТОЛЬКО диапазоны (границы + принят/не принят), без процентов:
+                проценты вносятся на приёмке (CalibreResult). */}
+            {acceptanceType === "calibre" && (
+              <div className="grid gap-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Калибры</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      append({ label: "", min_cm: "", max_cm: "", is_accepted: true })
+                    }
+                  >
+                    <Plus className="size-4" /> Диапазон
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Границы в см. Верхний диапазон можно оставить открытым (пустой «до»).
+                </p>
+
+                {fields.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Нет диапазонов — добавьте хотя бы один.
+                  </p>
+                )}
+
+                {fields.map((f, i) => (
+                  <div key={f.id} className="grid gap-2 rounded border p-2">
+                    <div className="flex items-end gap-2">
+                      <FormField
+                        control={form.control}
+                        name={`ranges.${i}.label`}
+                        render={({ field }) => (
+                          <FormItem className="flex-1">
+                            <FormLabel className="text-xs">Метка</FormLabel>
+                            <FormControl>
+                              <Input placeholder="6-9" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`ranges.${i}.min_cm`}
+                        render={({ field }) => (
+                          <FormItem className="w-20">
+                            <FormLabel className="text-xs">от, см</FormLabel>
+                            <FormControl>
+                              <Input type="number" inputMode="decimal" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`ranges.${i}.max_cm`}
+                        render={({ field }) => (
+                          <FormItem className="w-20">
+                            <FormLabel className="text-xs">до, см</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="∞"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Удалить диапазон"
+                        onClick={() => remove(i)}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name={`ranges.${i}.is_accepted`}
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-2">
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-xs font-normal">
+                            Принимается
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ))}
+
+                {/* Ошибка уровня массива (нет диапазонов, нет принятых, пересечение). */}
+                {form.formState.errors.ranges?.message && (
+                  <p className="text-sm text-destructive">
+                    {form.formState.errors.ranges.message}
+                  </p>
+                )}
+                {/* Предупреждение о дырах — не блокирует сохранение. */}
+                {hasGap && (
+                  <p className="text-sm text-amber-600">
+                    Между диапазонами есть пропуск — это допустимо, но проверьте.
+                  </p>
+                )}
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="submit" disabled={form.formState.isSubmitting}>

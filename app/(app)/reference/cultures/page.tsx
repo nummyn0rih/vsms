@@ -25,6 +25,14 @@ export default async function CulturesPage({
     acceptance_type: c.acceptance_type,
     packaging_type_id: c.packaging_type_id,
     packaging_type_name: c.packagingType?.name ?? null,
+    // Decimal не сериализуется в Client Component → строкой; "" = открытый верх.
+    ranges:
+      c.calibreScheme?.ranges.map((r) => ({
+        label: r.label,
+        min_cm: r.min_cm?.toString() ?? "",
+        max_cm: r.max_cm?.toString() ?? "",
+        is_accepted: r.is_accepted,
+      })) ?? [],
     active: c.active,
   }));
 

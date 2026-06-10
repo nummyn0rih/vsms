@@ -12,6 +12,7 @@ import {
   type CultureInput,
   type PackagingOption,
 } from "./schema";
+import { persistCalibreScheme } from "./calibre";
 
 const ENTITY = "Culture";
 const PATH = "/reference/cultures";
@@ -45,7 +46,12 @@ export async function listCultures(params?: {
       ...(params?.includeInactive ? {} : { active: true }),
       ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     },
-    include: { packagingType: { select: { name: true } } },
+    include: {
+      packagingType: { select: { name: true } },
+      calibreScheme: {
+        include: { ranges: { orderBy: { min_cm: "asc" } } },
+      },
+    },
     orderBy: { name: "asc" },
   });
 }
@@ -73,19 +79,37 @@ export async function createCulture(input: CultureInput): Promise<ActionResult> 
       };
     }
 
-    const created = await prisma.culture.create({
-      data: {
-        name: parsed.data.name,
-        color: parsed.data.color,
-        acceptance_type: parsed.data.acceptance_type,
-        packaging_type_id: normPackagingTypeId(parsed.data.packaging_type_id),
-      },
-    });
+    // Культура + схема калибров — атомарно (либо обе, либо никак).
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.culture.create({
+        data: {
+          name: parsed.data.name,
+          color: parsed.data.color,
+          acceptance_type: parsed.data.acceptance_type,
+          packaging_type_id: normPackagingTypeId(parsed.data.packaging_type_id),
+        },
+      });
 
-    await logChange(
-      { entity: ENTITY, entityId: created.id, field: "created", newValue: created.name },
-      Number(user.id),
-    );
+      const schemeSummary = await persistCalibreScheme(
+        tx,
+        created.id,
+        parsed.data.acceptance_type,
+        parsed.data.ranges ?? [],
+      );
+
+      const entries = [
+        { entity: ENTITY, entityId: created.id, field: "created", newValue: created.name },
+      ];
+      if (parsed.data.acceptance_type === "calibre") {
+        entries.push({
+          entity: ENTITY,
+          entityId: created.id,
+          field: "calibre_scheme",
+          newValue: schemeSummary,
+        });
+      }
+      await logChange(entries, Number(user.id), tx);
+    });
 
     revalidatePath(PATH);
     return { ok: true };
@@ -132,22 +156,44 @@ export async function updateCulture(
       },
     ].filter((c) => c.oldValue !== c.newValue);
 
-    await prisma.culture.update({
-      where: { id },
-      data: {
-        name: parsed.data.name,
-        color: parsed.data.color,
-        acceptance_type: parsed.data.acceptance_type,
-        packaging_type_id: nextPackaging,
-      },
-    });
+    // Культура + схема калибров — атомарно в одной транзакции.
+    await prisma.$transaction(async (tx) => {
+      await tx.culture.update({
+        where: { id },
+        data: {
+          name: parsed.data.name,
+          color: parsed.data.color,
+          acceptance_type: parsed.data.acceptance_type,
+          packaging_type_id: nextPackaging,
+        },
+      });
 
-    if (changes.length > 0) {
-      await logChange(
-        changes.map((c) => ({ entity: ENTITY, entityId: id, ...c })),
-        Number(user.id),
+      // calibre → заменить набор диапазонов; simple → удалить схему (Cascade).
+      const schemeSummary = await persistCalibreScheme(
+        tx,
+        id,
+        parsed.data.acceptance_type,
+        parsed.data.ranges ?? [],
       );
-    }
+
+      const entries = changes.map((c) => ({ entity: ENTITY, entityId: id, ...c }));
+      // Схему логируем при calibre (правка набора) и при уходе на simple (удаление).
+      if (
+        parsed.data.acceptance_type === "calibre" ||
+        existing.acceptance_type === "calibre"
+      ) {
+        entries.push({
+          entity: ENTITY,
+          entityId: id,
+          field: "calibre_scheme",
+          oldValue: null,
+          newValue: schemeSummary,
+        });
+      }
+      if (entries.length > 0) {
+        await logChange(entries, Number(user.id), tx);
+      }
+    });
 
     revalidatePath(PATH);
     return { ok: true };
