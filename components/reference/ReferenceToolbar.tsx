@@ -8,12 +8,15 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 // Переиспользуемая панель справочника: поиск (?q) + переключатель неактивных
-// (?inactive=1) + слот для кнопки создания. Состояние живёт в URL — не в localStorage.
+// (?inactive=1) + опц. слот доп.фильтров + слот для кнопки создания. Состояние
+// живёт в URL — не в localStorage.
 export function ReferenceToolbar({
   searchPlaceholder = "Поиск по имени…",
+  filters,
   children,
 }: {
   searchPlaceholder?: string;
+  filters?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -56,6 +59,7 @@ export function ReferenceToolbar({
         />
         <Label htmlFor="show-inactive">Показывать неактивных</Label>
       </div>
+      {filters}
       <div className="ml-auto">{children}</div>
     </div>
   );

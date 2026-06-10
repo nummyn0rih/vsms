@@ -43,8 +43,8 @@ export const NAV: NavItem[] = [
     children: [
       { href: "/reference/farmers", label: "Фермеры", enabled: true },
       { href: "/reference/cultures", label: "Культуры", enabled: true },
-      { href: "/reference/transport-companies", label: "Транспортные компании" },
-      { href: "/reference/drivers", label: "Водители" },
+      { href: "/reference/transport-companies", label: "Транспортные компании", enabled: true },
+      { href: "/reference/drivers", label: "Водители", enabled: true },
       { href: "/reference/packaging-types", label: "Типы тары", enabled: true },
       { href: "/reference/ingredients", label: "Ингредиенты" },
     ],
