@@ -143,8 +143,10 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
         )}
       </DialogTrigger>
 
-      <DialogContent>
-        <DialogHeader>
+      {/* Flex-колонка: header и footer закреплены (shrink-0), середина скроллится.
+          max-h-[85vh] — модалка не вылезает за экран при 10+ категориях. */}
+      <DialogContent className="flex max-h-[85vh] flex-col gap-0">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             {mode === "edit" ? "Редактировать культуру" : "Новая культура"}
           </DialogTitle>
@@ -152,7 +154,12 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            {/* Скроллируемый контент: ошибки нижних категорий видны при прокрутке. */}
+            <div className="grid flex-1 gap-4 overflow-y-auto px-1 py-2">
             <FormField
               control={form.control}
               name="name"
@@ -265,7 +272,8 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Границы в см. Верхний диапазон можно оставить открытым (пустой «до»).
+                  Границы в см необязательны. Оба поля пустые = безразмерная категория
+                  (например «Брак»). Верхнюю размерную можно оставить открытой (пустой «до»).
                 </p>
 
                 {fields.length === 0 && (
@@ -365,8 +373,9 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
                 )}
               </div>
             )}
+            </div>
 
-            <DialogFooter>
+            <DialogFooter className="shrink-0">
               <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? "Сохранение…" : "Сохранить"}
               </Button>

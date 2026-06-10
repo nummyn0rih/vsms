@@ -12,13 +12,13 @@ type Tx = Omit<
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
 >;
 
-// Числа диапазона из формы (строки) → строки для Prisma Decimal; "" → null.
-// min_cm обязателен после zod-валидации, поэтому тут уже валиден; max_cm пуст =
-// открытый верхний диапазон.
+// Числа категории из формы (строки) → строки для Prisma Decimal; "" → null.
+// min_cm и max_cm оба опциональны: оба пусты = безразмерная категория («Брак»);
+// min задан, max пуст = открытый верх.
 export function normalizeRanges(rows: CalibreRangeInput[]) {
   return rows.map((r) => ({
     label: r.label.trim(),
-    min_cm: r.min_cm.trim(),
+    min_cm: r.min_cm?.trim() ? r.min_cm.trim() : null,
     max_cm: r.max_cm?.trim() ? r.max_cm.trim() : null,
     is_accepted: r.is_accepted,
   }));

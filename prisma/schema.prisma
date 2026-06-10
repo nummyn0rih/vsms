@@ -257,9 +257,14 @@ model ContractLine {
   price_per_kg Decimal  @db.Decimal(12, 4)
   created_at   DateTime @default(now())
 
-  contract      Contract       @relation(fields: [contract_id], references: [id], onDelete: Cascade)
-  culture       Culture        @relation(fields: [culture_id], references: [id], onDelete: Restrict)
-  shipmentItems ShipmentItem[]
+  // Имя строки («стандарт», «нестандарт >12», «доп. объём август») — различать
+  // строки одной культуры с разными ценой/назначением (DOMAIN.md разд.2).
+  label String?
+
+  contract       Contract        @relation(fields: [contract_id], references: [id], onDelete: Cascade)
+  culture        Culture         @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  shipmentItems  ShipmentItem[]
+  calibreResults CalibreResult[]
 }
 
 // =====================================================================
@@ -320,9 +325,13 @@ model CalibreResult {
   acceptance_act_id Int
   calibre_range_id  Int
   percent           Decimal @db.Decimal(5, 2)
+  // Привязка категории к строке контракта (этап C, на приёмке). Есть → категория
+  // оплачивается по этой строке (объём+цена строки); null → только статистика.
+  contract_line_id  Int?
 
   acceptanceAct AcceptanceAct @relation(fields: [acceptance_act_id], references: [id], onDelete: Cascade)
   calibreRange  CalibreRange  @relation(fields: [calibre_range_id], references: [id], onDelete: Restrict)
+  contractLine  ContractLine? @relation(fields: [contract_line_id], references: [id], onDelete: Restrict)
 }
 
 // =====================================================================

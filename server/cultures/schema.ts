@@ -20,12 +20,13 @@ export const NO_PACKAGING = "none";
 // regex — страховка от ручного ввода/paste.
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-// Один диапазон калибра в форме. Числа приходят строками (как capacity_kg у
-// PackagingType): min_cm обязателен (>0), max_cm пуст = открытый верхний диапазон.
+// Одна категория приёмки в форме (CalibreRange). Числа приходят строками (как
+// capacity_kg у PackagingType). Размеры опциональны: оба пустых = БЕЗРАЗМЕРНАЯ
+// категория («Брак»). min задан → размерная; max пуст у размерной = открытый верх.
 // Процентов тут НЕТ — они вносятся на приёмке (CalibreResult, этап C).
 export const calibreRangeSchema = z.object({
   label: z.string().trim().min(1, "Метка обязательна"),
-  min_cm: z.string().trim(),
+  min_cm: z.string().trim().optional(),
   max_cm: z.string().trim().optional(),
   is_accepted: z.boolean(),
 });
@@ -65,14 +66,37 @@ export const cultureSchema = z
       return;
     }
 
-    // Построчные проверки: число min_cm, max_cm, уникальность label.
+    // Индекс последней РАЗМЕРНОЙ категории — открытый верх допустим только у неё.
+    const dimensional = (r: CalibreRangeInput) =>
+      (r.min_cm?.trim() ?? "") !== "" || (r.max_cm?.trim() ?? "") !== "";
+    let lastDimIdx = -1;
+    rows.forEach((r, i) => {
+      if (dimensional(r)) lastDimIdx = i;
+    });
+
+    // Построчные проверки: размеры (только у размерных), уникальность label.
     const seenLabels = new Set<string>();
     rows.forEach((r, i) => {
       const min = parseCm(r.min_cm);
       const max = parseCm(r.max_cm);
+      const hasMin = (r.min_cm?.trim() ?? "") !== "";
       const hasMax = (r.max_cm?.trim() ?? "") !== "";
 
-      // 2. min_cm > 0.
+      // 5. label уникален в пределах схемы.
+      const key = r.label.trim().toLowerCase();
+      if (key && seenLabels.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ranges", i, "label"],
+          message: "Метка уже использована",
+        });
+      }
+      seenLabels.add(key);
+
+      // Безразмерная категория (оба поля пусты, напр. «Брак») — валидна, размеры не проверяем.
+      if (!hasMin && !hasMax) return;
+
+      // 2. размерная: min обязателен и > 0.
       if (min === null || min <= 0) {
         ctx.addIssue({
           code: "custom",
@@ -96,27 +120,17 @@ export const cultureSchema = z
           });
         }
       }
-      // 3. открытый (max пуст) допустим только у последнего диапазона.
-      if (!hasMax && i !== rows.length - 1) {
+      // 3. открытый (max пуст) допустим только у последней РАЗМЕРНОЙ категории.
+      if (hasMin && !hasMax && i !== lastDimIdx) {
         ctx.addIssue({
           code: "custom",
           path: ["ranges", i, "max_cm"],
           message: "Открытым может быть только последний диапазон",
         });
       }
-      // 5. label уникален в пределах схемы.
-      const key = r.label.trim().toLowerCase();
-      if (key && seenLabels.has(key)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["ranges", i, "label"],
-          message: "Метка уже использована",
-        });
-      }
-      seenLabels.add(key);
     });
 
-    // 1. Минимум один принятый диапазон.
+    // 1. Минимум одна принятая категория.
     if (!rows.some((r) => r.is_accepted)) {
       ctx.addIssue({
         code: "custom",
@@ -125,7 +139,8 @@ export const cultureSchema = z
       });
     }
 
-    // 3. Диапазоны не пересекаются по [min, max). Открытый max = +∞.
+    // 3. Размерные категории не пересекаются по [min, max). Безразмерные (min=null)
+    // отфильтрованы. Открытый max = +∞.
     // Сортируем копию по min; смежные не должны налезать.
     const sorted = rows
       .map((r) => ({ min: parseCm(r.min_cm), max: parseCm(r.max_cm) }))

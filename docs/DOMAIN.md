@@ -61,6 +61,7 @@ ShipmentItem 1───1 AcceptanceAct
 AcceptanceAct 1───N CalibreResult
 CalibreScheme 1───N CalibreRange
 CalibreRange 1───N CalibreResult
+ContractLine 1───N CalibreResult (nullable; привязка категории к строке оплаты)
 
 MaterialShipment 1───N MaterialShipmentItem
 MaterialShipmentItem ──> PackagingType ИЛИ Ingredient (полиморфно, item_kind)
@@ -92,7 +93,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | TripWeightNorm | farmer_id, culture_id, planned_trip_weight_kg | основа «осталось ~N машин» |
 | IngredientRecipe | culture_id, ingredient_id, qty_per_kg_product | рецептура на кг продукции (M:N) |
 | CalibreScheme | id, culture_id | привязана к калибруемой культуре |
-| CalibreRange | id, scheme_id, label, min_cm, max_cm, is_accepted | диапазоны (>предел → is_accepted=false) |
+| CalibreRange | id, scheme_id, label, min_cm (nullable), max_cm (nullable), is_accepted | **категория приёмки** (не обязательно размерная). min/max пусты = безразмерная категория («Брак»). Размерная: min задан, max пуст = открытый верх (>предел). |
 | SeasonConfig | season_year, summer_start, summer_end, summer_workdays {Пн-Сб}, winter_workdays {Пн-Пт} | источник рабочих дней |
 | AlertRule | id, item_kind, item_id, location_scope, threshold | пороги дефицита |
 
@@ -101,7 +102,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Сущность | Атрибуты |
 |---|---|
 | Contract | id, farmer_id, season_year, created_at, notes |
-| ContractLine | id, contract_id, culture_id, volume_tons, price_per_kg, created_at |
+| ContractLine | id, contract_id, culture_id, label (nullable), volume_tons, price_per_kg, created_at — label = имя строки («стандарт», «нестандарт >12», «доп. объём август») |
 
 **Операции — ядро**
 
@@ -110,7 +111,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Shipment | id, code, departure_date, arrival_date, status {planned\|sent\|arrived\|accepted}, driver_id (FK), created_by, timestamps |
 | ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное) |
 | AcceptanceAct | id, shipment_item_id (FK), brak_percent, accepted_percent (simple), comment, act_number, weighed_at |
-| CalibreResult | id, acceptance_act_id (FK), calibre_range_id (FK), percent |
+| CalibreResult | id, acceptance_act_id (FK), calibre_range_id (FK), percent, contract_line_id (FK, nullable) — привязка категории к строке = оплата по этой строке (объём+цена строки); null = только статистика |
 
 **Операции — логистика материалов**
 
@@ -157,10 +158,10 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | BR-4 | Ингредиенты расходуются по фактическому весу (перевеска), т.к. заложены до браковки. |
 | BR-5 | Цена — это строки контракта (ContractLine). Одна культура может иметь несколько строк с разной ценой. |
 | BR-6 | Стоимость/выполнение — ЖИВОЙ пересчёт: при изменении цены строки или перепривязки все привязанные позиции пересчитываются автоматически (цифры не хранятся). |
-| BR-7 | Перепривязать ShipmentItem можно только к строке ТОЙ ЖЕ культуры и ТОГО ЖЕ фермера. Блокирующая валидация. |
+| BR-7 | Перепривязать ShipmentItem можно только к строке ТОЙ ЖЕ культуры и ТОГО ЖЕ фермера. Блокирующая валидация. То же для привязки категории приёмки (CalibreResult.contract_line_id) — только строка той же культуры и того же фермера. |
 | BR-8 | contract_line_id обязателен (NOT NULL) при переходе позиции в accepted. Если строк культуры >1 — выбор обязателен; если 1 — авто. |
 | BR-9 | act_number = номер партии, присваивается на заводе, уникален, обязателен при accepted. Каждая позиция машины = своя партия. |
-| BR-10 | Калибры: для acceptance_type=calibre сумма всех процентов (диапазоны + брак) = 100%. accepted = actual × Σ(% диапазонов где is_accepted=true). |
+| BR-10 | Калибры (acceptance_type=calibre): вся раскладка партии вносится категориями схемы, Σ % всех категорий = 100%. brak_percent акта НЕ используется (он только для simple). accepted = actual × Σ(% категорий где is_accepted=true). Дефолт привязки категорий к строке на приёмке: is_accepted=true → наследуют привязку позиции (ShipmentItem.contract_line_id); is_accepted=false → null. Админ может вручную привязать категорию к другой строке (напр. >12 → строка «нестандарт»). |
 | BR-11 | Дата прибытия не должна падать на нерабочий день завода (валидация по SeasonConfig). |
 | BR-12 | При создании отгрузки вводится дата прибытия ИЛИ отправления, вторая = ±2 дня. Обе правятся вручную потом. |
 | BR-13 | Статусы: planned→sent→arrived→accepted. Откат — только Admin, с записью в ChangeLog. |
@@ -188,11 +189,23 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | прогресс плана недели | Σ запланировано / WeeklyPlan.target | плановый |
 | недельные/дневные итоги | агрегаты ShipmentItem по arrival_date | — |
 
+**Для calibre-культур** (раскладка по категориям, каждая со своей привязкой к строке):
+
+| Что | Формула | База |
+|---|---|---|
+| выполнение строки | Σ (actual × % категорий, привязанных к ЭТОЙ строке) / volume_tons | принятый |
+| стоимость | Σ по категориям (actual × % × price_per_kg ИХ строки) | принятый |
+| accepted_weight позиции | actual × Σ (% привязанных категорий) | принятый |
+| нестандарт | Σ (actual × % категорий is_accepted=false с размерами) | фактический |
+
+- **Нестандарт** (категории `is_accepted=false` с размерами, напр. >12) — отдельная статистика, **НЕ брак** (брак = только simple-культуры).
+- **Объёмы стандарта и нестандарта не смешиваются.** Даже если нестандарт оплачивается по цене стандарта — это ОТДЕЛЬНАЯ строка контракта (та же цена, свой объём). Категории привязаны к разным строкам → их accepted идёт в выполнение разных строк.
+
 ---
 
 ## 6. Справочные константы домена
 
 - Типы тары: ящик овощной (томаты, черри); бочка металл 200 кг (патиссоны маринованные); бочка пластик 250 кг (патиссоны, перец сладкий, халапеньо — маринованные).
 - Ингредиенты: соль, уксус, аскорбиновая кислота, пиросульфит (для маринованных).
-- Калибруемая культура (пример): огурцы — диапазоны 6–9 см (принято), 9–12 см (принято), >12 см (не принято), брак (не принято).
+- Калибруемая культура (пример): огурцы — категории 6–9 см (принято), 9–12 см (принято), >12 см (открытый верх, не принято), Брак (безразмерная, не принято).
 - Сезон: июнь→май. season_year = год июня.

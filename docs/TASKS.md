@@ -84,7 +84,7 @@
 - [ ] SeasonConfig: настройка сезона, рабочие дни лето/зима
 - [ ] PackagingNorm: матрица фермер×культура → средний вес ед.тары
 - [ ] TripWeightNorm: матрица фермер×культура → плановый вес рейса
-- [x] CalibreScheme + CalibreRange: схема калибров на культуру (диапазоны, is_accepted) — редактор внутри формы Culture (блок виден при acceptance_type=calibre), useFieldArray + zod superRefine (min>0, нет пересечений, открытый только последний, ≥1 принятый, уникальные label; дыры — warning). Сохранение атомарно с культурой ($transaction), `server/cultures/calibre.ts`. Проценты партии (CalibreResult) — этап C.
+- [x] CalibreScheme + CalibreRange: схема **категорий приёмки** на культуру — редактор внутри формы Culture (блок виден при acceptance_type=calibre), useFieldArray + zod superRefine. Категория не обязательно размерная: min/max nullable, оба пусты = безразмерная («Брак»). Правила: размерная min>0, нет пересечений (только между размерными), открытый верх только у последней размерной, ≥1 принятая, уникальные label; дыры — warning. Сохранение атомарно с культурой ($transaction), `server/cultures/calibre.ts`. Модалка скроллится (header/footer закреплены). Привязка категорий к строкам контракта (CalibreResult.contract_line_id, ContractLine.label — миграция calibre_categories) — на приёмке, этап C.
 - [ ] IngredientRecipe: рецептура культура×ингредиент → кол-во на кг
 - [ ] AlertRule: пороги дефицита (можно отложить к V1.1, но таблица уже есть)
 
