@@ -6,7 +6,7 @@ import { RotateCcw, Trash2 } from "lucide-react";
 
 import type { DriverRow, TransportCompanyOption } from "@/server/drivers/schema";
 import { setDriverActive } from "@/server/drivers/actions";
-import { normalizePhone } from "@/lib/validators";
+import { normalizePhone, formatPhone } from "@/lib/validators";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -124,7 +124,7 @@ export function DriversTable({
                   href={`tel:${normalizePhone(row.phone)}`}
                   className="hover:underline"
                 >
-                  {row.phone}
+                  {formatPhone(row.phone)}
                 </a>
               ) : (
                 <span className="text-muted-foreground">—</span>

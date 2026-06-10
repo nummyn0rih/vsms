@@ -7,7 +7,7 @@ import { RotateCcw, Trash2 } from "lucide-react";
 import type { Farmer } from "@/lib/generated/prisma/client";
 import type { FarmerContacts } from "@/server/farmers/schema";
 import { setFarmerActive } from "@/server/farmers/actions";
-import { normalizePhone } from "@/lib/validators";
+import { normalizePhone, formatPhone } from "@/lib/validators";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,7 @@ function ContactsCell({ farmer }: { farmer: Farmer }) {
   return (
     <div className="flex flex-col">
       <a href={`tel:${normalizePhone(c.phone)}`} className="hover:underline">
-        {c.phone}
+        {formatPhone(c.phone)}
       </a>
       {c.contactPerson && (
         <span className="text-xs text-muted-foreground">{c.contactPerson}</span>
