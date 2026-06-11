@@ -76,9 +76,9 @@
 - [x] Транспортные компании (TransportCompany): name/notes, soft delete (`server/transport-companies/`, `app/(app)/reference/transport-companies/`)
 - [x] Водители (Driver): сплошной список, фильтр по компании и фамилии (оба в URL, комбинируются), кликабельный телефон (`tel:` через normalizePhone), поле info, FK-Select ТК (неактивная не теряется в edit) (`server/drivers/`, `app/(app)/reference/drivers/`)
 - [x] Типы тары (PackagingType): ящик/бочка, capacity_kg — условная валидация zod (barrel→capacity обязателен, box→null), поле ёмкости условно по kind (`server/packaging-types/`, `app/(app)/reference/packaging-types/`)
-- [ ] Ингредиенты (Ingredient)
+- [x] Ингредиенты (Ingredient): name, unit (kg/l, Select с подписями кг/л), soft delete (`server/ingredients/`, `app/(app)/reference/ingredients/`)
 
-**Критерий:** все справочники заполняемы, фильтры работают, телефон кликабелен.
+**Критерий:** все справочники заполняемы, фильтры работают, телефон кликабелен. — ВЫПОЛНЕН, A4 закрыт.
 
 ### A5. CRUD настроек (нормы и схемы)
 - [ ] SeasonConfig: настройка сезона, рабочие дни лето/зима

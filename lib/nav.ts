@@ -46,7 +46,7 @@ export const NAV: NavItem[] = [
       { href: "/reference/transport-companies", label: "Транспортные компании", enabled: true },
       { href: "/reference/drivers", label: "Водители", enabled: true },
       { href: "/reference/packaging-types", label: "Типы тары", enabled: true },
-      { href: "/reference/ingredients", label: "Ингредиенты" },
+      { href: "/reference/ingredients", label: "Ингредиенты", enabled: true },
     ],
   },
   { href: "/settings", label: "Настройки", icon: Settings, roles: ["admin"] },
