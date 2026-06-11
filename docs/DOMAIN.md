@@ -94,7 +94,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | IngredientRecipe | culture_id, ingredient_id, qty_per_kg_product | рецептура на кг продукции (M:N) |
 | CalibreScheme | id, culture_id | привязана к калибруемой культуре |
 | CalibreRange | id, scheme_id, label, min_cm (nullable), max_cm (nullable), is_accepted | **категория приёмки** (не обязательно размерная). min/max пусты = безразмерная категория («Брак»). Размерная: min задан, max пуст = открытый верх (>предел). |
-| SeasonConfig | season_year, summer_start, summer_end, summer_workdays {Пн-Сб}, winter_workdays {Пн-Пт} | источник рабочих дней |
+| SeasonConfig | season_year, summer_start, summer_end, summer_workdays `Int[]`, winter_workdays `Int[]` (массивы дней недели, 0=Пн … 6=Вс; дефолт лето Пн–Сб, зима Пн–Пт) | источник рабочих дней |
 | AlertRule | id, item_kind, item_id, location_scope, threshold | пороги дефицита |
 
 **Контракты**

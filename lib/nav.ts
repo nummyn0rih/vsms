@@ -49,12 +49,26 @@ export const NAV: NavItem[] = [
       { href: "/reference/ingredients", label: "Ингредиенты", enabled: true },
     ],
   },
-  { href: "/settings", label: "Настройки", icon: Settings, roles: ["admin"] },
+  {
+    href: "/settings",
+    label: "Настройки",
+    icon: Settings,
+    roles: ["admin"],
+    children: [
+      { href: "/settings/seasons", label: "Сезоны", enabled: true },
+      { href: "/settings/recipes", label: "Рецептуры", enabled: true },
+      { href: "/settings/alert-rules", label: "Пороги алертов", enabled: true },
+    ],
+  },
 ];
 
 // Подтабы раздела «Справочники» (используются и в сайдбаре, и в reference/layout).
 export const REFERENCE_TABS =
   NAV.find((i) => i.href === "/reference")?.children ?? [];
+
+// Подтабы раздела «Настройки» (сайдбар + settings/layout).
+export const SETTINGS_TABS =
+  NAV.find((i) => i.href === "/settings")?.children ?? [];
 
 export function navForRole(role: Role | undefined): NavItem[] {
   return NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));

@@ -222,8 +222,8 @@ model SeasonConfig {
   season_year     Int      @unique // год начала сезона (июнь), BR-17
   summer_start    DateTime
   summer_end      DateTime
-  summer_workdays Int // дней/неделю летом (6, BR-18)
-  winter_workdays Int // дней/неделю зимой (5, BR-18)
+  summer_workdays Int[] // дни недели летом, 0=Пн … 6=Вс (BR-18, дефолт Пн–Сб)
+  winter_workdays Int[] // дни недели зимой, 0=Пн … 6=Вс (BR-18, дефолт Пн–Пт)
 }
 
 model AlertRule {

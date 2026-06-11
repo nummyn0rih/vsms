@@ -1,5 +1,6 @@
-import { Placeholder } from "@/components/layout/Placeholder";
+import { redirect } from "next/navigation";
 
+// /settings — без собственного контента: ведём на первую вкладку.
 export default function SettingsPage() {
-  return <Placeholder title="Настройки" note="Появится на этапе A5." />;
+  redirect("/settings/seasons");
 }
