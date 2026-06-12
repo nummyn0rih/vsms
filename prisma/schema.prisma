@@ -277,12 +277,14 @@ model Shipment {
   departure_date DateTime?
   arrival_date   DateTime?
   status         ShipmentStatus @default(planned)
-  driver_id      Int
+  // nullable: водитель обязателен только при переходе planned→sent (B2), на planned — нет.
+  driver_id      Int?
+  comment        String?
   created_by     Int?
   created_at     DateTime       @default(now())
   updated_at     DateTime       @updatedAt
 
-  driver Driver         @relation(fields: [driver_id], references: [id], onDelete: Restrict)
+  driver Driver?        @relation(fields: [driver_id], references: [id], onDelete: Restrict)
   items  ShipmentItem[]
 }
 

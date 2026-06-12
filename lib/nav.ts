@@ -28,6 +28,8 @@ export type NavItem = {
 // пока: Справочники и Настройки только admin, остальное всем. Правится здесь.
 export const NAV: NavItem[] = [
   { href: "/", label: "Лента отгрузок", icon: LayoutList },
+  // Временный список отгрузок (B1). Заменится лентой на "/" в B3.
+  { href: "/shipments", label: "Отгрузки (B1)", icon: Truck },
   { href: "/planner", label: "Планировщик", icon: CalendarRange },
   { href: "/acceptance", label: "Приёмка", icon: ClipboardCheck },
   { href: "/contracts", label: "Контракты", icon: FileText },
