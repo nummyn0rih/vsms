@@ -73,3 +73,61 @@ const WEEKDAY_NAMES = [
 export function weekdayName(date: Date): string {
   return WEEKDAY_NAMES[weekdayMonFirst(date)];
 }
+
+// --- ISO-недели (BR-17). Единый источник для ленты B3 (группировка/скролл). ---
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Номер ISO-недели + ISO-год (могут отличаться от календарного у краёв года).
+// Алгоритм «ближайший четверг»: неделя, которой принадлежит четверг этой даты.
+export function isoWeek(date: Date): { isoYear: number; isoWeek: number } {
+  // Четверг текущей ISO-недели (Пн=0 … Вс=6 → сдвиг к четвергу).
+  const thursday = new Date(date);
+  thursday.setUTCDate(thursday.getUTCDate() - weekdayMonFirst(date) + 3);
+  const isoYear = thursday.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  firstThursday.setUTCDate(
+    firstThursday.getUTCDate() - weekdayMonFirst(firstThursday) + 3,
+  );
+  const week =
+    1 + Math.round((thursday.getTime() - firstThursday.getTime()) / (7 * MS_PER_DAY));
+  return { isoYear, isoWeek: week };
+}
+
+// Пн и Вс ISO-недели (UTC-полночь) — для дат в шапке недели и обхода дней.
+export function isoWeekRange(
+  isoYear: number,
+  week: number,
+): { start: Date; end: Date } {
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  firstThursday.setUTCDate(
+    firstThursday.getUTCDate() - weekdayMonFirst(firstThursday) + 3,
+  );
+  // Понедельник нужной недели = четверг недели 1 − 3 дня + (week−1) недель.
+  const monday = new Date(firstThursday);
+  monday.setUTCDate(monday.getUTCDate() - 3 + (week - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  return { start: monday, end: sunday };
+}
+
+// ISO-неделя + сезон «сегодня» (по умолчанию) — для авто-скролла и правил
+// сворачивания ленты (срез 2/3).
+export function currentSeasonWeek(date: Date = new Date()): {
+  isoYear: number;
+  isoWeek: number;
+  seasonYear: number;
+} {
+  const { isoYear, isoWeek: week } = isoWeek(date);
+  return { isoYear, isoWeek: week, seasonYear: seasonYearOf(date) };
+}
+
+// Сравнение (isoYear, isoWeek) для классификации past/current/future.
+export function compareIsoWeek(
+  a: { isoYear: number; isoWeek: number },
+  b: { isoYear: number; isoWeek: number },
+): -1 | 0 | 1 {
+  if (a.isoYear !== b.isoYear) return a.isoYear < b.isoYear ? -1 : 1;
+  if (a.isoWeek !== b.isoWeek) return a.isoWeek < b.isoWeek ? -1 : 1;
+  return 0;
+}
