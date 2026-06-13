@@ -23,8 +23,12 @@ export default async function CulturesPage({
     name: c.name,
     color: c.color,
     acceptance_type: c.acceptance_type,
-    packaging_type_id: c.packaging_type_id,
-    packaging_type_name: c.packagingType?.name ?? null,
+    packagingTypes: c.packagingTypes.map((pt) => ({
+      id: pt.packaging_type_id,
+      name: pt.packagingType.name,
+      is_default: pt.is_default,
+      active: pt.packagingType.active,
+    })),
     // Decimal не сериализуется в Client Component → строкой; "" = открытый верх.
     ranges:
       c.calibreScheme?.ranges.map((r) => ({

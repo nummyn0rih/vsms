@@ -132,8 +132,24 @@ export function CulturesTable({
             </TableCell>
             <TableCell>{ACCEPTANCE_TYPE_LABELS[row.acceptance_type]}</TableCell>
             <TableCell>
-              {row.packaging_type_name ?? (
+              {row.packagingTypes.length === 0 ? (
                 <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className="flex flex-wrap gap-1">
+                  {row.packagingTypes.map((pt) => (
+                    <span
+                      key={pt.id}
+                      className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs"
+                      title={pt.is_default ? "Тип по умолчанию" : undefined}
+                    >
+                      {pt.is_default && <span className="text-amber-500">★</span>}
+                      {pt.name}
+                      {!pt.active && (
+                        <span className="text-muted-foreground">(неактивен)</span>
+                      )}
+                    </span>
+                  ))}
+                </span>
               )}
             </TableCell>
             <TableCell>

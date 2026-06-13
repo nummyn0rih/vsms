@@ -15,20 +15,27 @@ export const KIND_META: Record<
   trip: { entity: "TripWeightNorm", valueField: "planned_trip_weight_kg" },
 };
 
-// Одна заполненная ячейка (запись нормы существует в БД).
+// Одна заполненная ячейка (запись нормы существует в БД). packaging_type_id —
+// только для packaging (норма по тройке); для trip null.
 export type NormCell = {
   farmer_id: number;
   culture_id: number;
+  packaging_type_id: number | null;
   value: number;
 };
 
 // Строки сетки — активные фермеры.
 export type FarmerRow = { id: number; name: string };
 
-// Колонки сетки — активные культуры. has_packaging: задан ли тип тары (нужно для режима тары).
+// Колонки сетки — активные культуры. packaging_type_ids — разрешённые типы тары
+// (матрица показывает только культуры РОВНО с одним типом; многотиповые — в отдельном
+// редакторе). Пусто = навал, в режиме тары не показывается.
 export type CultureCol = {
   id: number;
   name: string;
   color: string;
-  has_packaging: boolean;
+  packaging_type_ids: number[];
 };
+
+// Тип тары для редактора многотиповых норм (колонки таблицы).
+export type PackagingTypeCol = { id: number; name: string };

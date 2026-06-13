@@ -94,15 +94,15 @@ model Farmer {
 }
 
 model Culture {
-  id                Int            @id @default(autoincrement())
-  name              String
-  color             String // hex
-  acceptance_type   AcceptanceType
-  // nullable: учёт ведём только по переиспользуемой таре, не у всех культур она есть.
-  packaging_type_id Int?
-  active            Boolean        @default(true)
+  id              Int            @id @default(autoincrement())
+  name            String
+  color           String // hex
+  acceptance_type AcceptanceType
+  active          Boolean        @default(true)
 
-  packagingType     PackagingType?     @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
+  // Разрешённые типы тары культуры (m2m с пометкой дефолта). Одна культура может
+  // ехать в разной таре (патиссоны: бочка пластик/железо). Ноль связей = навал.
+  packagingTypes    CulturePackagingType[]
   calibreScheme     CalibreScheme? // 1:1, если acceptance_type = calibre
   contractLines     ContractLine[]
   shipmentItems     ShipmentItem[]
@@ -110,6 +110,20 @@ model Culture {
   tripWeightNorms   TripWeightNorm[]
   ingredientRecipes IngredientRecipe[]
   weeklyPlans       WeeklyPlan[]
+}
+
+// Разрешённые типы тары культуры. Инвариант «ровно один is_default=true на культуру»
+// Prisma не выразит — держим server-валидацией (server/cultures).
+model CulturePackagingType {
+  id                Int     @id @default(autoincrement())
+  culture_id        Int
+  packaging_type_id Int
+  is_default        Boolean @default(false)
+
+  culture       Culture       @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  packagingType PackagingType @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
+
+  @@unique([culture_id, packaging_type_id])
 }
 
 model TransportCompany {
@@ -138,12 +152,16 @@ model PackagingType {
   id          Int           @id @default(autoincrement())
   name        String
   kind        PackagingKind
-  capacity_kg Decimal?      @db.Decimal(12, 3) // 200/250 для бочки; null для ящика
+  // Справочное брутто (200/250 для бочки; null для ящика). В расчёте тары НЕ
+  // участвует — units считаются по PackagingNorm.avg_unit_weight_kg (нетто).
+  capacity_kg Decimal?      @db.Decimal(12, 3)
   active      Boolean       @default(true)
 
-  cultures              Culture[]
+  culturePackagingTypes CulturePackagingType[]
+  packagingNorms        PackagingNorm[]
   stockMovements        StockMovement[]
   materialShipmentItems MaterialShipmentItem[]
+  shipmentItems         ShipmentItem[]
 }
 
 model Ingredient {
@@ -165,12 +183,16 @@ model PackagingNorm {
   id                 Int     @id @default(autoincrement())
   farmer_id          Int
   culture_id         Int
+  packaging_type_id  Int
+  // Нетто продукта на единицу тары ДАННОГО типа (зависит от тройки фермер×культура×тип:
+  // процент заливки разный). Основа расчёта units при отправке.
   avg_unit_weight_kg Decimal @db.Decimal(12, 3)
 
-  farmer  Farmer  @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
-  culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  farmer        Farmer        @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
+  culture       Culture       @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  packagingType PackagingType @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
 
-  @@unique([farmer_id, culture_id])
+  @@unique([farmer_id, culture_id, packaging_type_id])
 }
 
 model TripWeightNorm {
@@ -295,6 +317,8 @@ model ShipmentItem {
   culture_id         Int
   planned_weight_kg  Decimal  @db.Decimal(12, 3)
   actual_weight_kg   Decimal? @db.Decimal(12, 3) // после перевески на воротах
+  // Тип тары ЭТОЙ позиции (выбор из разрешённых типов культуры). nullable: навал.
+  packaging_type_id  Int?
   contract_line_id   Int? // nullable до accepted (BR-8)
   // СНИМОК результата приёмки = actual × Σ(принятых %). Перезаписывается ТОЛЬКО
   // логикой пересчёта из акта (задача C). Напрямую не редактируется.
@@ -303,6 +327,7 @@ model ShipmentItem {
   shipment      Shipment       @relation(fields: [shipment_id], references: [id], onDelete: Cascade)
   farmer        Farmer         @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
   culture       Culture        @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+  packagingType PackagingType? @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
   contractLine  ContractLine?  @relation(fields: [contract_line_id], references: [id], onDelete: Restrict)
   acceptanceAct AcceptanceAct? // 1:1
 }

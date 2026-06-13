@@ -6,23 +6,35 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, AuthError } from "@/server/auth/session";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
-import {
-  cultureSchema,
-  NO_PACKAGING,
-  type CultureInput,
-  type PackagingOption,
-} from "./schema";
+import type { Prisma } from "@/lib/generated/prisma/client";
+import { cultureSchema, type CultureInput, type PackagingOption } from "./schema";
 import { persistCalibreScheme } from "./calibre";
 
 const ENTITY = "Culture";
 const PATH = "/reference/cultures";
 
-// packaging_type_id из Select: "none"/пусто → null (без тары);
-// иначе число (NaN → null, FK-целостность проверит Prisma).
-function normPackagingTypeId(v: string | undefined): number | null {
-  if (!v || v === NO_PACKAGING) return null;
-  const n = Number(v);
-  return Number.isNaN(n) ? null : n;
+type Tx = Prisma.TransactionClient;
+
+// Синк разрешённых типов тары культуры: полная замена набора (delete + createMany).
+// На CulturePackagingType никто не ссылается по id, пересоздание безопасно. Возвращает
+// сводку для ChangeLog. typeIds/defaultId уже валидированы zod (ровно один дефолт).
+async function syncCulturePackagingTypes(
+  tx: Tx,
+  cultureId: number,
+  typeIds: string[],
+  defaultId: string | undefined,
+): Promise<string> {
+  await tx.culturePackagingType.deleteMany({ where: { culture_id: cultureId } });
+  if (typeIds.length === 0) return "навал (без тары)";
+
+  await tx.culturePackagingType.createMany({
+    data: typeIds.map((id) => ({
+      culture_id: cultureId,
+      packaging_type_id: Number(id),
+      is_default: id === defaultId,
+    })),
+  });
+  return `${typeIds.length} тип(ов), дефолт #${defaultId}`;
 }
 
 // Единый перехват ошибок RBAC → ActionResult (страницу не валим).
@@ -47,7 +59,9 @@ export async function listCultures(params?: {
       ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
     },
     include: {
-      packagingType: { select: { name: true } },
+      packagingTypes: {
+        include: { packagingType: { select: { name: true, active: true } } },
+      },
       calibreScheme: {
         include: { ranges: { orderBy: { min_cm: "asc" } } },
       },
@@ -86,9 +100,15 @@ export async function createCulture(input: CultureInput): Promise<ActionResult> 
           name: parsed.data.name,
           color: parsed.data.color,
           acceptance_type: parsed.data.acceptance_type,
-          packaging_type_id: normPackagingTypeId(parsed.data.packaging_type_id),
         },
       });
+
+      const packagingSummary = await syncCulturePackagingTypes(
+        tx,
+        created.id,
+        parsed.data.packaging_type_ids ?? [],
+        parsed.data.default_packaging_type_id,
+      );
 
       const schemeSummary = await persistCalibreScheme(
         tx,
@@ -99,6 +119,7 @@ export async function createCulture(input: CultureInput): Promise<ActionResult> 
 
       const entries = [
         { entity: ENTITY, entityId: created.id, field: "created", newValue: created.name },
+        { entity: ENTITY, entityId: created.id, field: "packaging_types", newValue: packagingSummary },
       ];
       if (parsed.data.acceptance_type === "calibre") {
         entries.push({
@@ -137,11 +158,8 @@ export async function updateCulture(
     const existing = await prisma.culture.findUnique({ where: { id } });
     if (!existing) return { ok: false, error: "Культура не найдена" };
 
-    const nextPackaging = normPackagingTypeId(parsed.data.packaging_type_id);
-
     // Диф изменённых полей → отдельная запись в ChangeLog на каждое (BR-16).
-    // FK сравниваем строкой, чтобы null/число не давали ложный диф.
-    const changes = [
+    const changes: { field: string; oldValue: string | null; newValue: string | null }[] = [
       { field: "name", oldValue: existing.name, newValue: parsed.data.name },
       { field: "color", oldValue: existing.color, newValue: parsed.data.color },
       {
@@ -149,14 +167,9 @@ export async function updateCulture(
         oldValue: existing.acceptance_type,
         newValue: parsed.data.acceptance_type,
       },
-      {
-        field: "packaging_type_id",
-        oldValue: existing.packaging_type_id?.toString() ?? null,
-        newValue: nextPackaging?.toString() ?? null,
-      },
     ].filter((c) => c.oldValue !== c.newValue);
 
-    // Культура + схема калибров — атомарно в одной транзакции.
+    // Культура + типы тары + схема калибров — атомарно в одной транзакции.
     await prisma.$transaction(async (tx) => {
       await tx.culture.update({
         where: { id },
@@ -164,9 +177,16 @@ export async function updateCulture(
           name: parsed.data.name,
           color: parsed.data.color,
           acceptance_type: parsed.data.acceptance_type,
-          packaging_type_id: nextPackaging,
         },
       });
+
+      // Типы тары: полная замена набора (синк CulturePackagingType).
+      const packagingSummary = await syncCulturePackagingTypes(
+        tx,
+        id,
+        parsed.data.packaging_type_ids ?? [],
+        parsed.data.default_packaging_type_id,
+      );
 
       // calibre → заменить набор диапазонов; simple → удалить схему (Cascade).
       const schemeSummary = await persistCalibreScheme(
@@ -177,6 +197,13 @@ export async function updateCulture(
       );
 
       const entries = changes.map((c) => ({ entity: ENTITY, entityId: id, ...c }));
+      entries.push({
+        entity: ENTITY,
+        entityId: id,
+        field: "packaging_types",
+        oldValue: null,
+        newValue: packagingSummary,
+      });
       // Схему логируем при calibre (правка набора) и при уходе на simple (удаление).
       if (
         parsed.data.acceptance_type === "calibre" ||

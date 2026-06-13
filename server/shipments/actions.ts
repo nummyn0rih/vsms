@@ -20,7 +20,7 @@ import { persistShipmentItems, ShipmentValidationError } from "./items";
 import {
   calcPackagingUnits,
   loadPackagingContext,
-  pairKey,
+  tripleKey,
   FACTORY_LOCATION_ID,
 } from "./packaging";
 import {
@@ -291,6 +291,7 @@ export async function deleteShipment(id: number): Promise<ActionResult> {
 type ItemForTare = {
   farmer_id: number;
   culture_id: number;
+  packaging_type_id: number | null;
   planned_weight_kg: Prisma.Decimal;
   farmer: { name: string };
   culture: { name: string };
@@ -316,18 +317,24 @@ async function buildTarePlan(
   const missing: string[] = [];
 
   for (const item of items) {
-    const packagingType = ctx.packagingByCulture.get(item.culture_id) ?? null;
-    const norm = ctx.normByPair.get(pairKey(item.farmer_id, item.culture_id));
-    const calc = calcPackagingUnits(item.planned_weight_kg, packagingType, norm);
+    const typeId = item.packaging_type_id;
+    const norm =
+      typeId != null
+        ? ctx.normByTriple.get(tripleKey(item.farmer_id, item.culture_id, typeId))
+        : null;
+    const calc = calcPackagingUnits(item.planned_weight_kg, typeId, norm);
 
     if (calc.status === "none") continue;
+    const typeName =
+      typeId != null ? (ctx.nameByType.get(typeId) ?? "тара") : "тара";
     if (calc.status === "missing_norm") {
-      missing.push(`${item.farmer.name} × ${item.culture.name}`);
+      // «культура × фермер × тип тары» — нет нормы по тройке.
+      missing.push(`${item.culture.name} × ${item.farmer.name} × ${typeName}`);
       continue;
     }
     lines.push({
       packagingTypeId: calc.packagingTypeId,
-      packagingName: packagingType!.name,
+      packagingName: typeName,
       farmerId: item.farmer_id,
       farmerName: item.farmer.name,
       units: calc.units,
@@ -566,9 +573,11 @@ function mapItem(item: {
   farmer_id: number;
   culture_id: number;
   planned_weight_kg: Prisma.Decimal;
+  packaging_type_id: number | null;
   contract_line_id: number | null;
   farmer: { name: string };
   culture: { name: string; color: string };
+  packagingType: { name: string } | null;
   contractLine: { label: string | null } | null;
 }): ShipmentItemRow {
   return {
@@ -579,6 +588,8 @@ function mapItem(item: {
     culture_name: item.culture.name,
     color: item.culture.color,
     planned_weight_kg: item.planned_weight_kg.toString(),
+    packaging_type_id: item.packaging_type_id,
+    packaging_type_name: item.packagingType?.name ?? null,
     contract_line_id: item.contract_line_id,
     contract_line_label: item.contractLine?.label ?? null,
   };
@@ -587,6 +598,7 @@ function mapItem(item: {
 const itemInclude = {
   farmer: { select: { name: true } },
   culture: { select: { name: true, color: true } },
+  packagingType: { select: { name: true } },
   contractLine: { select: { label: true } },
 } as const;
 
@@ -635,7 +647,7 @@ export async function getShipment(id: number): Promise<ShipmentDetail | null> {
 export async function listShipmentOptions(): Promise<ShipmentOptions> {
   const currentSeason = seasonYearOf(new Date());
 
-  const [drivers, farmers, cultures, lines] = await Promise.all([
+  const [drivers, farmers, cultures, lines, norms] = await Promise.all([
     prisma.driver.findMany({
       where: { active: true },
       include: { transportCompany: { select: { name: true } } },
@@ -648,7 +660,17 @@ export async function listShipmentOptions(): Promise<ShipmentOptions> {
     }),
     prisma.culture.findMany({
       where: { active: true },
-      select: { id: true, name: true, color: true },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        packagingTypes: {
+          select: {
+            is_default: true,
+            packagingType: { select: { id: true, name: true } },
+          },
+        },
+      },
       orderBy: { name: "asc" },
     }),
     prisma.contractLine.findMany({
@@ -662,6 +684,14 @@ export async function listShipmentOptions(): Promise<ShipmentOptions> {
       },
       orderBy: { id: "asc" },
     }),
+    prisma.packagingNorm.findMany({
+      select: {
+        farmer_id: true,
+        culture_id: true,
+        packaging_type_id: true,
+        avg_unit_weight_kg: true,
+      },
+    }),
   ]);
 
   return {
@@ -671,13 +701,28 @@ export async function listShipmentOptions(): Promise<ShipmentOptions> {
       transport_company_name: d.transportCompany.name,
     })),
     farmers,
-    cultures,
+    cultures: cultures.map((c) => ({
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      packagingTypes: c.packagingTypes.map((pt) => ({
+        id: pt.packagingType.id,
+        name: pt.packagingType.name,
+        is_default: pt.is_default,
+      })),
+    })),
     contractLines: lines.map((l) => ({
       id: l.id,
       farmer_id: l.contract.farmer_id,
       culture_id: l.culture_id,
       label: l.label,
       price_per_kg: l.price_per_kg.toString(),
+    })),
+    packagingNorms: norms.map((n) => ({
+      farmer_id: n.farmer_id,
+      culture_id: n.culture_id,
+      packaging_type_id: n.packaging_type_id,
+      value: n.avg_unit_weight_kg.toString(),
     })),
   };
 }

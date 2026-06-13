@@ -20,23 +20,29 @@ function authFail(e: unknown): { ok: false; error: string } | null {
   return null;
 }
 
-const whereKey = (farmerId: number, cultureId: number) => ({
-  farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId },
-});
-
-// Прямые ветки по режиму: обе модели имеют одинаковую форму ключей, различается
-// только поле-значение. Ветвим явно (типобезопасно), а не через общий делегат.
+// Норма тары — по тройке (фермер×культура×тип), вес рейса — по паре. packagingTypeId
+// обязателен для packaging, игнорируется для trip.
 async function readNorm(
   kind: NormKind,
   farmerId: number,
   cultureId: number,
+  packagingTypeId?: number,
 ): Promise<{ id: number; value: number } | null> {
-  const where = whereKey(farmerId, cultureId);
   if (kind === "packaging") {
-    const r = await prisma.packagingNorm.findUnique({ where });
+    const r = await prisma.packagingNorm.findUnique({
+      where: {
+        farmer_id_culture_id_packaging_type_id: {
+          farmer_id: farmerId,
+          culture_id: cultureId,
+          packaging_type_id: packagingTypeId!,
+        },
+      },
+    });
     return r ? { id: r.id, value: Number(r.avg_unit_weight_kg) } : null;
   }
-  const r = await prisma.tripWeightNorm.findUnique({ where });
+  const r = await prisma.tripWeightNorm.findUnique({
+    where: { farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId } },
+  });
   return r ? { id: r.id, value: Number(r.planned_trip_weight_kg) } : null;
 }
 
@@ -45,36 +51,69 @@ async function writeNorm(
   farmerId: number,
   cultureId: number,
   value: number,
+  packagingTypeId?: number,
 ): Promise<{ id: number }> {
-  const where = whereKey(farmerId, cultureId);
   if (kind === "packaging") {
     return prisma.packagingNorm.upsert({
-      where,
-      create: { farmer_id: farmerId, culture_id: cultureId, avg_unit_weight_kg: value },
+      where: {
+        farmer_id_culture_id_packaging_type_id: {
+          farmer_id: farmerId,
+          culture_id: cultureId,
+          packaging_type_id: packagingTypeId!,
+        },
+      },
+      create: {
+        farmer_id: farmerId,
+        culture_id: cultureId,
+        packaging_type_id: packagingTypeId!,
+        avg_unit_weight_kg: value,
+      },
       update: { avg_unit_weight_kg: value },
     });
   }
   return prisma.tripWeightNorm.upsert({
-    where,
+    where: { farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId } },
     create: { farmer_id: farmerId, culture_id: cultureId, planned_trip_weight_kg: value },
     update: { planned_trip_weight_kg: value },
   });
 }
 
-async function removeNorm(kind: NormKind, farmerId: number, cultureId: number) {
-  const where = whereKey(farmerId, cultureId);
-  if (kind === "packaging") return prisma.packagingNorm.delete({ where });
-  return prisma.tripWeightNorm.delete({ where });
+async function removeNorm(
+  kind: NormKind,
+  farmerId: number,
+  cultureId: number,
+  packagingTypeId?: number,
+) {
+  if (kind === "packaging") {
+    return prisma.packagingNorm.delete({
+      where: {
+        farmer_id_culture_id_packaging_type_id: {
+          farmer_id: farmerId,
+          culture_id: cultureId,
+          packaging_type_id: packagingTypeId!,
+        },
+      },
+    });
+  }
+  return prisma.tripWeightNorm.delete({
+    where: { farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId } },
+  });
 }
 
 export async function listNorms(kind: NormKind): Promise<NormCell[]> {
   if (kind === "packaging") {
     const rows = await prisma.packagingNorm.findMany({
-      select: { farmer_id: true, culture_id: true, avg_unit_weight_kg: true },
+      select: {
+        farmer_id: true,
+        culture_id: true,
+        packaging_type_id: true,
+        avg_unit_weight_kg: true,
+      },
     });
     return rows.map((r) => ({
       farmer_id: r.farmer_id,
       culture_id: r.culture_id,
+      packaging_type_id: r.packaging_type_id,
       value: Number(r.avg_unit_weight_kg),
     }));
   }
@@ -84,6 +123,7 @@ export async function listNorms(kind: NormKind): Promise<NormCell[]> {
   return rows.map((r) => ({
     farmer_id: r.farmer_id,
     culture_id: r.culture_id,
+    packaging_type_id: null,
     value: Number(r.planned_trip_weight_kg),
   }));
 }
@@ -93,6 +133,7 @@ export async function upsertNorm(
   farmerId: number,
   cultureId: number,
   value: number,
+  packagingTypeId?: number,
 ): Promise<ActionResult> {
   try {
     const user = await requireRole("admin");
@@ -103,23 +144,29 @@ export async function upsertNorm(
     }
     const next = parsed.data;
 
-    // Двойная защита: норму тары нельзя задать культуре без типа тары
-    // (на клиенте ячейка disabled, но сервер тоже обязан проверить).
+    // Норму тары можно задать только для разрешённой тройки (тип тары должен быть
+    // в списке разрешённых у культуры). Сервер обязан проверить, не только UI.
     if (kind === "packaging") {
-      const culture = await prisma.culture.findUnique({
-        where: { id: cultureId },
-        select: { packaging_type_id: true },
+      if (packagingTypeId == null) {
+        return { ok: false, error: "Не указан тип тары" };
+      }
+      const allowed = await prisma.culturePackagingType.findUnique({
+        where: {
+          culture_id_packaging_type_id: {
+            culture_id: cultureId,
+            packaging_type_id: packagingTypeId,
+          },
+        },
       });
-      if (!culture) return { ok: false, error: "Культура не найдена" };
-      if (culture.packaging_type_id == null) {
-        return { ok: false, error: "У культуры не задан тип тары" };
+      if (!allowed) {
+        return { ok: false, error: "Этот тип тары не разрешён для культуры" };
       }
     }
 
-    const existing = await readNorm(kind, farmerId, cultureId);
+    const existing = await readNorm(kind, farmerId, cultureId, packagingTypeId);
     if (existing && existing.value === next) return { ok: true };
 
-    const saved = await writeNorm(kind, farmerId, cultureId, next);
+    const saved = await writeNorm(kind, farmerId, cultureId, next, packagingTypeId);
 
     await logChange(
       {
@@ -143,14 +190,15 @@ export async function deleteNorm(
   kind: NormKind,
   farmerId: number,
   cultureId: number,
+  packagingTypeId?: number,
 ): Promise<ActionResult> {
   try {
     const user = await requireRole("admin");
 
-    const existing = await readNorm(kind, farmerId, cultureId);
+    const existing = await readNorm(kind, farmerId, cultureId, packagingTypeId);
     if (!existing) return { ok: true }; // идемпотентно: нечего удалять
 
-    await removeNorm(kind, farmerId, cultureId);
+    await removeNorm(kind, farmerId, cultureId, packagingTypeId);
 
     await logChange(
       {

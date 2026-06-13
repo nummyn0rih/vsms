@@ -41,7 +41,7 @@
 ```
 Farmer 1───N Contract 1───N ContractLine
 Farmer 1───N Shipment (через ShipmentItem)
-Farmer 1───N PackagingNorm     (фермер × культура → ср.вес ед.тары)
+Farmer 1───N PackagingNorm     (фермер × культура × тип тары → нетто ед.тары)
 Farmer 1───N TripWeightNorm    (фермер × культура → плановый вес рейса)
 
 Culture 1───N ContractLine
@@ -49,7 +49,7 @@ Culture 1───N ShipmentItem
 Culture 1───1 CalibreScheme     (если acceptance_type = calibre)
 Culture 1───N PackagingNorm
 Culture 1───N TripWeightNorm
-Culture N───1 PackagingType
+Culture N───N PackagingType   (через CulturePackagingType, один is_default)
 
 TransportCompany 1───N Driver
 Driver 1───N Shipment           (1 рейс = 1 водитель)
@@ -79,17 +79,18 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Сущность | Атрибуты |
 |---|---|
 | Farmer | id, name, contacts(json), notes, active |
-| Culture | id, name, color (hex), acceptance_type {simple\|calibre}, packaging_type_id (FK), active |
+| Culture | id, name, color (hex), acceptance_type {simple\|calibre}, active. Разрешённые типы тары — через CulturePackagingType (m2m, один дефолт); ноль связей = навал |
 | TransportCompany | id, name, notes, active |
 | Driver | id, full_name, phone, transport_company_id (FK), info (free text) |
-| PackagingType | id, name, kind {box\|barrel}, capacity_kg (200/250; null для ящика), active |
+| PackagingType | id, name, kind {box\|barrel}, capacity_kg (200/250; null для ящика; СПРАВОЧНОЕ брутто, в расчёте тары НЕ участвует), active |
+| CulturePackagingType | culture_id, packaging_type_id, is_default; уникум (culture, packaging_type). Разрешённые типы тары культуры, ровно один is_default (server-валидация) |
 | Ingredient | id, name, unit {kg\|l}, active |
 
 **Настройки**
 
 | Сущность | Атрибуты | Назначение |
 |---|---|---|
-| PackagingNorm | farmer_id, culture_id, avg_unit_weight_kg | вес ед.тары (ящик/бочка); уникум (farmer, culture) |
+| PackagingNorm | farmer_id, culture_id, packaging_type_id, avg_unit_weight_kg | нетто продукта на ед.тары ДАННОГО типа; уникум (farmer, culture, packaging_type) — норма по тройке |
 | TripWeightNorm | farmer_id, culture_id, planned_trip_weight_kg | основа «осталось ~N машин» |
 | IngredientRecipe | culture_id, ingredient_id, qty_per_kg_product | рецептура на кг продукции (M:N) |
 | CalibreScheme | id, culture_id | привязана к калибруемой культуре |
@@ -109,7 +110,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Сущность | Атрибуты |
 |---|---|
 | Shipment | id, code, departure_date, arrival_date, status {planned\|sent\|arrived\|accepted}, driver_id (FK), created_by, timestamps |
-| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное) |
+| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал; выбор из разрешённых типов культуры), contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное) |
 | AcceptanceAct | id, shipment_item_id (FK), brak_percent, accepted_percent (simple), comment, act_number, weighed_at |
 | CalibreResult | id, acceptance_act_id (FK), calibre_range_id (FK), percent, contract_line_id (FK, nullable) — привязка категории к строке = оплата по этой строке (объём+цена строки); null = только статистика |
 
@@ -141,7 +142,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 **Правила движка:**
 1. **Локация** = завод (фикс. id=0) ∪ Farmer.id. Лом/утиль — НЕ локации.
 2. **Лом — это состояние** (`state`), не место. «Списать в лом» = движение годная→лом на той же локации. «Утилизация» = disposal лома из системы. Баланс лома по фермеру виден (для сбора целой машиной).
-3. **Авто-движение тары** при переходе Shipment `planned → sent` (НЕ при создании): quantity = planned_weight / PackagingNorm.avg_unit_weight, тип return. НЕ зависит от приёмки. Откат `sent → planned` (только Admin) сторнирует обратным движением (BR-3, BR-19).
+3. **Авто-движение тары** при переходе Shipment `planned → sent` (НЕ при создании): тип тары берётся из ShipmentItem.packaging_type_id, quantity = ceil(planned_weight / PackagingNorm.avg_unit_weight по тройке фермер×культура×тип), тип return. Развилки box/barrel нет, capacity_kg не участвует. Навал (тип=null) → движения нет. Нет нормы по тройке → переход заблокирован. НЕ зависит от приёмки. Откат `sent → planned` (только Admin) сторнирует обратным движением (BR-3, BR-19).
 4. **Авто-расход ингредиентов** на приёмке: actual_weight × IngredientRecipe, списание у фермера.
 5. **Баланс**(location, item, state) = Σ in − Σ out. Может быть ОТРИЦАТЕЛЬНЫМ (разрешено).
 6. Дефицит НЕ блокирует отгрузку — только информационные алерты (AlertRule.threshold).

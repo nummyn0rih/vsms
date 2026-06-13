@@ -68,6 +68,7 @@ const EMPTY_ITEM = {
   farmer_id: "",
   culture_id: "",
   planned_weight_kg: "",
+  packaging_type_id: "",
   contract_line_id: "",
 };
 
@@ -107,6 +108,8 @@ export function ShipmentFormDialog(props: Props) {
             farmer_id: String(it.farmer_id),
             culture_id: String(it.culture_id),
             planned_weight_kg: it.planned_weight_kg,
+            packaging_type_id:
+              it.packaging_type_id != null ? String(it.packaging_type_id) : "",
             contract_line_id:
               it.contract_line_id != null ? String(it.contract_line_id) : "",
           }))
@@ -307,6 +310,9 @@ export function ShipmentFormDialog(props: Props) {
                     setLine={(v) =>
                       form.setValue(`items.${i}.contract_line_id`, v)
                     }
+                    setPackagingType={(v) =>
+                      form.setValue(`items.${i}.packaging_type_id`, v)
+                    }
                   />
                 ))}
 
@@ -340,6 +346,7 @@ function ItemRow({
   canRemove,
   onRemove,
   setLine,
+  setPackagingType,
 }: {
   index: number;
   control: Control<ShipmentInput>;
@@ -348,10 +355,49 @@ function ItemRow({
   canRemove: boolean;
   onRemove: () => void;
   setLine: (value: string) => void;
+  setPackagingType: (value: string) => void;
 }) {
   const farmerId = useWatch({ control, name: `items.${index}.farmer_id` });
   const cultureId = useWatch({ control, name: `items.${index}.culture_id` });
   const lineId = useWatch({ control, name: `items.${index}.contract_line_id` });
+  const typeId = useWatch({ control, name: `items.${index}.packaging_type_id` });
+  const weight = useWatch({ control, name: `items.${index}.planned_weight_kg` });
+
+  const culture = options.cultures.find((c) => String(c.id) === cultureId);
+  const packagingTypes = culture?.packagingTypes ?? [];
+  const showPackaging = Boolean(cultureId) && packagingTypes.length > 0;
+
+  // Подставить дефолтный тип тары при выборе/смене культуры: если у культуры есть
+  // типы, а текущий не из них (или пуст) — берём дефолт (или первый).
+  useEffect(() => {
+    if (!cultureId) return;
+    if (packagingTypes.length === 0) {
+      if (typeId) setPackagingType("");
+      return;
+    }
+    if (!packagingTypes.some((t) => String(t.id) === typeId)) {
+      const def = packagingTypes.find((t) => t.is_default) ?? packagingTypes[0];
+      setPackagingType(String(def.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cultureId, packagingTypes.length]);
+
+  // Инфо-строка тары: норма по тройке (клиент считает для показа, сервер — источник истины).
+  const tareInfo = (() => {
+    if (!showPackaging || !typeId || !weight) return null;
+    const w = Number(String(weight).replace(",", "."));
+    if (!Number.isFinite(w) || w <= 0) return null;
+    const norm = options.packagingNorms.find(
+      (n) =>
+        String(n.farmer_id) === farmerId &&
+        String(n.culture_id) === cultureId &&
+        String(n.packaging_type_id) === typeId,
+    );
+    if (!norm) return { ok: false as const };
+    const unit = Number(norm.value);
+    const typeName = packagingTypes.find((t) => String(t.id) === typeId)?.name ?? "тара";
+    return { ok: true as const, units: Math.ceil(w / unit), typeName };
+  })();
 
   const matching = options.contractLines.filter(
     (l) => String(l.farmer_id) === farmerId && String(l.culture_id) === cultureId,
@@ -465,6 +511,33 @@ function ItemRow({
             </FormItem>
           )}
         />
+        {showPackaging && (
+          <FormField
+            control={control}
+            name={`items.${index}.packaging_type_id`}
+            render={({ field }) => (
+              <FormItem className="w-40">
+                <FormLabel className="text-xs">Тип тары</FormLabel>
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Тип тары" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {packagingTypes.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name}
+                        {t.is_default ? " (по умолч.)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
         {showLine && (
           <FormField
             control={control}
@@ -489,6 +562,20 @@ function ItemRow({
           />
         )}
       </div>
+
+      {/* Инфо-строка тары (плановая потребность). Норма по тройке; на отправке —
+          источник истины сервер. Нет нормы → предупреждение, planned сохранить можно. */}
+      {tareInfo &&
+        (tareInfo.ok ? (
+          <p className="text-xs text-muted-foreground">
+            Тара: ≈ <span className="tabular-nums">{tareInfo.units}</span>{" "}
+            {tareInfo.typeName}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-600">
+            Нет нормы тары для этого типа — отправка будет заблокирована
+          </p>
+        ))}
     </div>
   );
 }

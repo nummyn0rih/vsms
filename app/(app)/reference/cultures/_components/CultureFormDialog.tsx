@@ -10,7 +10,6 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import {
   cultureSchema,
   ACCEPTANCE_TYPE_LABELS,
-  NO_PACKAGING,
   type CultureInput,
   type CultureRow,
   type PackagingOption,
@@ -60,8 +59,9 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
       name: row?.name ?? "",
       color: row?.color ?? DEFAULT_COLOR,
       acceptance_type: row?.acceptance_type ?? "simple",
-      packaging_type_id:
-        row?.packaging_type_id != null ? String(row.packaging_type_id) : NO_PACKAGING,
+      packaging_type_ids: row?.packagingTypes.map((pt) => String(pt.id)) ?? [],
+      default_packaging_type_id:
+        row?.packagingTypes.find((pt) => pt.is_default)?.id.toString() ?? "",
       ranges: row?.ranges ?? [],
     },
   });
@@ -88,19 +88,41 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
     return false;
   })();
 
-  // В edit-режиме культура может ссылаться на уже деактивированный тип тары
-  // (его нет в active-списке). Добавляем его опцией, чтобы значение не терялось
-  // и Select не падал (DOMAIN.md §2: допускаем «без тары», не теряем текущее).
-  const options = [...packagingOptions];
-  if (
-    mode === "edit" &&
-    row.packaging_type_id != null &&
-    !options.some((o) => o.id === row.packaging_type_id)
-  ) {
-    options.unshift({
-      id: row.packaging_type_id,
-      name: `${row.packaging_type_name ?? "Тип тары"} (неактивен)`,
-    });
+  // Опции типов тары = активные + (в edit) уже выбранные, но деактивированные
+  // (FK-Select паттерн: не теряем текущую связь). Помечаем неактивные.
+  const typeOptions: (PackagingOption & { inactive?: boolean })[] = [
+    ...packagingOptions,
+  ];
+  if (mode === "edit") {
+    for (const pt of row.packagingTypes) {
+      if (!typeOptions.some((o) => o.id === pt.id)) {
+        typeOptions.push({ id: pt.id, name: pt.name, inactive: true });
+      }
+    }
+  }
+
+  const selectedTypeIds = useWatch({
+    control: form.control,
+    name: "packaging_type_ids",
+  });
+  const defaultTypeId = useWatch({
+    control: form.control,
+    name: "default_packaging_type_id",
+  });
+
+  // Чек/расчек типа: при добавлении первого — сразу дефолт; при снятии дефолта —
+  // дефолт уезжает на первый оставшийся (или пусто).
+  function toggleType(id: string, checked: boolean) {
+    const cur = selectedTypeIds ?? [];
+    const next = checked ? [...cur, id] : cur.filter((v) => v !== id);
+    form.setValue("packaging_type_ids", next, { shouldValidate: true });
+    if (checked && next.length === 1) {
+      form.setValue("default_packaging_type_id", id, { shouldValidate: true });
+    } else if (!checked && defaultTypeId === id) {
+      form.setValue("default_packaging_type_id", next[0] ?? "", {
+        shouldValidate: true,
+      });
+    }
   }
 
   async function onSubmit(values: CultureInput) {
@@ -227,31 +249,59 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="packaging_type_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Тип тары</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Выберите тип тары" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NO_PACKAGING}>Без тары</SelectItem>
-                      {options.map((o) => (
-                        <SelectItem key={o.id} value={String(o.id)}>
-                          {o.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+            {/* Типы тары: чекбокс = разрешён, radio = дефолтный (один из выбранных).
+                Ни одного = навал (без тары). */}
+            <FormItem>
+              <FormLabel>Типы тары</FormLabel>
+              <div className="grid gap-1.5 rounded-md border p-3">
+                {typeOptions.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    Нет активных типов тары — заведите в справочнике.
+                  </p>
+                )}
+                {typeOptions.map((o) => {
+                  const idStr = String(o.id);
+                  const checked = (selectedTypeIds ?? []).includes(idStr);
+                  return (
+                    <div key={o.id} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`pt-${o.id}`}
+                        checked={checked}
+                        onChange={(e) => toggleType(idStr, e.target.checked)}
+                        className="size-4"
+                      />
+                      <label htmlFor={`pt-${o.id}`} className="flex-1 text-sm">
+                        {o.name}
+                        {o.inactive && (
+                          <span className="text-muted-foreground"> (неактивен)</span>
+                        )}
+                      </label>
+                      <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <input
+                          type="radio"
+                          name="default_packaging_type"
+                          disabled={!checked}
+                          checked={defaultTypeId === idStr}
+                          onChange={() =>
+                            form.setValue("default_packaging_type_id", idStr, {
+                              shouldValidate: true,
+                            })
+                          }
+                          className="size-3.5"
+                        />
+                        по умолчанию
+                      </label>
+                    </div>
+                  );
+                })}
+              </div>
+              {form.formState.errors.default_packaging_type_id && (
+                <p className="text-sm text-destructive">
+                  {form.formState.errors.default_packaging_type_id.message}
+                </p>
               )}
-            />
+            </FormItem>
 
             {/* Блок калибров — только для acceptance_type=calibre. Здесь задаются
                 ТОЛЬКО диапазоны (границы + принят/не принят), без процентов:

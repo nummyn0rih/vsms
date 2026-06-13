@@ -23,6 +23,9 @@ export const shipmentItemSchema = z.object({
   farmer_id: z.string().trim().min(1, "Выберите фермера"),
   culture_id: z.string().trim().min(1, "Выберите культуру"),
   planned_weight_kg: decimalPositive("Вес должен быть больше 0"),
+  // Тип тары позиции (из разрешённых типов культуры). Пусто = навал. Серверная
+  // валидация членства типа в культуре — в items.ts (B2.5).
+  packaging_type_id: z.string().trim().optional(),
   // Привязка к строке контракта необязательна на planned (NOT NULL только при
   // accepted, BR-8 — этап C). BR-7 (своя культура+фермер) проверяется на сервере.
   contract_line_id: z.string().trim().optional(),
@@ -71,6 +74,8 @@ export type ShipmentItemRow = {
   culture_name: string;
   color: string;
   planned_weight_kg: string;
+  packaging_type_id: number | null;
+  packaging_type_name: string | null;
   contract_line_id: number | null;
   contract_line_label: string | null;
 };
@@ -106,7 +111,26 @@ export type DriverOption = {
   transport_company_name: string | null;
 };
 export type FarmerOption = { id: number; name: string };
-export type CultureOption = { id: number; name: string; color: string };
+// Разрешённый тип тары культуры (для выбора в позиции отгрузки).
+export type CulturePackagingOption = {
+  id: number;
+  name: string;
+  is_default: boolean;
+};
+export type CultureOption = {
+  id: number;
+  name: string;
+  color: string;
+  packagingTypes: CulturePackagingOption[];
+};
+
+// Нетто-норма по тройке — клиент считает инфо-строку «≈ N тары» (сервер — источник истины).
+export type PackagingNormOption = {
+  farmer_id: number;
+  culture_id: number;
+  packaging_type_id: number;
+  value: string;
+};
 
 // Строка контракта текущего сезона — клиент фильтрует по выбранным фермеру+культуре.
 export type ContractLineOption = {
@@ -122,6 +146,7 @@ export type ShipmentOptions = {
   farmers: FarmerOption[];
   cultures: CultureOption[];
   contractLines: ContractLineOption[];
+  packagingNorms: PackagingNormOption[];
 };
 
 // --- Предпросмотр движений тары перед отправкой (B2, AlertDialog «Отправить») ---

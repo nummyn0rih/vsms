@@ -11,9 +11,6 @@ export const ACCEPTANCE_TYPE_LABELS: Record<"simple" | "calibre", string> = {
   calibre: "Калибровка",
 };
 
-// Sentinel «без тары» для Select: Radix запрещает SelectItem value="".
-// В action нормализуем обратно в null.
-export const NO_PACKAGING = "none";
 
 // color обязателен (DOMAIN.md §2): цветовая метка используется во всём приложении
 // (лента, heatmap, аналитика). Нативный <input type="color"> всегда отдаёт #rrggbb,
@@ -46,12 +43,27 @@ export const cultureSchema = z
     name: z.string().trim().min(1, "Название обязательно"),
     color: z.string().trim().regex(HEX_COLOR, "Цвет в формате #RRGGBB"),
     acceptance_type: z.enum(["simple", "calibre"]),
-    // Приходит из Select строкой: "none" | числовой id. Нормализуем в action.
-    packaging_type_id: z.string().optional(),
+    // Разрешённые типы тары культуры (id строками). Пусто = навал (валидно).
+    packaging_type_ids: z.array(z.string()).optional(),
+    // Дефолтный тип — должен входить в packaging_type_ids, если те непусты.
+    default_packaging_type_id: z.string().optional(),
     // Схема калибров — только для acceptance_type=calibre (см. superRefine).
     ranges: z.array(calibreRangeSchema).optional(),
   })
   .superRefine((val, ctx) => {
+    // Типы тары: если выбран хотя бы один — ровно один дефолт из выбранных.
+    const typeIds = val.packaging_type_ids ?? [];
+    if (typeIds.length > 0) {
+      const def = val.default_packaging_type_id?.trim();
+      if (!def || !typeIds.includes(def)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["default_packaging_type_id"],
+          message: "Отметьте дефолтный тип тары из выбранных",
+        });
+      }
+    }
+
     // Для simple схема калибров не нужна и не валидируется.
     if (val.acceptance_type !== "calibre") return;
     const rows = val.ranges ?? [];
@@ -161,19 +173,26 @@ export const cultureSchema = z
 
 export type CultureInput = z.infer<typeof cultureSchema>;
 
-// Вью-тип для клиентских компонентов. packaging_type_name — из связи, чтобы
-// показать имя даже у деактивированного типа (в таблице и edit-форме).
-// ranges — текущая схема калибров (для edit-формы); пусто для simple.
+// Один разрешённый тип тары культуры (для таблицы и edit-формы). active — чтобы
+// показать пометку «неактивен» у деактивированного типа, не теряя связь.
+export type CulturePackagingTypeRow = {
+  id: number; // packaging_type_id
+  name: string;
+  is_default: boolean;
+  active: boolean;
+};
+
+// Вью-тип для клиентских компонентов. packagingTypes — разрешённые типы тары
+// (с пометкой дефолта). ranges — текущая схема калибров (edit); пусто для simple.
 export type CultureRow = {
   id: number;
   name: string;
   color: string;
   acceptance_type: "simple" | "calibre";
-  packaging_type_id: number | null;
-  packaging_type_name: string | null;
+  packagingTypes: CulturePackagingTypeRow[];
   ranges: CalibreRangeInput[];
   active: boolean;
 };
 
-// Опции для Select типа тары в форме (только active).
+// Опции для multi-select типа тары в форме (только active).
 export type PackagingOption = { id: number; name: string };
