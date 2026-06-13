@@ -365,37 +365,44 @@ function ItemRow({
 
   const culture = options.cultures.find((c) => String(c.id) === cultureId);
   const packagingTypes = culture?.packagingTypes ?? [];
-  const showPackaging = Boolean(cultureId) && packagingTypes.length > 0;
+  const typeCount = packagingTypes.length;
+  // 0 типов — навал (поля нет); 1 — авто-тип со статичной меткой; ≥2 — select.
+  const singleType = typeCount === 1 ? packagingTypes[0] : null;
+  const showPackagingSelect = Boolean(cultureId) && typeCount >= 2;
+  const hasPackaging = Boolean(cultureId) && typeCount > 0; // для метки и инфо-строки
 
-  // Подставить дефолтный тип тары при выборе/смене культуры: если у культуры есть
-  // типы, а текущий не из них (или пуст) — берём дефолт (или первый).
+  // Разрешённый тип для текущей культуры — считаем СИНХРОННО (не в эффекте): навал → "";
+  // сохранённый валидный тип оставляем; иначе дефолт/единственный. Подаётся прямо в
+  // Select (value), поэтому дефолт виден сразу, без зависимости от перерисовки Controller.
+  const resolvedTypeId = (() => {
+    if (typeCount === 0) return "";
+    if (typeId && packagingTypes.some((t) => String(t.id) === typeId)) return typeId;
+    const def = packagingTypes.find((t) => t.is_default) ?? packagingTypes[0];
+    return String(def.id);
+  })();
+
+  // Эффект только синхронизирует стор формы (для submit) — покрывает навал, смену
+  // культуры и авто-дефолт. Отображение уже держит resolvedTypeId.
   useEffect(() => {
-    if (!cultureId) return;
-    if (packagingTypes.length === 0) {
-      if (typeId) setPackagingType("");
-      return;
-    }
-    if (!packagingTypes.some((t) => String(t.id) === typeId)) {
-      const def = packagingTypes.find((t) => t.is_default) ?? packagingTypes[0];
-      setPackagingType(String(def.id));
-    }
+    if ((typeId ?? "") !== resolvedTypeId) setPackagingType(resolvedTypeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cultureId, packagingTypes.length]);
+  }, [resolvedTypeId]);
 
   // Инфо-строка тары: норма по тройке (клиент считает для показа, сервер — источник истины).
   const tareInfo = (() => {
-    if (!showPackaging || !typeId || !weight) return null;
+    if (!hasPackaging || !resolvedTypeId || !weight) return null;
     const w = Number(String(weight).replace(",", "."));
     if (!Number.isFinite(w) || w <= 0) return null;
     const norm = options.packagingNorms.find(
       (n) =>
         String(n.farmer_id) === farmerId &&
         String(n.culture_id) === cultureId &&
-        String(n.packaging_type_id) === typeId,
+        String(n.packaging_type_id) === resolvedTypeId,
     );
     if (!norm) return { ok: false as const };
     const unit = Number(norm.value);
-    const typeName = packagingTypes.find((t) => String(t.id) === typeId)?.name ?? "тара";
+    const typeName =
+      packagingTypes.find((t) => String(t.id) === resolvedTypeId)?.name ?? "тара";
     return { ok: true as const, units: Math.ceil(w / unit), typeName };
   })();
 
@@ -511,14 +518,24 @@ function ItemRow({
             </FormItem>
           )}
         />
-        {showPackaging && (
+        {singleType && (
+          // Одно-типовая культура: select не нужен, тип проставлен авто. Статичная
+          // приглушённая метка — чтобы видеть применяемую тару. Высота под инпут веса.
+          <FormItem className="w-40">
+            <FormLabel className="text-xs">Тип тары</FormLabel>
+            <div className="flex h-10 items-center text-sm text-muted-foreground">
+              {singleType.name}
+            </div>
+          </FormItem>
+        )}
+        {showPackagingSelect && (
           <FormField
             control={control}
             name={`items.${index}.packaging_type_id`}
             render={({ field }) => (
               <FormItem className="w-40">
                 <FormLabel className="text-xs">Тип тары</FormLabel>
-                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                <Select value={resolvedTypeId} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Тип тары" />
