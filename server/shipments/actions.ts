@@ -14,8 +14,15 @@ import {
   type ShipmentDetail,
   type ShipmentItemRow,
   type ShipmentOptions,
+  type ShipmentTarePreview,
 } from "./schema";
 import { persistShipmentItems, ShipmentValidationError } from "./items";
+import {
+  calcPackagingUnits,
+  loadPackagingContext,
+  pairKey,
+  FACTORY_LOCATION_ID,
+} from "./packaging";
 import {
   isFactoryWorkday,
   parseDateUTC,
@@ -275,6 +282,280 @@ export async function deleteShipment(id: number): Promise<ActionResult> {
     return { ok: true };
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось удалить отгрузку" };
+  }
+}
+
+// --- B2: переходы статуса planned ↔ sent + авто-движение тары (BR-3, BR-13, BR-19) ---
+
+// Позиция в объёме, нужном расчёту тары (имена — для текста/ChangeLog).
+type ItemForTare = {
+  farmer_id: number;
+  culture_id: number;
+  planned_weight_kg: Prisma.Decimal;
+  farmer: { name: string };
+  culture: { name: string };
+};
+
+type TarePlanLine = {
+  packagingTypeId: number;
+  packagingName: string;
+  farmerId: number;
+  farmerName: string;
+  units: number;
+};
+
+// Считает тару по всем позициям. lines — что списать (status=ok), missing — пары
+// box-культур без нормы (status=none пропускаем, движения нет). Чистый помощник:
+// и предпросмотр, и отправка прогоняют один и тот же расчёт.
+async function buildTarePlan(
+  tx: Tx,
+  items: ItemForTare[],
+): Promise<{ lines: TarePlanLine[]; missing: string[] }> {
+  const ctx = await loadPackagingContext(tx, items);
+  const lines: TarePlanLine[] = [];
+  const missing: string[] = [];
+
+  for (const item of items) {
+    const packagingType = ctx.packagingByCulture.get(item.culture_id) ?? null;
+    const norm = ctx.normByPair.get(pairKey(item.farmer_id, item.culture_id));
+    const calc = calcPackagingUnits(item.planned_weight_kg, packagingType, norm);
+
+    if (calc.status === "none") continue;
+    if (calc.status === "missing_norm") {
+      missing.push(`${item.farmer.name} × ${item.culture.name}`);
+      continue;
+    }
+    lines.push({
+      packagingTypeId: calc.packagingTypeId,
+      packagingName: packagingType!.name,
+      farmerId: item.farmer_id,
+      farmerName: item.farmer.name,
+      units: calc.units,
+    });
+  }
+
+  return { lines, missing };
+}
+
+const tareItemInclude = {
+  farmer: { select: { name: true } },
+  culture: { select: { name: true } },
+} as const;
+
+// Предпросмотр движений тары для AlertDialog «Отправить». Чтение, без записи.
+export async function previewShipmentTare(
+  id: number,
+): Promise<ShipmentTarePreview> {
+  const shipment = await prisma.shipment.findUnique({
+    where: { id },
+    include: { items: { include: tareItemInclude } },
+  });
+  if (!shipment) return { ok: false, driverMissing: false, missing: [] };
+
+  const { lines, missing } = await buildTarePlan(prisma, shipment.items);
+  const driverMissing = shipment.driver_id == null;
+
+  if (driverMissing || missing.length > 0) {
+    return { ok: false, driverMissing, missing };
+  }
+
+  return {
+    ok: true,
+    lines: lines.map((l) => ({
+      farmerName: l.farmerName,
+      packagingName: l.packagingName,
+      units: l.units,
+    })),
+  };
+}
+
+// Сводка по типам тары для ChangeLog: «Ящик овощной ×62; Бочка 200 ×4».
+function tareSummary(lines: TarePlanLine[]): string {
+  const byType = new Map<string, number>();
+  for (const l of lines) {
+    byType.set(l.packagingName, (byType.get(l.packagingName) ?? 0) + l.units);
+  }
+  return [...byType].map(([name, units]) => `${name} ×${units}`).join("; ");
+}
+
+// Доменная ошибка отправки (нет нормы) — откатывает транзакцию, ловится в action.
+class ShipmentSendError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ShipmentSendError";
+  }
+}
+
+// planned → sent: создаёт движения тары (фермер→завод) и переводит статус.
+export async function sendShipment(id: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipment = await tx.shipment.findUnique({
+        where: { id },
+        include: { items: { include: tareItemInclude } },
+      });
+      if (!shipment) return { ok: false as const, error: "Отгрузка не найдена" };
+      if (shipment.status !== "planned") {
+        return { ok: false as const, error: "Отгрузка уже отправлена" };
+      }
+      // Водитель обязателен при отправке (на planned был опционален).
+      if (shipment.driver_id == null) {
+        return { ok: false as const, error: "Назначьте водителя перед отправкой" };
+      }
+
+      const { lines, missing } = await buildTarePlan(tx, shipment.items);
+      if (missing.length > 0) {
+        // Хотя бы одна box-культура без нормы → откат всей транзакции (throw уводит
+        // в catch как обычная ошибка; см. ShipmentSendError ниже).
+        throw new ShipmentSendError(
+          `Нет нормы фасовки: ${missing.join("; ")}. Задайте норму в Настройках.`,
+        );
+      }
+
+      if (lines.length > 0) {
+        await tx.stockMovement.createMany({
+          data: lines.map((l) => ({
+            date: shipment.departure_date ?? new Date(),
+            kind: "packaging" as const,
+            packaging_type_id: l.packagingTypeId,
+            quantity: l.units,
+            from_location_id: l.farmerId,
+            to_location_id: FACTORY_LOCATION_ID,
+            from_state: "good" as const,
+            to_state: "good" as const,
+            movement_type: "return" as const,
+            source_doc_type: "shipment" as const,
+            source_doc_id: id,
+          })),
+        });
+      }
+
+      await tx.shipment.update({ where: { id }, data: { status: "sent" } });
+
+      await logChange(
+        [
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "status",
+            oldValue: "planned",
+            newValue: "sent",
+          },
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "movements",
+            newValue:
+              lines.length > 0
+                ? `${lines.length} движ.: ${tareSummary(lines)}`
+                : "тары нет (навал)",
+          },
+        ],
+        Number(user.id),
+        tx,
+      );
+
+      return { ok: true as const };
+    });
+
+    if (result.ok) revalidatePath(PATH);
+    return result;
+  } catch (e) {
+    if (e instanceof ShipmentSendError) return { ok: false, error: e.message };
+    return authFail(e) ?? { ok: false, error: "Не удалось отправить отгрузку" };
+  }
+}
+
+// sent → planned (только Admin): сторнирует тару обратными движениями. Исходные
+// движения НЕ трогаем (аудит). Сторнируем НЕТТО по группам (тип тары × фермер) —
+// при повторном цикле отправка/откат сторнируется только несторнированный остаток.
+export async function revertShipmentToPlanned(id: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipment = await tx.shipment.findUnique({ where: { id } });
+      if (!shipment) return { ok: false as const, error: "Отгрузка не найдена" };
+      if (shipment.status !== "sent") {
+        return { ok: false as const, error: "Откат возможен только из статуса «Отправлена»" };
+      }
+
+      const movements = await tx.stockMovement.findMany({
+        where: {
+          source_doc_type: "shipment",
+          source_doc_id: id,
+          kind: "packaging",
+          movement_type: "return",
+        },
+      });
+
+      // Нетто по (тип тары × фермер): оригиналы (→завод) минус уже созданные сторно
+      // (→фермер). Ключ группы — `${packagingTypeId}:${farmerId}`.
+      const net = new Map<string, { packagingTypeId: number; farmerId: number; qty: Prisma.Decimal }>();
+      for (const m of movements) {
+        const isOriginal = m.to_location_id === FACTORY_LOCATION_ID;
+        const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
+        if (m.packaging_type_id == null || farmerId == null) continue;
+        const key = `${m.packaging_type_id}:${farmerId}`;
+        const cur = net.get(key) ?? {
+          packagingTypeId: m.packaging_type_id,
+          farmerId,
+          qty: new Prisma.Decimal(0),
+        };
+        cur.qty = isOriginal ? cur.qty.plus(m.quantity) : cur.qty.minus(m.quantity);
+        net.set(key, cur);
+      }
+
+      const storno = [...net.values()].filter((g) => g.qty.gt(0));
+      if (storno.length > 0) {
+        await tx.stockMovement.createMany({
+          data: storno.map((g) => ({
+            date: new Date(),
+            kind: "packaging" as const,
+            packaging_type_id: g.packagingTypeId,
+            quantity: g.qty,
+            from_location_id: FACTORY_LOCATION_ID,
+            to_location_id: g.farmerId,
+            from_state: "good" as const,
+            to_state: "good" as const,
+            movement_type: "return" as const,
+            source_doc_type: "shipment" as const,
+            source_doc_id: id,
+          })),
+        });
+      }
+
+      await tx.shipment.update({ where: { id }, data: { status: "planned" } });
+
+      await logChange(
+        [
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "status",
+            oldValue: "sent",
+            newValue: "planned",
+          },
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "storno",
+            newValue: `сторно тары: ${storno.length} групп`,
+          },
+        ],
+        Number(user.id),
+        tx,
+      );
+
+      return { ok: true as const };
+    });
+
+    if (result.ok) revalidatePath(PATH);
+    return result;
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось откатить отгрузку" };
   }
 }
 

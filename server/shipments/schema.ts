@@ -123,3 +123,18 @@ export type ShipmentOptions = {
   cultures: CultureOption[];
   contractLines: ContractLineOption[];
 };
+
+// --- Предпросмотр движений тары перед отправкой (B2, AlertDialog «Отправить») ---
+
+// ok=false → отправка невозможна: либо нет водителя, либо нет норм по парам.
+export type ShipmentTarePreview =
+  | {
+      ok: true;
+      lines: { farmerName: string; packagingName: string; units: number }[];
+    }
+  | {
+      ok: false;
+      driverMissing: boolean;
+      // «ИП Ковальчук × Томаты» — пары без нормы фасовки.
+      missing: string[];
+    };

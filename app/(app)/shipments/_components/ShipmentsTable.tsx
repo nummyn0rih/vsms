@@ -3,13 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Send, Undo2 } from "lucide-react";
 
-import { getShipment, deleteShipment } from "@/server/shipments/actions";
+import {
+  getShipment,
+  deleteShipment,
+  sendShipment,
+  revertShipmentToPlanned,
+  previewShipmentTare,
+} from "@/server/shipments/actions";
 import type {
   ShipmentListRow,
   ShipmentDetail,
   ShipmentOptions,
+  ShipmentTarePreview,
 } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { Button } from "@/components/ui/button";
@@ -138,8 +145,16 @@ export function ShipmentsTable({
             <TableCell className="text-right">
               <RoleGate allow={["admin"]}>
                 <div className="flex justify-end gap-1">
-                  <EditShipmentButton id={row.id} options={options} />
-                  <DeleteShipmentButton row={row} />
+                  {/* planned: правка/удаление/отправка. sent: только откат.
+                      arrived/accepted — этап C/D, действий пока нет (BR-19). */}
+                  {row.status === "planned" && (
+                    <>
+                      <SendShipmentButton row={row} />
+                      <EditShipmentButton id={row.id} options={options} />
+                      <DeleteShipmentButton row={row} />
+                    </>
+                  )}
+                  {row.status === "sent" && <RevertShipmentButton row={row} />}
                 </div>
               </RoleGate>
             </TableCell>
@@ -187,6 +202,147 @@ function EditShipmentButton({
         />
       )}
     </>
+  );
+}
+
+// Отправка planned → sent. При открытии диалога лениво грузим предпросмотр тары:
+// нет водителя / нет норм → ошибка в теле, кнопка disabled; иначе список списаний.
+function SendShipmentButton({ row }: { row: ShipmentListRow }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [preview, setPreview] = useState<ShipmentTarePreview | null>(null);
+  const [sending, setSending] = useState(false);
+
+  async function onOpenChange(next: boolean) {
+    setOpen(next);
+    if (next) {
+      setPreview(null);
+      setPreview(await previewShipmentTare(row.id));
+    }
+  }
+
+  async function onConfirm() {
+    setSending(true);
+    const res = await sendShipment(row.id);
+    setSending(false);
+    if (res.ok) {
+      toast.success(`Отгрузка №${row.code} отправлена`);
+      setOpen(false);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  const canSend = preview?.ok === true;
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon-sm" title="Отправить">
+          <Send className="size-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Отправить отгрузку №{row.code}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            При отправке тара спишется со складов фермеров на завод.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {preview === null && (
+          <p className="text-sm text-muted-foreground">Расчёт тары…</p>
+        )}
+
+        {preview?.ok === true && (
+          <div className="text-sm">
+            {preview.lines.length === 0 ? (
+              <p className="text-muted-foreground">Тары нет (навал) — движений не будет.</p>
+            ) : (
+              <>
+                <p className="mb-1 font-medium">Будет списано у фермеров:</p>
+                <ul className="space-y-0.5">
+                  {preview.lines.map((l, i) => (
+                    <li key={i}>
+                      {l.farmerName} — <span className="tabular-nums">{l.units}</span>{" "}
+                      {l.packagingName}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+
+        {preview?.ok === false && (
+          <div className="text-sm text-destructive">
+            {preview.driverMissing && <p>Назначьте водителя перед отправкой.</p>}
+            {preview.missing.length > 0 && (
+              <>
+                <p className="font-medium">Нет нормы фасовки для пар:</p>
+                <ul className="space-y-0.5">
+                  {preview.missing.map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+
+        <AlertDialogFooter>
+          <AlertDialogCancel>Отмена</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={!canSend || sending}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
+          >
+            Отправить
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// Откат sent → planned со сторно тары (только Admin).
+function RevertShipmentButton({ row }: { row: ShipmentListRow }) {
+  const router = useRouter();
+
+  async function onConfirm() {
+    const res = await revertShipmentToPlanned(row.id);
+    if (res.ok) {
+      toast.success(`Отгрузка №${row.code} возвращена в черновик`);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="ghost" size="icon-sm" title="Откатить в план">
+          <Undo2 className="size-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Откатить отгрузку №{row.code} в черновик?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Списанная при отправке тара вернётся фермерам сторно-движениями. Статус
+            сменится на «Черновик», после чего отгрузку снова можно править.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Отмена</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Откатить</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 
