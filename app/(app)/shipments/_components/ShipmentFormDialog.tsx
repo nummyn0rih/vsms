@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { StatusBadge } from "./shipment-status";
 import { useShipmentItemField } from "./useShipmentItemField";
 
 // Сдвиг даты YYYY-MM-DD на N дней (через UTC, чтобы не плыло от таймзоны). BR-12: ±2.
@@ -76,6 +77,9 @@ const EMPTY_ITEM = {
 export function ShipmentFormDialog(props: Props) {
   const { mode, options, showTrigger = true } = props;
   const row = mode === "edit" ? props.row : undefined;
+  // Правка разрешена только на planned (DESIGN §3). sent+ открываем в read-only:
+  // поля заблокированы, подсказка «откатите статус», сохранение скрыто.
+  const readOnly = mode === "edit" && row!.status !== "planned";
   const router = useRouter();
   const [internalOpen, setInternalOpen] = useState(false);
   const controlled = props.open !== undefined;
@@ -192,11 +196,14 @@ export function ShipmentFormDialog(props: Props) {
 
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 sm:max-w-2xl">
         <DialogHeader className="shrink-0">
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
             {mode === "edit" ? "Редактировать отгрузку" : "Новая отгрузка"}
+            {row && <StatusBadge status={row.status} />}
           </DialogTitle>
           <DialogDescription>
-            Черновик рейса: даты, водитель (необязателен) и позиции (1–{MAX_ITEMS}).
+            {readOnly
+              ? "Отгрузка уже отправлена — поля заблокированы. Чтобы править, откатите статус в «Черновик»."
+              : `Черновик рейса: даты, водитель (необязателен) и позиции (1–${MAX_ITEMS}).`}
           </DialogDescription>
         </DialogHeader>
 
@@ -218,6 +225,7 @@ export function ShipmentFormDialog(props: Props) {
                         <Input
                           type="date"
                           {...field}
+                          disabled={readOnly}
                           onChange={(e) => onDepartureChange(e.target.value)}
                         />
                       </FormControl>
@@ -235,6 +243,7 @@ export function ShipmentFormDialog(props: Props) {
                         <Input
                           type="date"
                           {...field}
+                          disabled={readOnly}
                           onChange={(e) => onArrivalChange(e.target.value)}
                         />
                       </FormControl>
@@ -259,6 +268,7 @@ export function ShipmentFormDialog(props: Props) {
                         searchPlaceholder="Поиск по фамилии…"
                         emptyText="Водитель не найден"
                         clearable
+                        disabled={readOnly}
                       />
                     </FormControl>
                     <FormMessage />
@@ -277,6 +287,7 @@ export function ShipmentFormDialog(props: Props) {
                         placeholder="Необязательно"
                         {...field}
                         value={field.value ?? ""}
+                        disabled={readOnly}
                       />
                     </FormControl>
                     <FormMessage />
@@ -292,7 +303,7 @@ export function ShipmentFormDialog(props: Props) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={fields.length >= MAX_ITEMS}
+                    disabled={readOnly || fields.length >= MAX_ITEMS}
                     onClick={() => append({ ...EMPTY_ITEM })}
                   >
                     <Plus className="size-4" /> Позиция
@@ -307,6 +318,7 @@ export function ShipmentFormDialog(props: Props) {
                     options={options}
                     extraLineLabels={extraLineLabels}
                     canRemove={fields.length > 1}
+                    readOnly={readOnly}
                     onRemove={() => remove(i)}
                     setLine={(v) =>
                       form.setValue(`items.${i}.contract_line_id`, v)
@@ -326,9 +338,15 @@ export function ShipmentFormDialog(props: Props) {
             </div>
 
             <DialogFooter className="shrink-0">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? "Сохранение…" : "Сохранить"}
-              </Button>
+              {readOnly ? (
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  Закрыть
+                </Button>
+              ) : (
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? "Сохранение…" : "Сохранить"}
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </Form>
@@ -345,6 +363,7 @@ function ItemRow({
   options,
   extraLineLabels,
   canRemove,
+  readOnly,
   onRemove,
   setLine,
   setPackagingType,
@@ -354,6 +373,7 @@ function ItemRow({
   options: ShipmentOptions;
   extraLineLabels: Record<number, string>;
   canRemove: boolean;
+  readOnly: boolean;
   onRemove: () => void;
   setLine: (value: string) => void;
   setPackagingType: (value: string) => void;
@@ -385,7 +405,11 @@ function ItemRow({
           render={({ field }) => (
             <FormItem className="flex-1">
               <FormLabel className="text-xs">Фермер</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={readOnly}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Фермер" />
@@ -409,7 +433,11 @@ function ItemRow({
           render={({ field }) => (
             <FormItem className="flex-1">
               <FormLabel className="text-xs">Культура</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={field.onChange}
+                disabled={readOnly}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Культура" />
@@ -439,7 +467,7 @@ function ItemRow({
           size="icon-sm"
           title="Удалить позицию"
           className="mt-6"
-          disabled={!canRemove}
+          disabled={readOnly || !canRemove}
           onClick={onRemove}
         >
           <Trash2 className="size-4" />
@@ -454,7 +482,7 @@ function ItemRow({
             <FormItem className="w-36">
               <FormLabel className="text-xs">Плановый вес, кг</FormLabel>
               <FormControl>
-                <Input type="number" inputMode="decimal" {...field} />
+                <Input type="number" inputMode="decimal" {...field} disabled={readOnly} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -477,7 +505,11 @@ function ItemRow({
             render={({ field }) => (
               <FormItem className="w-40">
                 <FormLabel className="text-xs">Тип тары</FormLabel>
-                <Select value={resolvedTypeId} onValueChange={field.onChange}>
+                <Select
+                  value={resolvedTypeId}
+                  onValueChange={field.onChange}
+                  disabled={readOnly}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Тип тары" />
@@ -513,6 +545,7 @@ function ItemRow({
                     searchPlaceholder="Поиск строки…"
                     emptyText="Нет строк для фермера/культуры"
                     clearable
+                    disabled={readOnly}
                   />
                 </FormControl>
                 <FormMessage />
