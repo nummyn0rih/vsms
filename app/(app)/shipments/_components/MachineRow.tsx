@@ -13,16 +13,6 @@ import {
 } from "./shipment-actions";
 import { DriverModal } from "./DriverModal";
 
-// Подложка строки позиции — цвет культуры с ~9% непрозрачности (CLAUDE.md).
-function tint(hex: string, alpha: number): string {
-  const m = hex.replace("#", "");
-  if (m.length !== 6) return "transparent";
-  const r = parseInt(m.slice(0, 2), 16);
-  const g = parseInt(m.slice(2, 4), 16);
-  const b = parseInt(m.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
@@ -109,6 +99,7 @@ export function MachineRow({
         className="flex w-[330px] shrink-0 flex-col gap-2 border-r border-[#ebebeb] p-3"
         style={{ backgroundColor: zoneBg }}
       >
+        {/* Строка 1: статус · даты · группа иконок-действий по статусу (admin). */}
         <div className="flex items-center gap-2">
           <StatusBadge status={shipment.status} />
           <span className="text-[13px] tracking-tight">
@@ -118,12 +109,22 @@ export function MachineRow({
             />
           </span>
           <RoleGate allow={["admin"]}>
-            <span className="ml-auto">
+            <div className="ml-auto flex items-center gap-0.5">
               <EditShipmentButton id={shipment.id} options={options} />
-            </span>
+              {isPlanned && (
+                <>
+                  <DeleteShipmentButton id={shipment.id} code={shipment.code} />
+                  <SendShipmentButton id={shipment.id} code={shipment.code} />
+                </>
+              )}
+              {canRevert && (
+                <RevertShipmentButton id={shipment.id} code={shipment.code} />
+              )}
+            </div>
           </RoleGate>
         </div>
 
+        {/* Строка 2: только водитель. */}
         {shipment.driverName ? (
           <DriverModal
             driverName={shipment.driverName}
@@ -137,27 +138,12 @@ export function MachineRow({
           </span>
         )}
 
+        {/* Строка 3: комментарий под пунктирным разделителем. */}
         {shipment.comment && (
           <p className="border-t border-dashed border-[#a1a1a166] pt-1.5 text-xs leading-tight text-muted-foreground">
             {shipment.comment}
           </p>
         )}
-
-        <RoleGate allow={["admin"]}>
-          {(isPlanned || canRevert) && (
-            <div className="mt-auto flex items-center gap-2 pt-1">
-              {isPlanned && (
-                <>
-                  <SendShipmentButton id={shipment.id} code={shipment.code} />
-                  <DeleteShipmentButton id={shipment.id} code={shipment.code} />
-                </>
-              )}
-              {canRevert && (
-                <RevertShipmentButton id={shipment.id} code={shipment.code} />
-              )}
-            </div>
-          )}
-        </RoleGate>
       </div>
 
       {/* Правая зона: строки позиций делят высоту поровну. */}
@@ -169,7 +155,7 @@ export function MachineRow({
             style={{
               gridTemplateColumns:
                 "minmax(150px,1.4fr) 110px minmax(160px,1.5fr) 150px minmax(110px,0.9fr)",
-              backgroundColor: tint(it.color, 0.09),
+              backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
             <span className="flex items-center gap-2 truncate text-sm">

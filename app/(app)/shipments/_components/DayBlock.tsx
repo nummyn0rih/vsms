@@ -24,36 +24,47 @@ export function DayBlock({
   const weekday =
     day.weekdayName.charAt(0).toUpperCase() + day.weekdayName.slice(1);
 
+  // Шапка дня: день недели приглушённо (400), дата акцентом (600 ink).
+  const dayHeader = (
+    <span className="text-[13px] tracking-tight whitespace-nowrap">
+      <span className="font-normal text-muted-foreground">{weekday}, </span>
+      <span className="font-semibold text-foreground">{dateLabel}</span>
+    </span>
+  );
+
   if (day.shipments.length === 0) {
     // Пустой рабочий день: нерабочие пустые дни в ленту не попадают (feed.ts).
     return (
-      <div className="flex items-center gap-3 border-t border-[#ebebeb] py-2 pr-3 pl-[30px] text-[13px] text-muted-foreground">
-        <span className="font-semibold tracking-tight text-foreground/70">
-          {weekday}, {dateLabel}
-        </span>
+      <div className="flex items-center gap-2 border-t border-[#ebebeb] py-2 pr-3 pl-[30px] text-[13px] text-muted-foreground">
+        {dayHeader}
         <span>— нет отгрузок</span>
       </div>
     );
   }
 
-  const tareText = summary.tare
-    .map((t) => `${t.units} ${t.packagingTypeName}`)
-    .join(" · ");
+  const hasTare = summary.tare.length > 0;
 
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 border-t border-[#ebebeb] py-2 pr-3 pl-[30px]">
-        <span className="text-[13px] font-semibold tracking-tight whitespace-nowrap">
-          {weekday}, {dateLabel}
-        </span>
+        {dayHeader}
         <div className="flex flex-wrap items-center gap-1.5">
           {summary.cultures.map((c) => (
             <CultureChip key={c.cultureId} culture={c} />
           ))}
         </div>
-        {(tareText || summary.hasUnpricedTare) && (
+        {(hasTare || summary.hasUnpricedTare) && (
           <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">
-            тара: {tareText || "—"}
+            тара:{" "}
+            {hasTare
+              ? summary.tare.map((t, i) => (
+                  <span key={t.packagingTypeName}>
+                    {i > 0 && " · "}
+                    <b className="font-medium tabular-nums text-[#4d4d4d]">{t.units}</b>{" "}
+                    {t.packagingTypeName}
+                  </span>
+                ))
+              : "—"}
             {summary.hasUnpricedTare && (
               <span title="Есть позиции без нормы тары"> · ?</span>
             )}

@@ -57,24 +57,25 @@ export const WeekBlock = forwardRef<
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3.5 rounded-lg px-3 py-2.5 select-none hover:bg-muted/50"
+        className={`flex w-full items-center gap-3.5 rounded-lg px-3 py-2.5 select-none hover:bg-muted/50 ${
+          collapsed ? "border border-[#ebebeb] bg-[#fafafa]" : ""
+        }`}
       >
         <ChevronRight
           className={`size-4 shrink-0 text-muted-foreground transition-transform ${
             collapsed ? "" : "rotate-90"
           }`}
         />
-        <span className="rounded border border-[#ebebeb] bg-[#f5f5f5] px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+        <span className="rounded-[5px] border border-[#ebebeb] bg-[#f5f5f5] px-[7px] py-0.5 font-mono text-xs text-[#888888]">
           W{week.isoWeek}
         </span>
-        <span className="text-[15px] font-semibold tracking-tight whitespace-nowrap">
-          Неделя {week.isoWeek}
+        <span className="text-[15px] tracking-tight whitespace-nowrap">
+          <span className="font-semibold text-[#171717]">Неделя {week.isoWeek}</span>
           {rangeLabel && (
-            <>
+            <span className="font-normal text-muted-foreground">
               {" · "}
-              <span className="tabular-nums">{rangeLabel}</span> {week.isoYear}
-              <span className="font-normal text-muted-foreground"> ({spanLabel})</span>
-            </>
+              <span className="tabular-nums">{rangeLabel}</span> {week.isoYear} ({spanLabel})
+            </span>
           )}
         </span>
 
@@ -85,9 +86,9 @@ export const WeekBlock = forwardRef<
         </div>
 
         <span className="ml-auto text-[13px] whitespace-nowrap text-muted-foreground">
-          <span className="tabular-nums">{summary.machineCount}</span>{" "}
+          <b className="font-medium tabular-nums text-[#171717]">{summary.machineCount}</b>{" "}
           {plural(summary.machineCount, "машина", "машины", "машин")} ·{" "}
-          <span className="tabular-nums">{formatTons(summary.totalKg)}</span> т
+          <b className="font-medium tabular-nums text-[#171717]">{formatTons(summary.totalKg)}</b> т
         </span>
       </button>
 

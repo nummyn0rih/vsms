@@ -118,8 +118,8 @@ export function SendShipmentButton({ id, code }: { id: number; code: string }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Send className="size-3.5" /> Отправить
+        <Button variant="ghost" size="icon-sm" title="Отправить">
+          <Send className="size-4" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -197,7 +197,7 @@ export function RevertShipmentButton({ id, code }: { id: number; code: string })
   async function onConfirm() {
     const res = await revertShipmentToPlanned(id);
     if (res.ok) {
-      toast.success(`Отгрузка №${code} возвращена в черновик`);
+      toast.success(`Отгрузка №${code} возвращена в план`);
       router.refresh();
     } else {
       toast.error(res.error);
@@ -207,16 +207,16 @@ export function RevertShipmentButton({ id, code }: { id: number; code: string })
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Undo2 className="size-3.5" /> В план
+        <Button variant="ghost" size="icon-sm" title="Откатить в план">
+          <Undo2 className="size-4" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Откатить отгрузку №{code} в черновик?</AlertDialogTitle>
+          <AlertDialogTitle>Откатить отгрузку №{code} в план?</AlertDialogTitle>
           <AlertDialogDescription>
             Списанная при отправке тара вернётся фермерам сторно-движениями.
-            Статус сменится на «Черновик», после чего отгрузку снова можно править.
+            Статус сменится на «Плановая», после чего отгрузку снова можно править.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -244,7 +244,12 @@ export function DeleteShipmentButton({ id, code }: { id: number; code: string })
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="ghost" size="icon-sm" title="Удалить">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Удалить"
+          className="hover:text-[#ee0000]"
+        >
           <Trash2 className="size-4" />
         </Button>
       </AlertDialogTrigger>
@@ -252,7 +257,7 @@ export function DeleteShipmentButton({ id, code }: { id: number; code: string })
         <AlertDialogHeader>
           <AlertDialogTitle>Удалить отгрузку №{code}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Черновик отгрузки и все его позиции будут удалены безвозвратно.
+            Плановая отгрузка и все её позиции будут удалены безвозвратно.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
