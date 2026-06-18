@@ -1,5 +1,7 @@
-import { Placeholder } from "@/components/layout/Placeholder";
+import { redirect } from "next/navigation";
 
-export default function FeedPage() {
-  return <Placeholder title="Лента отгрузок" note="Появится на этапе B." />;
+// "/" больше не имеет своего пункта меню — лента живёт под /shipments.
+// Логин/корень ведём сразу на ленту.
+export default function HomePage() {
+  redirect("/shipments");
 }

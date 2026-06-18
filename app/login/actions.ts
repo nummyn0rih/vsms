@@ -13,7 +13,7 @@ export async function login(
     await signIn("credentials", {
       login: formData.get("login"),
       password: formData.get("password"),
-      redirectTo: "/",
+      redirectTo: "/shipments",
     });
   } catch (error) {
     // Успешный вход бросает NEXT_REDIRECT — его пробрасываем дальше.
