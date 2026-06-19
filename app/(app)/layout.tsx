@@ -16,7 +16,9 @@ export default async function AppLayout({
   return (
     <div className="flex h-screen">
       <Sidebar role={user.role} userLabel={user.login} />
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <main className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="pt-6">{children}</div>
+      </main>
     </div>
   );
 }
