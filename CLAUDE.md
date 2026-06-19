@@ -64,7 +64,7 @@ Solo-разработка с AI. Это рабочий инструмент дл
 
 - Источник: `docs/DESIGN-SYSTEM.md` (токены Vercel), но ТОЛЬКО app-масштаб: radius 6px (кнопки/инпуты/бейджи) и 8px (модалки/контейнеры), form-height 40px (компакт 32px), hairline-бордеры #ebebeb, stacked shadows, Geist; веса и числа — `tabular-nums`; технические метки (№ акта, ISO-недели) — Geist Mono.
 - ЗАПРЕЩЕНЫ: mesh-градиенты, pill-кнопки 100px, hero/dark-бенды, эмодзи как иконки. Хром экранов нейтральный светлый — цветовой бюджет отдан статусам и культурам.
-- **Статусы отгрузок:** planned = серый (#888888 / фон #f5f5f5), sent = синий #0070f3 (фон #d3e5ff), arrived = янтарный #f5a623 (фон #ffefcf), accepted = мятный #29bc9b (фон #aaffec приглушённый).
+- **Статусы отгрузок (две заливки на статус — источник истины: `DESIGN-SYSTEM.md` → `status-fills`).** На статус задаются: `zone` (фон левой зоны машины), `badge` (фон бейджа), `dot` (точка), `fg` (текст). Значения: planned `zone #f5f5f5 / badge #ededed / dot #b3b3b3 / fg #888888` · sent `zone #eaf2ff / badge #d3e5ff / dot #0070f3 / fg #0761d1` · arrived `zone #fff6e3 / badge #ffefcf / dot #f5a623 / fg #ab570a` · accepted `zone #ddfff7 / badge #c7f6ea / dot #29bc9b / fg #1d8e75`. Не использовать `#aaffec` для accepted (это базовый `cyan-soft`, в статусах не применяется).
 - **Цвета культур** — из БД (`Culture.color`), НЕ хардкодить. Подложка строки = цвет с opacity 8–10%, чипы = полный цвет.
 - Структура экранов — `docs/DESIGN.md`.
 

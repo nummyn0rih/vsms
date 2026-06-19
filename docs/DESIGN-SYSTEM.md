@@ -41,6 +41,16 @@ colors:
   selection-bg: "#171717"
   selection-fg: "#f2f2f2"
 
+# --- VSMS status fills (app-scope, единственный источник истины по цветам статусов) ---
+# Два уровня заливки на статус: zone — фон левой зоны машины (mz-left), badge — фон бейджа.
+# dot — точка в бейдже, fg — текст бейджа/зоны. Значения вшиты в прототип lenta-b0.html.
+# ВНИМАНИЕ: accepted НЕ использует cyan-soft (#aaffec). Корректные значения — ниже.
+status-fills:
+  planned:  { zone: "#f5f5f5", badge: "#ededed", dot: "#b3b3b3", fg: "#888888" }
+  sent:     { zone: "#eaf2ff", badge: "#d3e5ff", dot: "#0070f3", fg: "#0761d1" }
+  arrived:  { zone: "#fff6e3", badge: "#ffefcf", dot: "#f5a623", fg: "#ab570a" }
+  accepted: { zone: "#ddfff7", badge: "#c7f6ea", dot: "#29bc9b", fg: "#1d8e75" }
+
 typography:
   display-xl:
     fontFamily: Geist, Inter, system-ui, -apple-system, sans-serif
