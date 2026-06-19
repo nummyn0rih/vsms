@@ -7,19 +7,7 @@ import { type FeedWeek, weekSummary } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { DayBlock } from "./DayBlock";
 import { CultureChip, formatTons } from "./FeedChips";
-
-const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", timeZone: "UTC" });
-const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
-  day: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
-
-// 0=Пн … 6=Вс, как в workdays.ts.
-const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-function weekdayShort(date: Date): string {
-  return WEEKDAY_SHORT[(date.getUTCDay() + 6) % 7];
-}
+import { formatWeekRange } from "./week-format";
 
 function plural(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10;
@@ -40,24 +28,19 @@ export const WeekBlock = forwardRef<
 >(function WeekBlock({ week, options, collapsed, onToggle }, ref) {
   const summary = weekSummary(week);
 
-  // Диапазон рабочих дней недели: первый и последний рабочий день (feed включает
-  // все рабочие дни недели). Подпись «(Пн–Сб)» — их дни недели.
-  const workdays = week.days.filter((d) => d.isWorkday);
-  let rangeLabel = "";
-  let spanLabel = "";
-  if (workdays.length > 0) {
-    const first = new Date(`${workdays[0].date}T00:00:00Z`);
-    const last = new Date(`${workdays[workdays.length - 1].date}T00:00:00Z`);
-    rangeLabel = `${dayFmt.format(first)}–${dayMonthFmt.format(last)}`;
-    spanLabel = `${weekdayShort(first)}–${weekdayShort(last)}`;
-  }
+  // Диапазон рабочих дней недели: «8–13 июня» + «(Пн–Сб)».
+  const { range: rangeLabel, span: spanLabel } = formatWeekRange(week);
 
   return (
-    <div ref={ref} className="mt-4 scroll-mt-4">
+    <div
+      ref={ref}
+      className="mt-4"
+      style={{ scrollMarginTop: "var(--toolbar-h, 0px)" }}
+    >
       <button
         type="button"
         onClick={onToggle}
-        className={`flex w-full items-center gap-3.5 rounded-lg px-3 py-2.5 select-none hover:bg-muted/50 ${
+        className={`week-head flex w-full items-center gap-3.5 rounded-lg px-3 py-2.5 select-none hover:bg-muted/50 ${
           collapsed ? "border border-[#ebebeb] bg-[#fafafa]" : ""
         }`}
       >
