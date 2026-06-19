@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Лента отгрузок — План (B4)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+
+    /* culture colors (in production come from Culture.color) */
+    --cult-tomato: #d4322c;
+    --cult-cucumber: #1d8e75;
+    --cult-pepper: #e8830c;
+    --cult-squash: #7928ca;
+
+    /* plan progress — neutral domain, NO shipment-status colours */
+    --bar-track: #f0f0f0;
+    --bar-actual: #9a9a9a;      /* перевешено (factual) */
+    --bar-plan-a: #d6d6d6;      /* план — hatch dark stripe */
+    --bar-plan-b: #ededed;      /* план — hatch light stripe */
+    --bar-tick: #b0b0b0;        /* цель — risk line (neutral) */
+    --bar-accent: #171717;      /* единственный акцент: достигнуто / перелёт */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1380px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-head { margin-bottom: 48px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 10px 0 0; color: var(--body); font-size: 15px; line-height: 22px; max-width: 760px; letter-spacing: -0.01em; }
+
+  .group { margin-top: 56px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 44px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 820px; }
+
+  .stage {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+  }
+
+  /* ---------------- toolbar (reused from lenta) ---------------- */
+  .toolbar {
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .tbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+
+  .btn {
+    height: 40px; padding: 0 14px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 0 1px 2px #0000001f; }
+  .btn-primary:hover { background: #000; }
+  .btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--body); }
+  .btn-ghost:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
+
+  .is-disabled { opacity: .42; cursor: not-allowed; box-shadow: none; color: var(--mute); }
+  .seg button.is-disabled { color: var(--mute); }
+  .seg button.is-disabled:hover { background: transparent; }
+
+  /* week switcher */
+  .weeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); box-shadow: 0 1px 1px #0000000a; overflow: hidden; }
+  .weeknav button { height: 100%; width: 36px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; }
+  .weeknav button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .weeknav button svg { width: 16px; height: 16px; }
+  .weeknav .wlabel { padding: 0 13px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .wlabel .wsub { color: var(--mute); font-weight: 400; }
+
+  /* view segmented — Plan now ACTIVE, Heatmap still disabled */
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button { border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover:not(.is-disabled):not(.active) { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  /* ---------------- context strip (plan domain) ---------------- */
+  .ctx { padding: 14px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); }
+  .ctx .week-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; letter-spacing: 0; }
+  .ctx .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .ctx .week-title .wmeta { color: var(--mute); font-weight: 400; }
+  .ctx .season { font-size: 12px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .ctx .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber); }
+  .ctx .ag { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+  .ctx .ag b { color: var(--ink); font-weight: 600; }
+
+  /* ---------------- plan matrix ---------------- */
+  .matrixwrap { overflow: auto; max-height: 640px; }
+  table.pmatrix { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+  table.pmatrix col.c-cult { width: 232px; }
+  table.pmatrix col.c-day { width: 132px; }
+  table.pmatrix col.c-week { width: 168px; }
+
+  table.pmatrix th, table.pmatrix td { border-bottom: 1px solid var(--hairline); }
+
+  /* header row */
+  table.pmatrix thead th {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--canvas-soft); text-align: left; vertical-align: bottom;
+    padding: 11px 14px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+  }
+  table.pmatrix thead th.cult-col { left: 0; z-index: 30; border-right: 1px solid var(--hairline); }
+  table.pmatrix thead th.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+  .dh { display: flex; flex-direction: column; gap: 2px; }
+  .dh .dh-day { font-size: 14px; color: var(--ink); font-weight: 600; }
+  .dh .dh-date { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); letter-spacing: 0; }
+  .dh.off .dh-day, .dh.off .dh-date { color: var(--hairline-strong); }
+  .wh { font-size: 13px; color: var(--ink); font-weight: 600; }
+
+  /* row header — culture + granularity toggle */
+  table.pmatrix tbody th.cult-col {
+    position: sticky; left: 0; z-index: 10;
+    background: var(--canvas); border-right: 1px solid var(--hairline);
+    text-align: left; vertical-align: top; font-weight: 500;
+    padding: 12px 14px; color: var(--ink);
+  }
+  table.pmatrix tbody tr:hover th.cult-col,
+  table.pmatrix tbody tr:hover td { background: var(--canvas-soft); }
+  .cult-name { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .cult-name .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .cult-meta { font-size: 11px; color: var(--mute); margin: 4px 0 10px 20px; letter-spacing: -0.01em; }
+
+  /* granularity mini-segmented */
+  .gran { display: inline-flex; padding: 2px; background: var(--canvas-soft-2); border-radius: 6px; gap: 2px; margin-left: 20px; }
+  .gran button { border: 0; background: transparent; font-family: inherit; font-size: 11px; font-weight: 500; letter-spacing: -0.01em; color: var(--mute); padding: 3px 9px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .gran button.on { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+  .gran-tip { position: relative; display: inline-flex; }
+
+  /* day cell */
+  table.pmatrix td { padding: 9px 10px; vertical-align: top; }
+  table.pmatrix td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft); }
+  table.pmatrix tbody tr:hover td.week-col { background: var(--canvas-soft-2); }
+  table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { border-bottom: 0; }
+
+  .pcell { display: flex; flex-direction: column; gap: 7px; }
+
+  /* target input */
+  .ptin { display: inline-flex; align-items: center; height: 30px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); padding: 0 8px; transition: border-color .12s, box-shadow .12s; }
+  .ptin:hover { border-color: var(--hairline-strong); }
+  .ptin:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .ptin input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; width: 100%; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .ptin input::placeholder { color: var(--mute); }
+  .ptin .u { font-size: 11px; color: var(--mute); margin-left: 4px; flex-shrink: 0; }
+  .ptin.empty input { color: var(--mute); }
+
+  /* week target input — a touch stronger */
+  .week-col .ptin { height: 32px; }
+  .week-col .ptin input { font-size: 14px; font-weight: 500; }
+
+  /* progress bar */
+  .pbar { position: relative; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: visible; }
+  .pbar .bf { position: absolute; top: 0; height: 100%; }
+  .pbar .actual { left: 0; background: var(--bar-actual); border-radius: 3px 0 0 3px; }
+  .pbar .plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .pbar .over { background: var(--bar-accent); }
+  .pbar .btick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--bar-tick); border-radius: 1px; }
+  .pbar.met .btick { background: var(--bar-accent); }
+  /* round the right edge of whatever fill ends the bar */
+  .pbar .plan.endcap { border-radius: 0 3px 3px 0; }
+  .pbar .actual.endcap { border-radius: 3px; }
+  .pbar .over.endcap { border-radius: 0 3px 3px 0; }
+
+  /* caption */
+  .pcap { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0; color: var(--body); font-variant-numeric: tabular-nums; }
+  .pcap .t-goal { color: var(--mute); }
+  .pcap.zero { color: var(--mute); }
+
+  /* week caption block */
+  .wcap { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .wcap .wval { font-family: "Geist Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .wcap .wval .t-goal { color: var(--mute); }
+  .wdelta { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+  .wdelta.under { color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+  .wdelta.over { color: #fff; background: var(--bar-accent); }
+
+  /* muted day cell (granularity = weekly) */
+  .pcell.muted { align-items: center; justify-content: center; min-height: 64px; }
+  .pcell.muted .dash { font-family: "Geist Mono", monospace; font-size: 13px; color: var(--hairline-strong); }
+  td.muted { background: repeating-linear-gradient(45deg, #fcfcfc 0 8px, #f7f7f7 8px 16px); }
+  table.pmatrix tbody tr:hover td.muted { background: repeating-linear-gradient(45deg, #f8f8f8 0 8px, #f2f2f2 8px 16px); }
+
+  /* tfoot — itogo */
+  table.pmatrix tfoot th, table.pmatrix tfoot td { border-top: 1px solid var(--hairline); background: var(--canvas-soft); padding: 11px 14px; }
+  table.pmatrix tfoot th.cult-col { position: sticky; left: 0; z-index: 10; border-right: 1px solid var(--hairline); font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  table.pmatrix tfoot td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+  table.pmatrix tfoot td { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+
+  /* ---------------- bar legend ---------------- */
+  .barlegend { display: flex; flex-wrap: wrap; gap: 20px; padding: 14px 22px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font-size: 12px; color: var(--body); letter-spacing: -0.01em; }
+  .barlegend span { display: inline-flex; align-items: center; gap: 8px; }
+  .lg-sw { width: 26px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .lg-sw.actual { background: var(--bar-actual); }
+  .lg-sw.plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .lg-sw.over { background: var(--bar-accent); }
+  .lg-tick { width: 2px; height: 14px; background: var(--bar-tick); border-radius: 1px; flex-shrink: 0; margin: 0 12px; }
+
+  /* ---------------- granularity detail frame ---------------- */
+  .gdetail { padding: 24px 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .gcard { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--canvas); }
+  .gcard-head { padding: 13px 16px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--canvas-soft); }
+  .gcard-head .gh-name { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .gcard-head .gh-name .chip { width: 11px; height: 11px; border-radius: 3px; }
+  .gcard-body { padding: 16px; }
+  .gminirow { display: grid; gap: 10px; }
+  .gminirow.days { grid-template-columns: repeat(3, 1fr); }
+  .gminirow.weekly { grid-template-columns: 1fr; max-width: 220px; }
+  .gmini-lbl { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); letter-spacing: 0; text-transform: uppercase; margin-bottom: 5px; }
+  .conv-note { margin-top: 16px; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--body); background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 11px; line-height: 16px; }
+  .conv-note svg { width: 14px; height: 14px; color: var(--mute); flex-shrink: 0; }
+  .conv-note b { font-weight: 600; color: var(--ink); }
+
+  /* tooltip on granularity options */
+  .gtip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 11px; font-weight: 500; letter-spacing: -0.01em; padding: 5px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 8px -2px #00000040; }
+  .gtip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--ink); }
+
+  /* ---------------- three-situation callout ---------------- */
+  .situations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .situ { padding: 26px 24px; border-right: 1px solid var(--hairline); }
+  .situ:last-child { border-right: 0; }
+  .situ-tag { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin-bottom: 4px; }
+  .situ-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; margin-bottom: 18px; }
+  .pbar.big { height: 10px; border-radius: 5px; }
+  .pbar.big .actual { border-radius: 5px 0 0 5px; }
+  .pbar.big .actual.endcap, .pbar.big .plan.endcap, .pbar.big .over.endcap { border-radius: 5px; }
+  .pbar.big .plan.endcap, .pbar.big .over.endcap { border-radius: 0 5px 5px 0; }
+  .pbar.big .btick { top: -3px; bottom: -3px; }
+  .situ-cap { margin-top: 14px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .situ-cap .sc-val { font-family: "Geist Mono", monospace; font-size: 14px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .situ-cap .sc-val .t-goal { color: var(--mute); }
+  .situ-desc { margin-top: 12px; font-size: 12px; color: var(--mute); line-height: 17px; letter-spacing: -0.01em; }
+
+  /* ---------------- empty states ---------------- */
+  .empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 72px 24px; }
+  .empty .ill { width: 64px; height: 64px; border-radius: 14px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--hairline-strong); margin-bottom: 20px; }
+  .empty .ill svg { width: 30px; height: 30px; }
+  .empty h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .empty p { font-size: 14px; color: var(--mute); letter-spacing: -0.01em; margin: 8px 0 0; max-width: 400px; line-height: 20px; }
+  .empty .actions { margin-top: 22px; display: flex; align-items: center; gap: 10px; }
+
+  /* "цель не задана" hint badge in no-target cells */
+  .nt-hint { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--hairline-strong); text-transform: uppercase; }
+  .pbar.notarget .btick { display: none; }
+
+  .endnote { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+  .endnote .mono { color: var(--body); }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="150" y="160" width="900" height="60" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="150" y="250" width="900" height="380" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="190" y="330" width="120" height="10" rx="5" fill="#9a9a9a"/>
+    <rect x="310" y="330" width="80" height="10" rx="5" fill="#d6d6d6"/>
+    <rect x="408" y="322" width="3" height="26" rx="1" fill="#171717"/>
+    <rect x="190" y="430" width="170" height="10" rx="5" fill="#9a9a9a"/>
+    <rect x="360" y="430" width="70" height="10" rx="5" fill="#171717"/>
+    <rect x="190" y="530" width="60" height="10" rx="5" fill="#d6d6d6"/>
+    <rect x="408" y="522" width="3" height="26" rx="1" fill="#171717"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Лента отгрузок · B4</p>
+    <h1 class="doc-title">План — недельные цели по культурам</h1>
+    <p class="doc-lead">Третий вид ленты (Таблица&nbsp;|&nbsp;Heatmap&nbsp;|&nbsp;План). Сетка целей культура&nbsp;×&nbsp;день с тумблером гранулярности на строке, столбцом «Неделя» и прогресс-баром у каждой ячейки. Токены наследуются из ленты и вкладки «Нормы»: радиусы&nbsp;6&nbsp;px, hairline&nbsp;#ebebeb, Geist + tabular-nums. Прогресс — нейтраль/ink, один акцент (ink) для «достигнуто&nbsp;/&nbsp;перелёт»; статусные цвета отгрузок не используются.</p>
+  </header>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 1 · WORKING WEEK                                         -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">План · рабочая неделя</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">01</span>
+        <div>
+          <div class="frame-name">Матрица недели — цели и прогресс</div>
+          <div class="frame-desc">Вид «План» активен в переключателе (Heatmap по-прежнему disabled). Строки — культуры, столбцы — рабочие дни сезона (лето Пн–Сб) + итог «Неделя». В каждой ячейке: редактируемая цель (т, автосейв по blur) и прогресс-бар. Томаты — частично перевешено, Огурцы — набрано только плановыми (факт 0), Перец — перелёт за цель, Патиссоны — гранулярность «на неделю» (дневные ячейки свёрнуты).</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="01 · План — рабочая неделя">
+
+        <!-- toolbar -->
+        <div class="toolbar">
+          <div class="tbar-row">
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Отгрузка
+            </button>
+            <div class="weeknav">
+              <button title="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <div class="wlabel">Неделя 24 <span class="wsub">8–13 июня</span></div>
+              <button title="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+            <button class="btn btn-sm btn-ghost">Сегодня</button>
+            <div class="spacer"></div>
+            <div class="seg">
+              <button>Таблица</button>
+              <button class="is-disabled">Heatmap</button>
+              <button class="active">План</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- context strip -->
+        <div class="ctx">
+          <span class="week-num">W24</span>
+          <span class="week-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+          <span class="ag">Цель недели <b class="tnum">25,5 т</b> · набрано <b class="tnum">24,0 т</b></span>
+        </div>
+
+        <!-- matrix -->
+        <div class="matrixwrap">
+          <table class="pmatrix">
+            <colgroup>
+              <col class="c-cult" />
+              <col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" />
+              <col class="c-week" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="cult-col">Культура</th>
+                <th><div class="dh"><span class="dh-day">Пн</span><span class="dh-date">8 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Вт</span><span class="dh-date">9 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Ср</span><span class="dh-date">10 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Чт</span><span class="dh-date">11 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Пт</span><span class="dh-date">12 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Сб</span><span class="dh-date">13 июня</span></div></th>
+                <th class="week-col"><span class="wh">Неделя</span></th>
+              </tr>
+            </thead>
+            <tbody>
+
+              <!-- ТОМАТЫ · частично перевешено · по дням -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="gran">
+                    <button class="on">Дни</button>
+                    <button>Неделя</button>
+                  </div>
+                </th>
+                <!-- Пн -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Томаты · Пн, цель т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <!-- Вт -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Томаты · Вт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <!-- Ср -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="2,0" aria-label="Томаты · Ср, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">2,0 <span class="t-goal">/ 2,0</span></span>
+                </div></td>
+                <!-- Чт -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Томаты · Чт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <!-- Пт -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Томаты · Пт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf plan endcap" style="left:0; width:63.5%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <!-- Сб -->
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Томаты · Сб, цель т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum zero">0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <!-- Неделя -->
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin"><input value="9,0" aria-label="Томаты · цель недели т" readonly /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf actual" style="width:29.6%"></div><div class="bf plan endcap" style="left:29.6%; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <div class="wcap"><span class="wval tnum">7,3 <span class="t-goal">/ 9,0</span></span><span class="wdelta under tnum">−1,7</span></div>
+                </div></td>
+              </tr>
+
+              <!-- ОГУРЦЫ · только плановые (факт 0) · по дням -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                  <div class="gran">
+                    <button class="on">Дни</button>
+                    <button>Неделя</button>
+                  </div>
+                </th>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Огурцы · Пн, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Огурцы · Вт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Огурцы · Ср, цель т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf plan endcap" style="left:0; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">0,5 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Огурцы · Чт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Огурцы · Пт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="0,5" aria-label="Огурцы · Сб, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">0,5 <span class="t-goal">/ 0,5</span></span>
+                </div></td>
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin"><input value="6,0" aria-label="Огурцы · цель недели т" readonly /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf plan endcap" style="left:0; width:87.3%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <div class="wcap"><span class="wval tnum">5,5 <span class="t-goal">/ 6,0</span></span><span class="wdelta under tnum">факт 0</span></div>
+                </div></td>
+              </tr>
+
+              <!-- ПЕРЕЦ · перелёт за цель · по дням -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец</span>
+                  <div class="gran">
+                    <button class="on">Дни</button>
+                    <button>Неделя</button>
+                  </div>
+                </th>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Перец · Пн, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf actual" style="width:79.4%"></div><div class="bf over endcap" style="left:79.4%; width:15.8%"></div><div class="btick" style="left:79.4%"></div></div>
+                  <span class="pcap tnum">1,2 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Перец · Вт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf actual endcap" style="width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Перец · Ср, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Перец · Чт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div>
+                  <span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,5" aria-label="Перец · Пт, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin"><input value="1,0" aria-label="Перец · Сб, цель т" /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div>
+                  <span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span>
+                </div></td>
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin"><input value="6,5" aria-label="Перец · цель недели т" readonly /><span class="u">т</span></span>
+                  <div class="pbar met"><div class="bf actual" style="width:27.2%"></div><div class="bf plan" style="left:27.2%; width:53.2%"></div><div class="bf over endcap" style="left:80.4%; width:14.8%"></div><div class="btick" style="left:80.4%"></div></div>
+                  <div class="wcap"><span class="wval tnum">7,7 <span class="t-goal">/ 6,5</span></span><span class="wdelta over tnum">+1,2</span></div>
+                </div></td>
+              </tr>
+
+              <!-- ПАТИССОНЫ · гранулярность «на неделю» · дневные ячейки свёрнуты -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны</span>
+                  <div class="cult-meta">цель задана на неделю одним итогом</div>
+                  <div class="gran">
+                    <button>Дни</button>
+                    <button class="on">Неделя</button>
+                  </div>
+                </th>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="muted"><div class="pcell muted"><span class="dash">—</span></div></td>
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin"><input value="4,0" aria-label="Патиссоны · цель недели т" /><span class="u">т</span></span>
+                  <div class="pbar"><div class="bf actual" style="width:23.8%"></div><div class="bf plan endcap" style="left:23.8%; width:59.5%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <div class="wcap"><span class="wval tnum">3,5 <span class="t-goal">/ 4,0</span></span><span class="wdelta under tnum">−0,5</span></div>
+                </div></td>
+              </tr>
+
+            </tbody>
+            <tfoot>
+              <tr>
+                <th class="cult-col">Итого недели</th>
+                <td class="tnum">2,6 / 3,0</td>
+                <td class="tnum">2,4 / 2,5</td>
+                <td class="tnum">2,5 / 2,5</td>
+                <td class="tnum">3,0 / 2,5</td>
+                <td class="tnum">2,5 / 3,0</td>
+                <td class="tnum">1,5 / 1,5</td>
+                <td class="week-col"><div class="pcell">
+                  <div class="pbar"><div class="bf actual" style="width:22.4%"></div><div class="bf plan endcap" style="left:22.4%; width:67.2%"></div><div class="btick" style="left:95.2%"></div></div>
+                  <div class="wcap"><span class="wval tnum">24,0 <span class="t-goal">/ 25,5</span></span><span class="wdelta under tnum">−1,5</span></div>
+                </div></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- bar legend -->
+        <div class="barlegend">
+          <span><span class="lg-sw actual"></span>перевешено (факт)</span>
+          <span><span class="lg-sw plan"></span>плановое, ещё не перевешено</span>
+          <span><span class="lg-tick"></span>цель (риска)</span>
+          <span><span class="lg-sw over"></span>перелёт за цель / достигнуто</span>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 2 · GRANULARITY                                          -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">План · гранулярность строки</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">02</span>
+        <div>
+          <div class="frame-name">Конверсия «по дням» ⇄ «на неделю» (BR-21)</div>
+          <div class="frame-desc">Цель задаётся в одной гранулярности на пару (неделя, культура) — режимы не смешиваются. Тумблер на строке переключает представление без потери итога: дневные цели суммируются в недельную, а недельная — распределяется по рабочим дням равномерно (дальше правится вручную). Аффорданс подсказывается тултипом на неактивной опции.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="02 · Гранулярность">
+        <div class="gdetail">
+
+          <!-- по дням -->
+          <div class="gcard">
+            <div class="gcard-head">
+              <span class="gh-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+              <div class="gran">
+                <button class="on">Дни</button>
+                <span class="gran-tip">
+                  <button>Неделя</button>
+                  <span class="gtip">суммируется в одну недельную цель</span>
+                </span>
+              </div>
+            </div>
+            <div class="gcard-body">
+              <div class="gmini-lbl">по дням · цель на каждый рабочий день</div>
+              <div class="gminirow days">
+                <div><span class="ptin"><input value="1,5" aria-label="Пн" /><span class="u">т</span></span></div>
+                <div><span class="ptin"><input value="1,5" aria-label="Вт" /><span class="u">т</span></span></div>
+                <div><span class="ptin"><input value="2,0" aria-label="Ср" /><span class="u">т</span></span></div>
+                <div><span class="ptin"><input value="1,5" aria-label="Чт" /><span class="u">т</span></span></div>
+                <div><span class="ptin"><input value="1,5" aria-label="Пт" /><span class="u">т</span></span></div>
+                <div><span class="ptin"><input value="1,0" aria-label="Сб" /><span class="u">т</span></span></div>
+              </div>
+              <div class="conv-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                Переключение на «Неделю» свернёт дни в итог <b>9,0&nbsp;т</b> — без потери суммы.
+              </div>
+            </div>
+          </div>
+
+          <!-- на неделю -->
+          <div class="gcard">
+            <div class="gcard-head">
+              <span class="gh-name"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны</span>
+              <div class="gran">
+                <span class="gran-tip">
+                  <button>Дни</button>
+                  <span class="gtip">распределится по рабочим дням</span>
+                </span>
+                <button class="on">Неделя</button>
+              </div>
+            </div>
+            <div class="gcard-body">
+              <div class="gmini-lbl">на неделю · одна ячейка-итог</div>
+              <div class="gminirow weekly">
+                <div><span class="ptin"><input value="4,0" aria-label="Цель недели" /><span class="u">т</span></span></div>
+              </div>
+              <div class="conv-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 5 5 12 12 19"/><line x1="19" y1="12" x2="5" y2="12"/></svg>
+                Переключение на «Дни» разложит <b>4,0&nbsp;т</b> на 6 рабочих дней по <b>≈0,67&nbsp;т</b> — дальше правится вручную.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 3 · THREE PROGRESS SITUATIONS                            -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">План · прогресс-бар · три ситуации</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">03</span>
+        <div>
+          <div class="frame-name">Анатомия бара (BR-22)</div>
+          <div class="frame-desc">Прогресс&nbsp;=&nbsp;Σ эффективного веса позиций&nbsp;/&nbsp;цель. Эффективный вес — перевеска (actual), если она есть, иначе плановый. Сплошная часть — факт, штриховка — плановое без перевески, вертикальная риска — цель. Недобор виден как зазор до риски, перелёт — как продолжение бара за риской в акцентном тоне.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="03 · Три ситуации">
+        <div class="situations">
+
+          <!-- факт 0 -->
+          <div class="situ">
+            <div class="situ-tag">Этап планирования</div>
+            <div class="situ-name">Набрано только плановыми</div>
+            <div class="pbar big"><div class="bf plan endcap" style="left:0; width:79.4%"></div><div class="btick" style="left:95.2%"></div></div>
+            <div class="situ-cap"><span class="sc-val tnum">5,0 <span class="t-goal">/ 6,0 т</span></span></div>
+            <div class="situ-desc">Перевески ещё нет (факт&nbsp;0) — весь прогресс плановый, бар целиком штрихованный. До риски остаётся зазор: план пока не покрывает цель.</div>
+          </div>
+
+          <!-- частично -->
+          <div class="situ">
+            <div class="situ-tag">В процессе</div>
+            <div class="situ-name">Частично перевешено</div>
+            <div class="pbar big"><div class="bf actual" style="width:33.3%"></div><div class="bf plan endcap" style="left:33.3%; width:52.4%"></div><div class="btick" style="left:95.2%"></div></div>
+            <div class="situ-cap"><span class="sc-val tnum">5,4 <span class="t-goal">/ 6,0 т</span></span></div>
+            <div class="situ-desc">Часть позиций перевешена (сплошная), часть остаётся плановой (штрих). Эффективный вес = факт там, где он есть, иначе план. Недобор до цели — небольшой зазор.</div>
+          </div>
+
+          <!-- перелёт -->
+          <div class="situ">
+            <div class="situ-tag">Цель пройдена</div>
+            <div class="situ-name">Перелёт за цель</div>
+            <div class="pbar big met"><div class="bf actual" style="width:48.6%"></div><div class="bf plan" style="left:48.6%; width:32.4%"></div><div class="bf over endcap" style="left:81.0%; width:14.2%"></div><div class="btick" style="left:81.0%"></div></div>
+            <div class="situ-cap"><span class="sc-val tnum">7,2 <span class="t-goal">/ 6,0 т</span></span><span class="wdelta over tnum">+1,2</span></div>
+            <div class="situ-desc">Суммарный вес превысил цель — бар продолжается за риской акцентным (ink) тоном, риска тоже становится акцентной. Единственный акцент в домене плана.</div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 4 · EMPTY STATES                                         -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">План · пустые состояния</span><span class="gl-line"></span></div>
+
+    <!-- B · shipments but no targets -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">04</span>
+        <div>
+          <div class="frame-name">Неделя без целей, но с отгрузками</div>
+          <div class="frame-desc">Ячейки целей пустые (плейсхолдер «—»), но отгрузки на неделе есть — прогресс-бары показывают факт/план без риски-цели. У ячеек без цели — приглушённая подсказка «цель не задана»: видно фактическое движение, но не к чему его соотнести.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="04 · Без целей, с отгрузками">
+        <div class="ctx">
+          <span class="week-num">W24</span>
+          <span class="week-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+          <span class="ag">Цель недели <b class="tnum">не задана</b> · набрано <b class="tnum">11,4 т</b></span>
+        </div>
+        <div class="matrixwrap">
+          <table class="pmatrix">
+            <colgroup>
+              <col class="c-cult" />
+              <col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" />
+              <col class="c-week" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="cult-col">Культура</th>
+                <th><div class="dh"><span class="dh-day">Пн</span><span class="dh-date">8 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Вт</span><span class="dh-date">9 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Ср</span><span class="dh-date">10 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Чт</span><span class="dh-date">11 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Пт</span><span class="dh-date">12 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Сб</span><span class="dh-date">13 июня</span></div></th>
+                <th class="week-col"><span class="wh">Неделя</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="gran">
+                    <button class="on">Дни</button>
+                    <button>Неделя</button>
+                  </div>
+                </th>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Пн, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf actual endcap" style="width:70%"></div></div>
+                  <span class="pcap tnum">1,4 <span class="nt-hint">факт</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Вт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf actual endcap" style="width:55%"></div></div>
+                  <span class="pcap tnum">1,1 <span class="nt-hint">факт</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Ср, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf plan endcap" style="left:0; width:60%"></div></div>
+                  <span class="pcap tnum">1,2 <span class="nt-hint">план</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Чт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Пт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · Сб, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Томаты · цель недели не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf actual" style="width:42%"></div><div class="bf plan endcap" style="left:42%; width:21%"></div></div>
+                  <div class="wcap"><span class="wval tnum">3,7 т</span><span class="nt-hint">цель не задана</span></div>
+                </div></td>
+              </tr>
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                  <div class="gran">
+                    <button class="on">Дни</button>
+                    <button>Неделя</button>
+                  </div>
+                </th>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Пн, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf actual endcap" style="width:48%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="nt-hint">факт</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Вт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf plan endcap" style="left:0; width:62%"></div></div>
+                  <span class="pcap tnum">1,3 <span class="nt-hint">план</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Ср, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf plan endcap" style="left:0; width:50%"></div></div>
+                  <span class="pcap tnum">1,0 <span class="nt-hint">план</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Чт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Пт, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · Сб, цель не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"></div>
+                  <span class="pcap zero">— <span class="nt-hint">нет</span></span>
+                </div></td>
+                <td class="week-col"><div class="pcell">
+                  <span class="ptin empty"><input placeholder="—" aria-label="Огурцы · цель недели не задана" /><span class="u">т</span></span>
+                  <div class="pbar notarget"><div class="bf actual" style="width:24%"></div><div class="bf plan endcap" style="left:24%; width:30%"></div></div>
+                  <div class="wcap"><span class="wval tnum">3,3 т</span><span class="nt-hint">цель не задана</span></div>
+                </div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="barlegend">
+          <span><span class="lg-sw actual"></span>перевешено (факт)</span>
+          <span><span class="lg-sw plan"></span>плановое</span>
+          <span style="color:var(--mute)">риски-цели нет — цель на неделю не задана</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- C · nothing at all -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">05</span>
+        <div>
+          <div class="frame-name">Нет отгрузок и нет целей</div>
+          <div class="frame-desc">Нейтральное пустое состояние по центру: ни целей, ни отгрузок на неделе. Приглашение задать план — без статусных цветов и без «тревожного» тона.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="05 · Пусто полностью">
+        <div class="ctx">
+          <span class="week-num">W26</span>
+          <span class="week-title">Неделя 26 <span class="wmeta">· 22–27 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+        </div>
+        <div class="empty">
+          <div class="ill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="8" y2="14"/><line x1="12" y1="14" x2="12" y2="14"/><line x1="16" y1="14" x2="16" y2="14"/></svg>
+          </div>
+          <h3>План на неделю не задан</h3>
+          <p>На неделе 26 ещё нет ни целей по культурам, ни отгрузок. Задайте недельные цели — прогресс начнёт заполняться по мере планирования и перевески.</p>
+          <div class="actions">
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Задать цели
+            </button>
+            <button class="btn">Копировать из недели 25</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="endnote">VSMS · инструмент снабженца. Статичный макет вида «План» (B4). Цель — на пару (неделя, культура) в одной гранулярности: <span class="mono">по дням</span> или <span class="mono">на неделю</span> (BR-20/21). Прогресс&nbsp;=&nbsp;Σ эффективного веса&nbsp;/&nbsp;цель; эффективный вес — перевеска, иначе план (BR-22). Цвета статусов отгрузок в план-домене не используются — прогресс нейтральный, единственный акцент (ink) маркирует «достигнуто / перелёт». Drag-drop карточек (B5) и Heatmap в этот макет не входят.</p>
+
+</div>
+</body>
+</html>

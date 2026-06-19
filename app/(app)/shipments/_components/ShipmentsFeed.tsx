@@ -5,11 +5,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Feed, FeedShipment, FeedWeek } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
+import {
+  isoWeek as isoWeekOf,
+  isoWeekRange,
+  seasonYearOf,
+  currentSeasonWeek,
+} from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
+import { PlanView } from "./PlanView";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "./FeedToolbar";
 import { FilterCombo } from "./FilterCombo";
 import { weekKey, formatWeekRange } from "./week-format";
+
+// Формат диапазона недели для метки тулбара в режиме «План» (ISO Пн–Вс).
+const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+function planWeekSub(isoYear: number, week: number): string {
+  const { start, end } = isoWeekRange(isoYear, week);
+  return `${dayMonthFmt.format(start)} – ${dayMonthFmt.format(end)}`;
+}
 
 type Status = FeedShipment["status"];
 
@@ -183,6 +201,40 @@ export function ShipmentsFeed({
 
   // Активная (просматриваемая) неделя — для метки тулбара. Обновляется scrollspy.
   const [activeKey, setActiveKey] = useState<string>(currentKey);
+
+  // --- Вид «План» (B4a). Своя неделя, независимая от feed.weeks (план задаётся
+  // и на недели без отгрузок). prev/next шагают ±7 дней через ISO-хелперы. ---
+  const [viewMode, setViewMode] = useState<"table" | "plan">("table");
+  const [planWeek, setPlanWeek] = useState(() => {
+    const c = currentSeasonWeek();
+    return { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
+  });
+
+  function handleViewChange(v: "table" | "plan") {
+    // При входе в «План» стартуем с недели, которую пользователь смотрел в ленте.
+    if (v === "plan" && activeKey) {
+      const [y, w] = activeKey.split("-").map(Number);
+      if (y && w) {
+        const { start } = isoWeekRange(y, w);
+        setPlanWeek({ seasonYear: seasonYearOf(start), isoYear: y, isoWeek: w });
+      }
+    }
+    setViewMode(v);
+  }
+
+  function stepPlanWeek(delta: number) {
+    setPlanWeek((p) => {
+      const { start } = isoWeekRange(p.isoYear, p.isoWeek);
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + delta * 7);
+      const w = isoWeekOf(d);
+      return { seasonYear: seasonYearOf(d), isoYear: w.isoYear, isoWeek: w.isoWeek };
+    });
+  }
+  function goPlanToday() {
+    const c = currentSeasonWeek();
+    setPlanWeek({ seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek });
+  }
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -363,6 +415,38 @@ export function ShipmentsFeed({
     onReset: resetAll,
   };
 
+  // Вид «План» (B4a) — независим от дерева ленты: своя неделя + getPlanWeek.
+  if (viewMode === "plan") {
+    const today = currentSeasonWeek();
+    const isCurrent =
+      planWeek.isoYear === today.isoYear && planWeek.isoWeek === today.isoWeek;
+    return (
+      <div ref={rootRef}>
+        <FeedToolbar
+          ref={toolbarRef}
+          createSlot={createButton}
+          weekLabel={`Неделя ${planWeek.isoWeek}`}
+          weekSub={planWeekSub(planWeek.isoYear, planWeek.isoWeek)}
+          onPrevWeek={() => stepPlanWeek(-1)}
+          onNextWeek={() => stepPlanWeek(1)}
+          onToday={goPlanToday}
+          prevDisabled={false}
+          nextDisabled={false}
+          todayActive={!isCurrent}
+          viewMode={viewMode}
+          onViewChange={handleViewChange}
+          {...filterProps}
+        />
+        <PlanView
+          seasonYear={planWeek.seasonYear}
+          isoYear={planWeek.isoYear}
+          isoWeek={planWeek.isoWeek}
+        />
+        {createDialog}
+      </div>
+    );
+  }
+
   // Пустой сезон — нет ни одной отгрузки (A6). Тулбар-фильтры тут роли не играют.
   if (weeks.length === 0) {
     return (
@@ -378,6 +462,8 @@ export function ShipmentsFeed({
           prevDisabled
           nextDisabled
           todayActive={false}
+          viewMode={viewMode}
+          onViewChange={handleViewChange}
           {...filterProps}
         />
         <div className="feedzone">
@@ -434,6 +520,8 @@ export function ShipmentsFeed({
       prevDisabled={activeIndex <= 0}
       nextDisabled={activeIndex >= navWeeks.length - 1}
       todayActive={activeKey !== currentKey}
+      viewMode={viewMode}
+      onViewChange={handleViewChange}
       {...filterProps}
     />
   );

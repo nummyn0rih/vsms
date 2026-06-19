@@ -4,8 +4,10 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../lib/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../lib/generated/prisma"
+  // partialIndexes (Prisma 7.4+): partial-unique для WeeklyPlan (BR-20, день/неделя).
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -400,15 +402,22 @@ model MaterialShipmentItem {
 // =====================================================================
 
 model WeeklyPlan {
-  id          Int     @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
+  season_year Int // год сезона (BR-17), для фильтрации/итогов
   iso_year    Int
   iso_week    Int
   culture_id  Int
-  target_tons Decimal @db.Decimal(12, 3)
+  // null = недельная цель (одна строка на неделю/культуру). Задана дата = дневная
+  // цель. Смешивать в рамках (неделя,культура) нельзя — BR-20 (валидация + partial-unique).
+  date        DateTime? @db.Date
+  target_tons Decimal   @db.Decimal(12, 3)
 
   culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
 
-  @@unique([iso_year, iso_week, culture_id])
+  // Partial-unique (Prisma 7.4+, where: raw): одна дневная строка на (дата,культура),
+  // одна недельная на (неделя,культура). Гранулярности не пересекаются по BR-20.
+  @@unique([date, culture_id], map: "WeeklyPlan_date_culture_key", where: raw("\"date\" IS NOT NULL"))
+  @@unique([iso_year, iso_week, culture_id], map: "WeeklyPlan_week_culture_key", where: raw("\"date\" IS NULL"))
 }
 
 // =====================================================================

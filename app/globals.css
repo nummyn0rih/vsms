@@ -334,4 +334,92 @@
 .empty p { font-size: 14px; color: var(--mute); letter-spacing: -0.01em; margin: 8px 0 0; max-width: 380px; line-height: 20px; }
 .empty .actions { margin-top: 22px; display: flex; align-items: center; gap: 10px; }
 
+/* ============ Вид «План» (B4a) — сетка целей. Прогресс-бары — Часть B. ============ */
+/* context strip недели плана */
+.ctx { padding: 14px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); flex-wrap: wrap; }
+.ctx .week-num { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; color: var(--mute); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; }
+.ctx .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+.ctx .week-title .wmeta { color: var(--mute); font-weight: 400; }
+.ctx .season { font-size: 12px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.ctx .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber, #1d8e75); }
+.ctx .ag { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+.ctx .ag b { color: var(--ink); font-weight: 600; }
+
+/* матрица */
+.matrixwrap { overflow: auto; max-height: calc(100vh - var(--toolbar-h, 0px) - 120px); }
+table.pmatrix { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+table.pmatrix col.c-cult { width: 232px; }
+table.pmatrix col.c-day { width: 132px; }
+table.pmatrix col.c-week { width: 168px; }
+table.pmatrix th, table.pmatrix td { border-bottom: 1px solid var(--hairline); }
+
+table.pmatrix thead th {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--canvas-soft); text-align: left; vertical-align: bottom;
+  padding: 11px 14px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+}
+table.pmatrix thead th.cult-col { left: 0; z-index: 30; border-right: 1px solid var(--hairline); }
+table.pmatrix thead th.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+.dh { display: flex; flex-direction: column; gap: 2px; }
+.dh .dh-day { font-size: 14px; color: var(--ink); font-weight: 600; }
+.dh .dh-date { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--mute); }
+.wh { font-size: 13px; color: var(--ink); font-weight: 600; }
+
+table.pmatrix tbody th.cult-col {
+  position: sticky; left: 0; z-index: 10;
+  background: var(--canvas); border-right: 1px solid var(--hairline);
+  text-align: left; vertical-align: top; font-weight: 500; padding: 12px 14px; color: var(--ink);
+}
+table.pmatrix tbody tr:hover th.cult-col,
+table.pmatrix tbody tr:hover td { background: var(--canvas-soft); }
+.cult-name { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+.cult-name .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.cult-meta { font-size: 11px; color: var(--mute); margin: 4px 0 10px 20px; }
+
+/* мини-сегмент гранулярности */
+.gran { display: inline-flex; padding: 2px; background: var(--canvas-soft-2); border-radius: 6px; gap: 2px; margin-left: 20px; }
+.gran button { border: 0; background: transparent; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--mute); padding: 3px 9px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.gran button.on { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+.gran button:disabled { cursor: not-allowed; opacity: .55; }
+.gran-tip { position: relative; display: inline-flex; }
+.gran-tip .gtip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; font-size: 11px; font-weight: 500; padding: 5px 9px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 8px -2px #00000040; opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 40; }
+.gran-tip:hover .gtip { opacity: 1; }
+.gran-tip .gtip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--ink); }
+
+table.pmatrix td { padding: 9px 10px; vertical-align: top; }
+table.pmatrix td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft); }
+table.pmatrix tbody tr:hover td.week-col { background: var(--canvas-soft-2); }
+table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { border-bottom: 0; }
+.pcell { display: flex; flex-direction: column; gap: 7px; }
+
+/* ячейка-ввод цели */
+.ptin { display: inline-flex; align-items: center; height: 30px; width: 100%; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); padding: 0 8px; transition: border-color .12s, box-shadow .12s; }
+.ptin:hover { border-color: var(--hairline-strong); }
+.ptin:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.ptin input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; width: 100%; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.ptin input::placeholder { color: var(--mute); }
+.ptin input::-webkit-outer-spin-button, .ptin input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.ptin input[type="number"] { -moz-appearance: textfield; }
+.ptin .u { font-size: 11px; color: var(--mute); margin-left: 4px; flex-shrink: 0; }
+.ptin.empty input { color: var(--mute); }
+.ptin.ro { background: var(--canvas-soft); border-color: transparent; }
+.ptin.saved { border-color: #29bc9b; box-shadow: 0 0 0 1px #29bc9b; }
+.ptin.err { border-color: #d4322c; box-shadow: 0 0 0 1px #d4322c; }
+.ptin.busy { opacity: .7; }
+.week-col .ptin { height: 32px; }
+.week-col .ptin input { font-size: 14px; font-weight: 500; }
+.ptin-err { color: #d4322c; font-size: 11px; }
+
+/* свёрнутая дневная ячейка (режим «на неделю») */
+.pcell.muted { align-items: center; justify-content: center; min-height: 48px; }
+.pcell.muted .dash { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; color: var(--hairline-strong); }
+td.muted { background: repeating-linear-gradient(45deg, #fcfcfc 0 8px, #f7f7f7 8px 16px); }
+table.pmatrix tbody tr:hover td.muted { background: repeating-linear-gradient(45deg, #f8f8f8 0 8px, #f2f2f2 8px 16px); }
+
+/* tfoot — итого */
+table.pmatrix tfoot th, table.pmatrix tfoot td { border-top: 1px solid var(--hairline); background: var(--canvas-soft); padding: 11px 14px; }
+table.pmatrix tfoot th.cult-col { position: sticky; left: 0; z-index: 10; border-right: 1px solid var(--hairline); font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+table.pmatrix tfoot td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+table.pmatrix tfoot td { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--body); font-variant-numeric: tabular-nums; text-align: right; }
+
 }

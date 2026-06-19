@@ -36,6 +36,9 @@ type FeedToolbarProps = {
   nextDisabled: boolean;
   /** true → активна не текущая неделя, «Сегодня» подсвечена (вернуться к текущей). */
   todayActive: boolean;
+  // Переключатель вида (B4a): «Таблица» / «План». Heatmap пока заглушка.
+  viewMode: "table" | "plan";
+  onViewChange: (v: "table" | "plan") => void;
   // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed).
   search: string;
   onSearch: (v: string) => void;
@@ -64,6 +67,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       prevDisabled,
       nextDisabled,
       todayActive,
+      viewMode,
+      onViewChange,
       search,
       onSearch,
       onClearSearch,
@@ -116,7 +121,11 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
           <div className="spacer" />
 
           <div className="seg">
-            <button type="button" className="active">
+            <button
+              type="button"
+              className={viewMode === "table" ? "active" : ""}
+              onClick={() => onViewChange("table")}
+            >
               Таблица
             </button>
             <div className="tip-wrap">
@@ -125,16 +134,18 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
               </button>
               <span className="tip">скоро</span>
             </div>
-            <div className="tip-wrap">
-              <button type="button" className="is-disabled" aria-disabled>
-                План
-              </button>
-              <span className="tip">скоро</span>
-            </div>
+            <button
+              type="button"
+              className={viewMode === "plan" ? "active" : ""}
+              onClick={() => onViewChange("plan")}
+            >
+              План
+            </button>
           </div>
         </div>
 
-        {/* Строка 2 — поиск/фильтры/тумблер/сброс (Часть B, клиентское). */}
+        {/* Строка 2 — поиск/фильтры/тумблер/сброс (только для «Таблицы»). */}
+        {viewMode === "table" && (
         <div className="tbar-row">
           <div className={`search${search ? " has-val" : ""}`}>
             <Svg cls="ic-search">
@@ -205,6 +216,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             <span className="tip">скоро</span>
           </div>
         </div>
+        )}
       </div>
     );
   },
