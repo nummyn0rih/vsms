@@ -100,6 +100,93 @@ function sumCultures(items: FeedItem[]): { cultures: CultureTotal[]; totalKg: nu
   return { cultures: [...byCulture.values()], totalKg };
 }
 
+// --- Превью списания/возврата тары для диалогов статусов (чистое) ---
+
+export type TarePreviewLine = {
+  packagingTypeId: number;
+  packagingName: string;
+  kind: "box" | "barrel";
+  units: number;
+  cultures: { name: string; units: number }[]; // разбивка «Томаты 62 + Огурцы 41»
+};
+
+export type TarePreviewGroup = {
+  farmerId: number;
+  farmerName: string;
+  lines: TarePreviewLine[]; // одна строка на тип тары у фермера
+};
+
+export type SendPreview = {
+  groups: TarePreviewGroup[];
+  totals: { boxes: number; barrels: number }; // → formatTareTotals
+  computedPositions: number; // рассчитанные позиции (норма есть)
+  totalTarePositions: number; // все позиции с тарой (навал исключён)
+  farmersCount: number; // distinct фермеров среди рассчитанных
+  missing: { cultureName: string; farmerName: string; packagingName: string }[];
+};
+
+// Группировка УЖЕ посчитанных сервером tareUnits по фермеру/типу тары для диалогов
+// «Отправить»/«Откатить». Это агрегация (как summarizeCultures/daySummary), НЕ
+// пересчёт тары: tareUnits приходит из feed-loader (плановый вес). Навал
+// (packagingTypeId == null) и «нет нормы» в списания не идут.
+export function buildSendPreview(items: FeedItem[]): SendPreview {
+  const groupByFarmer = new Map<number, TarePreviewGroup>();
+  const totals = { boxes: 0, barrels: 0 };
+  const farmers = new Set<number>();
+  const missing: SendPreview["missing"] = [];
+  let computedPositions = 0;
+  let totalTarePositions = 0;
+
+  for (const it of items) {
+    if (it.packagingTypeId == null) continue; // навал — без тары
+    totalTarePositions += 1;
+
+    if (it.tareMissingNorm || it.tareUnits == null || it.packagingKind == null) {
+      if (it.tareMissingNorm) {
+        missing.push({
+          cultureName: it.cultureName,
+          farmerName: it.farmerName,
+          packagingName: it.packagingTypeName ?? "тара",
+        });
+      }
+      continue;
+    }
+
+    computedPositions += 1;
+    farmers.add(it.farmerId);
+    if (it.packagingKind === "box") totals.boxes += it.tareUnits;
+    else totals.barrels += it.tareUnits;
+
+    let group = groupByFarmer.get(it.farmerId);
+    if (!group) {
+      group = { farmerId: it.farmerId, farmerName: it.farmerName, lines: [] };
+      groupByFarmer.set(it.farmerId, group);
+    }
+    let line = group.lines.find((l) => l.packagingTypeId === it.packagingTypeId);
+    if (!line) {
+      line = {
+        packagingTypeId: it.packagingTypeId,
+        packagingName: it.packagingTypeName ?? "тара",
+        kind: it.packagingKind,
+        units: 0,
+        cultures: [],
+      };
+      group.lines.push(line);
+    }
+    line.units += it.tareUnits;
+    line.cultures.push({ name: it.cultureName, units: it.tareUnits });
+  }
+
+  return {
+    groups: [...groupByFarmer.values()],
+    totals,
+    computedPositions,
+    totalTarePositions,
+    farmersCount: farmers.size,
+    missing,
+  };
+}
+
 export function weekSummary(week: FeedWeek): {
   cultures: CultureTotal[];
   totalKg: number;

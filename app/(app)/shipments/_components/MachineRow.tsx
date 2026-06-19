@@ -119,12 +119,10 @@ export function MachineRow({
               {isPlanned && (
                 <>
                   <DeleteShipmentButton id={shipment.id} code={shipment.code} />
-                  <SendShipmentButton id={shipment.id} code={shipment.code} />
+                  <SendShipmentButton shipment={shipment} />
                 </>
               )}
-              {canRevert && (
-                <RevertShipmentButton id={shipment.id} code={shipment.code} />
-              )}
+              {canRevert && <RevertShipmentButton shipment={shipment} />}
             </div>
           </RoleGate>
         </div>

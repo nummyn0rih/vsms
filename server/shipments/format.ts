@@ -13,6 +13,16 @@ export function pluralRu(n: number, one: string, few: string, many: string): str
 export const tareBoxWord = (n: number) => pluralRu(n, "ящик", "ящика", "ящиков");
 export const tareBarrelWord = (n: number) => pluralRu(n, "бочка", "бочки", "бочек");
 
+// Слово тары по виду (для строк превью диалогов: «103 ящика», «9 бочек»).
+export const tareUnitWord = (kind: "box" | "barrel", n: number) =>
+  kind === "box" ? tareBoxWord(n) : tareBarrelWord(n);
+
+// Склонения для сводок диалогов отправки/отката.
+export const positionsWord = (n: number) =>
+  pluralRu(n, "позиция", "позиции", "позиций");
+export const farmersWord = (n: number) =>
+  pluralRu(n, "фермер", "фермера", "фермеров");
+
 // "62 ящика · 8 бочек" из { boxes, barrels } (нули опускаем).
 export function formatTareTotals(boxes: number, barrels: number): string {
   const parts: string[] = [];
