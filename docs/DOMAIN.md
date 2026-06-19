@@ -125,7 +125,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 
 | Сущность | Атрибуты |
 |---|---|
-| WeeklyPlan | id, iso_year, iso_week, culture_id, target_tons |
+| WeeklyPlan | id, season_year, iso_year, iso_week, culture_id, date (Date, **nullable**), target_tons. **Гранулярность (BR-20):** `date` задан → цель на ДЕНЬ (ось date×culture); `date=null` → цель на ВСЮ неделю (ось iso_year×iso_week×culture). Для пары (неделя, культура) допустимо ЛИБО набор дневных строк, ЛИБО одна недельная — не одновременно. Partial-unique: `(date, culture_id) WHERE date IS NOT NULL` и `(iso_year, iso_week, culture_id) WHERE date IS NULL`. |
 | User | id, login, role {admin\|operator\|user}, password_hash, active |
 | ChangeLog | id, entity, entity_id, field, old_value, new_value, user_id, timestamp |
 
@@ -172,6 +172,9 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | BR-17 | Номера недель — ISO-календарные. season_year = год начала сезона (июнь). |
 | BR-18 | Рабочие дни: лето (июнь–сент) Пн–Сб (6), зима (окт–май) Пн–Пт (5). Берутся из SeasonConfig. |
 | BR-19 | Отгрузка в статусе `planned` — черновик без движений, может быть удалена физически. Со статуса `sent` и далее удаление запрещено: сначала откат статуса Admin (со сторно движений по BR-3), затем удаление. |
+| BR-20 | План недели (WeeklyPlan) задаётся для пары (неделя, культура) в ОДНОЙ гранулярности: либо дневные строки (`date` задан; можно не на все дни), либо одна недельная (`date=null`). Смешивать в рамках одной (неделя, культура) запрещено — иначе двойной учёт. Контроль: server-валидация при сохранении + partial-unique индексы. Прогресс при дневной гранулярности раскладывается по дате прибытия; при недельной — суммируется на неделю. |
+| BR-21 | Конверсия гранулярности (атомарно, $transaction, в ChangeLog), итог сохраняется: **день→неделя** — дневные строки (неделя,культура) заменяются одной недельной, `target_tons = Σ дневных`. **неделя→дни** — недельная строка заменяется дневными по рабочим дням этой ISO-недели (SeasonConfig); target распределяется равномерно, остаток — на последний рабочий день (Σ точно сохраняется); далее правится вручную. |
+| BR-22 | **Прогресс плана считается по ЭФФЕКТИВНОМУ весу** позиции: `effective = actual_weight_kg ?? planned_weight_kg` (есть перевеска → по ней, иначе по плановому). Это эвристика прогресса планирования, НЕ одна из трёх учётных баз (§1) и НЕ «принятый». В прогресс идут все неудалённые отгрузки (planned/sent/arrived/accepted). Дефицит/перелив информативны, не блокируют. |
 
 ---
 
@@ -188,7 +191,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | рейсы ТК (овощи) | COUNT Shipment по ТК в arrived/accepted | — |
 | рейсы ТК (материалы) | COUNT MaterialShipment доставленных | — |
 | осталось ~N машин | (volume − accepted) / TripWeightNorm | принятый |
-| прогресс плана недели | Σ запланировано / WeeklyPlan.target | плановый |
+| прогресс плана (день/неделя) | Σ effective веса позиций / WeeklyPlan.target_tons (по оси date×culture или iso_week×culture; кг→т) | **эффективный = actual ?? planned** (BR-22) |
 | недельные/дневные итоги | агрегаты ShipmentItem по arrival_date | — |
 
 **Для calibre-культур** (раскладка по категориям, каждая со своей привязкой к строке):
