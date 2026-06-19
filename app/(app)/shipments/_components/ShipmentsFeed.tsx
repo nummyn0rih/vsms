@@ -1,14 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Feed } from "@/server/shipments/feed";
+import type { Feed, FeedShipment, FeedWeek } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "./FeedToolbar";
+import { FilterCombo } from "./FilterCombo";
 import { weekKey, formatWeekRange } from "./week-format";
+
+type Status = FeedShipment["status"];
+
+// Фикс-набор статусов для фильтра (порядок жизненного цикла, RU-метки).
+const STATUS_OPTIONS: ReadonlyArray<readonly [Status, string]> = [
+  ["planned", "Плановая"],
+  ["sent", "Отправлена"],
+  ["arrived", "Прибыла"],
+  ["accepted", "Принята"],
+];
+const STATUS_LABEL = new Map<Status, string>(STATUS_OPTIONS);
+
+// Иконки кнопок фильтров (stroke-пути, вербатим из toolbar-states.html).
+const supplierIcon = (
+  <>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </>
+);
+const cultureIcon = <path d="M11 2 4 6v6c0 5 3 7.5 7 9 4-1.5 7-4 7-9V6z" />;
 
 // Ближайший скроллящийся предок (контейнер <main> в app-оболочке).
 function getScrollParent(node: HTMLElement | null): HTMLElement | null {
@@ -21,6 +42,17 @@ function getScrollParent(node: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
+// Имена выбранных опций для подсказки «Пусто после фильтра».
+function selectedNames(
+  opts: { id: number; name: string }[],
+  sel: Set<number>,
+): string {
+  return opts
+    .filter((o) => sel.has(o.id))
+    .map((o) => o.name)
+    .join(", ");
+}
+
 export function ShipmentsFeed({
   feed,
   options,
@@ -30,12 +62,95 @@ export function ShipmentsFeed({
 }) {
   const weeks = feed.weeks;
 
-  // Якорь «Сегодня»: текущая неделя, иначе ближайшая будущая, иначе последняя.
-  const currentIndex = weeks.findIndex((w) => w.position === "current");
-  const futureIndex = weeks.findIndex((w) => w.position === "future");
-  const anchorIndex =
-    currentIndex !== -1 ? currentIndex : futureIndex !== -1 ? futureIndex : weeks.length - 1;
-  const currentKey = weeks.length > 0 ? weekKey(weeks[anchorIndex]) : "";
+  // --- Состояние фильтров (React state, без localStorage) ---
+  const [search, setSearch] = useState("");
+  const [supplierSel, setSupplierSel] = useState<Set<number>>(new Set());
+  const [cultureSel, setCultureSel] = useState<Set<number>>(new Set());
+  const [statusSel, setStatusSel] = useState<Set<Status>>(new Set());
+  const [hidePlanned, setHidePlanned] = useState(false);
+
+  const anyFilterActive =
+    search.trim() !== "" ||
+    supplierSel.size > 0 ||
+    cultureSel.size > 0 ||
+    statusSel.size > 0 ||
+    hidePlanned;
+
+  const resetAll = useCallback(() => {
+    setSearch("");
+    setSupplierSel(new Set());
+    setCultureSel(new Set());
+    setStatusSel(new Set());
+    setHidePlanned(false);
+  }, []);
+
+  function toggleNum(
+    setSet: React.Dispatch<React.SetStateAction<Set<number>>>,
+    id: number,
+  ) {
+    setSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  // Видимые недели: фильтрация — клиентская, поверх загруженного дерева. Машина
+  // атомарна (И между фильтрами); пустые дни/недели после фильтра скрываются.
+  const visibleWeeks = useMemo<FeedWeek[]>(() => {
+    if (!anyFilterActive) return weeks;
+    const q = search.trim().toLowerCase();
+    const machineVisible = (m: FeedShipment): boolean => {
+      if (statusSel.size && !statusSel.has(m.status)) return false;
+      if (hidePlanned && m.status === "planned") return false;
+      if (supplierSel.size && !m.items.some((it) => supplierSel.has(it.farmerId)))
+        return false;
+      if (cultureSel.size && !m.items.some((it) => cultureSel.has(it.cultureId)))
+        return false;
+      if (q) {
+        const hit =
+          m.code.toLowerCase().includes(q) ||
+          m.items.some(
+            (it) =>
+              it.farmerName.toLowerCase().includes(q) ||
+              it.cultureName.toLowerCase().includes(q),
+          );
+        if (!hit) return false;
+      }
+      return true;
+    };
+    return weeks
+      .map((w) => ({
+        ...w,
+        days: w.days
+          .map((d) => ({ ...d, shipments: d.shipments.filter(machineVisible) }))
+          .filter((d) => d.shipments.length > 0),
+      }))
+      .filter((w) => w.days.length > 0);
+  }, [weeks, anyFilterActive, search, supplierSel, cultureSel, statusSel, hidePlanned]);
+
+  // Счётчики опций (.ct): число машин сезона с этой культурой/фермером/статусом.
+  // По полному дереву — стабильны независимо от текущих фильтров.
+  const counts = useMemo(() => {
+    const farmer = new Map<number, number>();
+    const culture = new Map<number, number>();
+    const status = new Map<Status, number>();
+    for (const w of weeks)
+      for (const d of w.days)
+        for (const m of d.shipments) {
+          status.set(m.status, (status.get(m.status) ?? 0) + 1);
+          const fset = new Set<number>();
+          const cset = new Set<number>();
+          for (const it of m.items) {
+            fset.add(it.farmerId);
+            cset.add(it.cultureId);
+          }
+          for (const id of fset) farmer.set(id, (farmer.get(id) ?? 0) + 1);
+          for (const id of cset) culture.set(id, (culture.get(id) ?? 0) + 1);
+        }
+    return { farmer, culture, status };
+  }, [weeks]);
 
   // Свёрнутость недель в React-state (НЕ localStorage). Прошлые свёрнуты,
   // текущая и будущие развёрнуты (DESIGN §2).
@@ -56,9 +171,15 @@ export function ShipmentsFeed({
     });
   }
 
-  // Создание отгрузки: диалог в controlled-режиме, открывается из тулбара/пустого
-  // состояния кнопкой в стиле прототипа (.btn-primary, 40px).
+  // Создание отгрузки: диалог в controlled-режиме.
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Якорь «Сегодня»: текущая неделя, иначе ближайшая будущая, иначе последняя.
+  const currentIndex = weeks.findIndex((w) => w.position === "current");
+  const futureIndex = weeks.findIndex((w) => w.position === "future");
+  const anchorIndex =
+    currentIndex !== -1 ? currentIndex : futureIndex !== -1 ? futureIndex : weeks.length - 1;
+  const currentKey = weeks.length > 0 ? weekKey(weeks[anchorIndex]) : "";
 
   // Активная (просматриваемая) неделя — для метки тулбара. Обновляется scrollspy.
   const [activeKey, setActiveKey] = useState<string>(currentKey);
@@ -66,6 +187,13 @@ export function ShipmentsFeed({
   const toolbarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const weekEls = useRef<Map<string, HTMLElement>>(new Map());
+
+  // Текущий рендеримый (отфильтрованный) набор недель — для scrollspy в обработчике
+  // скролла (синхронизируем через effect, без чтения ref во время рендера).
+  const renderWeeksRef = useRef<FeedWeek[]>(visibleWeeks);
+  useEffect(() => {
+    renderWeeksRef.current = visibleWeeks;
+  }, [visibleWeeks]);
 
   const setWeekRef = useCallback(
     (key: string) => (el: HTMLDivElement | null) => {
@@ -99,11 +227,13 @@ export function ShipmentsFeed({
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
+        const list = renderWeeksRef.current;
+        if (list.length === 0) return;
         const h = toolbar?.offsetHeight ?? 0;
         const containerTop = scroller ? scroller.getBoundingClientRect().top : 0;
         const line = containerTop + h + 4;
-        let active = weekKey(weeks[0]);
-        for (const w of weeks) {
+        let active = weekKey(list[0]);
+        for (const w of list) {
           const el = weekEls.current.get(weekKey(w));
           if (!el) continue;
           if (el.getBoundingClientRect().top <= line) active = weekKey(w);
@@ -160,7 +290,80 @@ export function ShipmentsFeed({
     />
   );
 
-  // Пустой сезон — нет ни одной отгрузки (A6).
+  // Три фильтра-комбобокса. Опции — справочники (active) + счётчики по дереву.
+  const supplierCombo = (
+    <FilterCombo
+      kind="icon"
+      label="Поставщик"
+      icon={supplierIcon}
+      options={options.farmers.map((f) => ({
+        id: f.id,
+        name: f.name,
+        count: counts.farmer.get(f.id) ?? 0,
+      }))}
+      selected={supplierSel}
+      onToggle={(id) => toggleNum(setSupplierSel, id as number)}
+      onClear={() => setSupplierSel(new Set())}
+      searchable
+      searchPlaceholder="Найти поставщика…"
+    />
+  );
+  const cultureCombo = (
+    <FilterCombo
+      kind="icon"
+      label="Сырьё"
+      icon={cultureIcon}
+      options={options.cultures.map((c) => ({
+        id: c.id,
+        name: c.name,
+        color: c.color,
+        count: counts.culture.get(c.id) ?? 0,
+      }))}
+      selected={cultureSel}
+      onToggle={(id) => toggleNum(setCultureSel, id as number)}
+      onClear={() => setCultureSel(new Set())}
+      searchable
+      searchPlaceholder="Найти культуру…"
+    />
+  );
+  const statusCombo = (
+    <FilterCombo
+      kind="status"
+      label="Статус"
+      options={STATUS_OPTIONS.map(([id, name]) => ({
+        id,
+        name,
+        count: counts.status.get(id) ?? 0,
+      }))}
+      selected={statusSel}
+      onToggle={(id) =>
+        setStatusSel((prev) => {
+          const next = new Set(prev);
+          const s = id as Status;
+          if (next.has(s)) next.delete(s);
+          else next.add(s);
+          return next;
+        })
+      }
+      onClear={() => setStatusSel(new Set())}
+    />
+  );
+
+  // Пропсы тулбара, общие для всех веток (фильтры/поиск/тумблер/сброс).
+  const filterProps = {
+    search,
+    onSearch: setSearch,
+    onClearSearch: () => setSearch(""),
+    supplierCombo,
+    cultureCombo,
+    statusCombo,
+    hidePlanned,
+    onToggleHidePlanned: () => setHidePlanned((v) => !v),
+    showReset: anyFilterActive,
+    onReset: resetAll,
+  };
+
+  // Пустой сезон — нет ни одной отгрузки (A6). Тулбар-фильтры тут роли не играют.
   if (weeks.length === 0) {
     return (
       <div ref={rootRef}>
@@ -175,6 +378,7 @@ export function ShipmentsFeed({
           prevDisabled
           nextDisabled
           todayActive={false}
+          {...filterProps}
         />
         <div className="feedzone">
           <div className="empty">
@@ -204,35 +408,101 @@ export function ShipmentsFeed({
     );
   }
 
+  // Навигация/метка недели — по отфильтрованному набору.
+  const navWeeks = visibleWeeks;
   const activeIndex = Math.max(
     0,
-    weeks.findIndex((w) => weekKey(w) === activeKey),
+    navWeeks.findIndex((w) => weekKey(w) === activeKey),
   );
-  const activeWeek = weeks[activeIndex];
-  const { range: activeRange } = formatWeekRange(activeWeek);
+  const activeWeek = navWeeks[activeIndex];
+  const activeRange = activeWeek ? formatWeekRange(activeWeek).range : "";
+
+  const toolbar = (
+    <FeedToolbar
+      ref={toolbarRef}
+      createSlot={createButton}
+      weekLabel={activeWeek ? `Неделя ${activeWeek.isoWeek}` : ""}
+      weekSub={activeRange}
+      onPrevWeek={() => {
+        if (activeIndex > 0) scrollToKey(weekKey(navWeeks[activeIndex - 1]));
+      }}
+      onNextWeek={() => {
+        if (activeIndex < navWeeks.length - 1)
+          scrollToKey(weekKey(navWeeks[activeIndex + 1]));
+      }}
+      onToday={() => scrollToKey(currentKey)}
+      prevDisabled={activeIndex <= 0}
+      nextDisabled={activeIndex >= navWeeks.length - 1}
+      todayActive={activeKey !== currentKey}
+      {...filterProps}
+    />
+  );
+
+  // Пусто после фильтра (B7): данные в сезоне есть, но под фильтры не попало ничего.
+  if (anyFilterActive && navWeeks.length === 0) {
+    const parts: string[] = [];
+    if (supplierSel.size)
+      parts.push(`Поставщик · ${selectedNames(options.farmers, supplierSel)}`);
+    if (cultureSel.size)
+      parts.push(`Сырьё · ${selectedNames(options.cultures, cultureSel)}`);
+    if (statusSel.size)
+      parts.push(
+        `Статус · ${[...statusSel].map((s) => STATUS_LABEL.get(s)).join(", ")}`,
+      );
+    if (hidePlanned) parts.push("без плановых");
+    if (search.trim()) parts.push(`поиск «${search.trim()}»`);
+
+    return (
+      <div ref={rootRef}>
+        {toolbar}
+        <div className="feedzone">
+          <div className="empty">
+            <div className="ill">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                <line x1="13.5" y1="8.5" x2="8.5" y2="13.5" />
+                <line x1="8.5" y1="8.5" x2="13.5" y2="13.5" />
+              </svg>
+            </div>
+            <h3>Ничего не найдено по фильтрам</h3>
+            <p>Под текущие фильтры ({parts.join("; ")}) нет отгрузок.</p>
+            <div className="actions">
+              <button type="button" className="btn" onClick={resetAll}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 2v6h6" />
+                  <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
+                </svg>
+                Сбросить фильтры
+              </button>
+            </div>
+          </div>
+        </div>
+        {createDialog}
+      </div>
+    );
+  }
 
   return (
     <div ref={rootRef}>
-      <FeedToolbar
-        ref={toolbarRef}
-        createSlot={createButton}
-        weekLabel={`Неделя ${activeWeek.isoWeek}`}
-        weekSub={activeRange}
-        onPrevWeek={() => {
-          if (activeIndex > 0) scrollToKey(weekKey(weeks[activeIndex - 1]));
-        }}
-        onNextWeek={() => {
-          if (activeIndex < weeks.length - 1)
-            scrollToKey(weekKey(weeks[activeIndex + 1]));
-        }}
-        onToday={() => scrollToKey(currentKey)}
-        prevDisabled={activeIndex <= 0}
-        nextDisabled={activeIndex >= weeks.length - 1}
-        todayActive={activeKey !== currentKey}
-      />
+      {toolbar}
 
       <div>
-        {weeks.map((week) => {
+        {navWeeks.map((week) => {
           const key = weekKey(week);
           return (
             <WeekBlock

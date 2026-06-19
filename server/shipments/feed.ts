@@ -72,6 +72,15 @@ export type CultureTotal = {
   totalKg: number;
 };
 
+// Σ по культурам над набором машин (для чипов дня/недели — в т.ч. отфильтрованных
+// на клиенте). Чистая, переиспользуется и сервером, и клиентским пересчётом (B6).
+export function summarizeCultures(machines: FeedShipment[]): {
+  cultures: CultureTotal[];
+  totalKg: number;
+} {
+  return sumCultures(machines.flatMap((s) => s.items));
+}
+
 // Σ по культурам в стабильном порядке первого появления.
 function sumCultures(items: FeedItem[]): { cultures: CultureTotal[]; totalKg: number } {
   const byCulture = new Map<number, CultureTotal>();
@@ -96,13 +105,8 @@ export function weekSummary(week: FeedWeek): {
   totalKg: number;
   machineCount: number;
 } {
-  const items: FeedItem[] = [];
-  let machineCount = 0;
-  for (const day of week.days) {
-    machineCount += day.shipments.length;
-    for (const s of day.shipments) items.push(...s.items);
-  }
-  return { ...sumCultures(items), machineCount };
+  const machines = week.days.flatMap((d) => d.shipments);
+  return { ...summarizeCultures(machines), machineCount: machines.length };
 }
 
 export function daySummary(day: FeedDay): {
@@ -126,7 +130,7 @@ export function daySummary(day: FeedDay): {
     }
   }
   return {
-    ...sumCultures(items),
+    ...summarizeCultures(day.shipments),
     tare: { boxes, barrels },
     hasUnpricedTare,
   };

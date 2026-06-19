@@ -225,6 +225,15 @@
 }
 .search input::placeholder { color: var(--mute); }
 .search input:focus { outline: none; border-color: var(--hairline-strong); }
+.search.has-val input { padding-right: 38px; border-color: var(--hairline-strong); }
+.search .clear-x {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border: 0; background: transparent; border-radius: 5px;
+  color: var(--mute); cursor: pointer; display: grid; place-items: center;
+}
+.search .clear-x:hover { background: var(--canvas-soft-2); color: var(--ink); }
+.search .clear-x svg { width: 14px; height: 14px; }
+.search .mq { font-family: var(--font-mono), "Geist Mono", monospace; letter-spacing: 0; }
 
 /* фильтр */
 .filter-wrap { position: relative; display: inline-flex; }
@@ -238,6 +247,51 @@
 .filter .fl-ic { width: 14px; height: 14px; color: var(--mute); }
 .filter .fl-chev { width: 14px; height: 14px; color: var(--mute); }
 .filter .fv { color: var(--ink); font-weight: 500; }
+/* открыт */
+.filter.open { border-color: var(--hairline-strong); background: var(--canvas-soft); color: var(--ink); }
+.filter.open .fl-chev { transform: rotate(180deg); }
+/* активен (применён) — нейтральная заливка, НЕ статусные цвета */
+.filter.active { background: var(--canvas-soft-2); border-color: var(--hairline-strong); color: var(--ink); font-weight: 500; }
+.filter.active .fl-ic { color: var(--ink); }
+.filter .count {
+  font-family: var(--font-mono), "Geist Mono", monospace; font-size: 12px; letter-spacing: 0;
+  background: var(--ink); color: #fff; border-radius: 4px; min-width: 18px; height: 18px;
+  padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; margin-left: 1px;
+}
+
+/* кнопка «Сбросить» (сброс всех фильтров) */
+.btn-reset { border-color: transparent; background: transparent; box-shadow: none; color: var(--body); padding: 0 10px; }
+.btn-reset:hover { background: var(--canvas-soft-2); color: var(--ink); }
+.btn-reset svg { width: 14px; height: 14px; }
+
+/* combobox фильтра */
+.combo {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 272px;
+  display: flex; flex-direction: column;
+  border: 1px solid var(--hairline-strong); border-radius: 6px; overflow: hidden; background: var(--canvas);
+  box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #00000014;
+}
+.combo-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--hairline); }
+.combo-search svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+.combo-search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); width: 100%; letter-spacing: -0.02em; }
+.combo-search input::placeholder { color: var(--mute); }
+.combo-list { max-height: 240px; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 1px; }
+.combo-opt { display: flex; align-items: center; gap: 10px; padding: 8px 9px; border-radius: 5px; font-size: 14px; color: var(--ink); letter-spacing: -0.02em; cursor: pointer; }
+.combo-opt:hover { background: var(--canvas-soft); }
+.combo-opt .cb {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--hairline-strong);
+  flex-shrink: 0; display: grid; place-items: center; background: var(--canvas);
+}
+.combo-opt.sel .cb { background: var(--ink); border-color: var(--ink); }
+.combo-opt .cb svg { width: 11px; height: 11px; color: #fff; opacity: 0; }
+.combo-opt.sel .cb svg { opacity: 1; }
+.combo-opt .sq { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.combo-opt .nm { flex: 1; }
+.combo-opt .ct { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 12px; color: var(--mute); letter-spacing: 0; }
+.combo-foot { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--hairline); padding: 8px 9px; }
+.combo-foot .clr { border: 0; background: transparent; font-family: inherit; font-size: 13px; color: var(--body); cursor: pointer; padding: 4px 7px; border-radius: 5px; letter-spacing: -0.02em; }
+.combo-foot .clr:hover { background: var(--canvas-soft-2); color: var(--ink); }
+.combo-foot .apply { height: 30px; padding: 0 12px; border-radius: 6px; border: 0; background: var(--ink); color: #fff; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; cursor: pointer; }
 
 /* тумблер */
 .toggle { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; color: var(--body); letter-spacing: -0.02em; cursor: pointer; white-space: nowrap; }

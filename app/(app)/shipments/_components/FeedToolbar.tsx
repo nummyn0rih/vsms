@@ -6,7 +6,6 @@ import { forwardRef, type ReactNode } from "react";
 const ico = {
   chevronLeft: <polyline points="15 18 9 12 15 6" />,
   chevronRight: <polyline points="9 18 15 12 9 6" />,
-  chevronDown: <polyline points="6 9 12 15 18 9" />,
 };
 
 function Svg({ children, cls }: { children: ReactNode; cls?: string }) {
@@ -37,10 +36,22 @@ type FeedToolbarProps = {
   nextDisabled: boolean;
   /** true → активна не текущая неделя, «Сегодня» подсвечена (вернуться к текущей). */
   todayActive: boolean;
+  // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed).
+  search: string;
+  onSearch: (v: string) => void;
+  onClearSearch: () => void;
+  supplierCombo: ReactNode;
+  cultureCombo: ReactNode;
+  statusCombo: ReactNode;
+  hidePlanned: boolean;
+  onToggleHidePlanned: () => void;
+  showReset: boolean;
+  onReset: () => void;
 };
 
-// Каркас тулбара ленты (Часть A). Поиск/фильтры/тумблер — статичная разметка
-// без логики (интерактив — Часть B). Heatmap/План/Excel — заглушки с тултипом «скоро».
+// Тулбар ленты. Row 1 — создание/неделя/вид (Часть A). Row 2 — поиск/фильтры/
+// тумблер «скрыть плановые»/сброс (Часть B, всё клиентское поверх дерева).
+// Heatmap/План/Excel — заглушки с тултипом «скоро».
 export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
   function FeedToolbar(
     {
@@ -53,6 +64,16 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       prevDisabled,
       nextDisabled,
       todayActive,
+      search,
+      onSearch,
+      onClearSearch,
+      supplierCombo,
+      cultureCombo,
+      statusCombo,
+      hidePlanned,
+      onToggleHidePlanned,
+      showReset,
+      onReset,
     },
     ref,
   ) {
@@ -113,48 +134,62 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
           </div>
         </div>
 
-        {/* Строка 2 — поиск/фильтры/тумблер: статичная разметка, логика в Части B. */}
+        {/* Строка 2 — поиск/фильтры/тумблер/сброс (Часть B, клиентское). */}
         <div className="tbar-row">
-          <div className="search">
+          <div className={`search${search ? " has-val" : ""}`}>
             <Svg cls="ic-search">
               <circle cx="11" cy="11" r="8" />
               <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </Svg>
-            <input type="text" placeholder="Поиск: фермер, культура, № акта…" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Поиск: фермер, культура, № акта…"
+            />
+            {search && (
+              <button
+                type="button"
+                className="clear-x"
+                title="Очистить"
+                onClick={onClearSearch}
+              >
+                <Svg>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </Svg>
+              </button>
+            )}
           </div>
 
-          <div className="filter-wrap">
-            <button type="button" className="filter">
-              <Svg cls="fl-ic">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
+          {supplierCombo}
+          {cultureCombo}
+          {statusCombo}
+
+          {showReset && (
+            <button
+              type="button"
+              className="btn btn-sm btn-reset"
+              onClick={onReset}
+            >
+              <Svg>
+                <path d="M3 2v6h6" />
+                <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
               </Svg>
-              Поставщик
-              <Svg cls="fl-chev">{ico.chevronDown}</Svg>
+              Сбросить
             </button>
-          </div>
-
-          <div className="filter-wrap">
-            <button type="button" className="filter">
-              <Svg cls="fl-ic">
-                <path d="M11 2 4 6v6c0 5 3 7.5 7 9 4-1.5 7-4 7-9V6z" />
-              </Svg>
-              Сырьё
-              <Svg cls="fl-chev">{ico.chevronDown}</Svg>
-            </button>
-          </div>
-
-          <div className="filter-wrap">
-            <button type="button" className="filter">
-              Статус: <span className="fv">все</span>
-              <Svg cls="fl-chev">{ico.chevronDown}</Svg>
-            </button>
-          </div>
+          )}
 
           <div className="spacer" />
 
-          <label className="toggle">
-            <span className="switch off" />
+          <label className={`toggle${hidePlanned ? " on" : ""}`}>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={hidePlanned}
+              onChange={onToggleHidePlanned}
+            />
+            <span className={`switch${hidePlanned ? "" : " off"}`} />
             Скрыть плановые
           </label>
 
