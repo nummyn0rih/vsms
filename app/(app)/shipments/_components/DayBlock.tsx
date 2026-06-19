@@ -2,6 +2,7 @@
 
 import { type FeedDay, daySummary } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
+import { formatTareTotals } from "@/server/shipments/format";
 import { MachineRow } from "./MachineRow";
 import { CultureChip } from "./FeedChips";
 
@@ -42,7 +43,7 @@ export function DayBlock({
     );
   }
 
-  const hasTare = summary.tare.length > 0;
+  const hasTare = summary.tare.boxes > 0 || summary.tare.barrels > 0;
 
   return (
     <div>
@@ -56,15 +57,13 @@ export function DayBlock({
         {(hasTare || summary.hasUnpricedTare) && (
           <span className="ml-auto text-xs whitespace-nowrap text-muted-foreground">
             тара:{" "}
-            {hasTare
-              ? summary.tare.map((t, i) => (
-                  <span key={t.packagingTypeName}>
-                    {i > 0 && " · "}
-                    <b className="font-medium tabular-nums text-[#4d4d4d]">{t.units}</b>{" "}
-                    {t.packagingTypeName}
-                  </span>
-                ))
-              : "—"}
+            {hasTare ? (
+              <b className="font-medium tabular-nums text-[#4d4d4d]">
+                {formatTareTotals(summary.tare.boxes, summary.tare.barrels)}
+              </b>
+            ) : (
+              "—"
+            )}
             {summary.hasUnpricedTare && (
               <span title="Есть позиции без нормы тары"> · ?</span>
             )}

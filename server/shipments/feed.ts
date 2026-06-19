@@ -19,6 +19,7 @@ export type FeedItem = {
   plannedKg: number;
   packagingTypeId: number | null;
   packagingTypeName: string | null;
+  packagingKind: "box" | "barrel" | null; // вид тары для итогов по kind
   tareUnits: number | null; // null = навал ИЛИ нет нормы
   tareMissingNorm: boolean; // тип задан, нормы по тройке нет → UI «?»
   contractLineId: number | null;
@@ -107,25 +108,26 @@ export function weekSummary(week: FeedWeek): {
 export function daySummary(day: FeedDay): {
   cultures: CultureTotal[];
   totalKg: number;
-  tare: { packagingTypeName: string; units: number }[];
+  // Итоги тары агрегируются по виду (kind), а не по имени типа: все box → boxes,
+  // все barrel → barrels (DESIGN §2). Рендер — через formatTareTotals.
+  tare: { boxes: number; barrels: number };
   hasUnpricedTare: boolean;
 } {
   const items = day.shipments.flatMap((s) => s.items);
-  const byTare = new Map<string, number>();
+  let boxes = 0;
+  let barrels = 0;
   let hasUnpricedTare = false;
   for (const it of items) {
     if (it.tareMissingNorm) hasUnpricedTare = true;
     // Навал (tareUnits=null без флага) и «нет нормы» в сводку тары не входят.
-    if (it.tareUnits != null && it.packagingTypeName) {
-      byTare.set(
-        it.packagingTypeName,
-        (byTare.get(it.packagingTypeName) ?? 0) + it.tareUnits,
-      );
+    if (it.tareUnits != null && it.packagingKind) {
+      if (it.packagingKind === "box") boxes += it.tareUnits;
+      else if (it.packagingKind === "barrel") barrels += it.tareUnits;
     }
   }
   return {
     ...sumCultures(items),
-    tare: [...byTare].map(([packagingTypeName, units]) => ({ packagingTypeName, units })),
+    tare: { boxes, barrels },
     hasUnpricedTare,
   };
 }

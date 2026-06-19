@@ -27,6 +27,11 @@ function monthOf(s: string): number {
   return new Date(`${s}T00:00:00Z`).getUTCMonth();
 }
 
+// Тип тары в строке выводим со строчной первой буквы («Ящик» → «ящик»).
+function lcFirst(s: string): string {
+  return s.charAt(0).toLowerCase() + s.slice(1);
+}
+
 // «{отправление} → {прибытие}»: полные месяцы; если месяц совпадает — у отправления
 // только день, у прибытия «день месяц». Акцент (weight 600) на прибытии (DESIGN §2).
 function TripDates({
@@ -39,7 +44,7 @@ function TripDates({
   if (!departure && !arrival) return <span className="text-muted-foreground">—</span>;
 
   const arrEl = arrival ? (
-    <span className="font-semibold tabular-nums">
+    <span className="font-semibold tabular-nums text-foreground">
       {dayMonthFmt.format(new Date(`${arrival}T00:00:00Z`))}
     </span>
   ) : (
@@ -51,7 +56,7 @@ function TripDates({
   const sameMonth = arrival != null && monthOf(departure) === monthOf(arrival);
   const depFmt = sameMonth ? dayFmt : dayMonthFmt;
   const depEl = (
-    <span className="tabular-nums">
+    <span className="tabular-nums text-muted-foreground">
       {depFmt.format(new Date(`${departure}T00:00:00Z`))}
     </span>
   );
@@ -61,7 +66,7 @@ function TripDates({
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
       {depEl}
-      <span className="text-muted-foreground">→</span>
+      <span className="text-[#a1a1a1]">→</span>
       {arrEl}
     </span>
   );
@@ -158,23 +163,27 @@ export function MachineRow({
               backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
-            <span className="flex items-center gap-2 truncate text-sm">
+            <span className="flex items-center gap-2 truncate text-sm font-medium">
               <span
-                className="inline-block size-2.5 shrink-0 rounded-[3px]"
+                className="inline-block size-[9px] shrink-0 rounded-[2px]"
                 style={{ backgroundColor: it.color }}
               />
               <span className="truncate">{it.cultureName}</span>
             </span>
-            <span className="text-sm tabular-nums">
-              {formatWeight(it.plannedKg)}{" "}
-              <span className="text-muted-foreground">кг</span>
+            <span className="text-right text-sm font-medium tabular-nums">
+              {formatWeight(it.plannedKg)}
+              <span className="ml-0.5 text-xs font-normal text-muted-foreground">кг</span>
             </span>
-            <span className="truncate text-sm">{it.farmerName}</span>
-            <span className="text-sm text-muted-foreground">
+            <span className="truncate text-[13px]">{it.farmerName}</span>
+            <span className="text-[13px] text-muted-foreground">
               {it.tareUnits != null && it.packagingTypeName ? (
                 <>
-                  {it.packagingTypeName} ·{" "}
-                  <span className="tabular-nums text-foreground">{it.tareUnits}</span> шт
+                  {lcFirst(it.packagingTypeName)} ·{" "}
+                  <span className="tabular-nums text-foreground">
+                    {isPlanned ? "≈" : ""}
+                    {it.tareUnits}
+                  </span>{" "}
+                  шт
                 </>
               ) : it.tareMissingNorm ? (
                 <span title="Нет нормы тары">?</span>

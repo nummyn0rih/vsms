@@ -28,7 +28,7 @@ function toDateStr(d: Date | null): string | null {
 const feedItemInclude = {
   farmer: { select: { name: true } },
   culture: { select: { name: true, color: true } },
-  packagingType: { select: { name: true } },
+  packagingType: { select: { name: true, kind: true } },
   contractLine: { select: { label: true } },
 } as const;
 
@@ -93,6 +93,7 @@ export async function getFeed({
       plannedKg: item.planned_weight_kg.toNumber(),
       packagingTypeId: item.packaging_type_id,
       packagingTypeName: item.packagingType?.name ?? null,
+      packagingKind: item.packagingType?.kind ?? null,
       tareUnits: calc.status === "ok" ? calc.units : null,
       tareMissingNorm: calc.status === "missing_norm",
       contractLineId: item.contract_line_id,

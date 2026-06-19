@@ -11,13 +11,13 @@ export function CultureChip({ culture }: { culture: CultureTotal }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[#ebebeb] bg-card px-2 py-0.5 text-xs text-foreground/80">
       <span
-        className="inline-block size-2 shrink-0 rounded-full"
+        className="inline-block size-2 shrink-0 rounded-[2px]"
         style={{ backgroundColor: culture.color }}
       />
       {culture.name}
-      <span className="tabular-nums text-muted-foreground">
+      <b className="font-semibold tabular-nums text-foreground">
         {formatTons(culture.totalKg)} т
-      </span>
+      </b>
     </span>
   );
 }
