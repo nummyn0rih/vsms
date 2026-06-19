@@ -14,7 +14,6 @@ import {
   type ShipmentDetail,
   type ShipmentItemRow,
   type ShipmentOptions,
-  type ShipmentTarePreview,
 } from "./schema";
 import { persistShipmentItems, ShipmentValidationError } from "./items";
 import {
@@ -348,33 +347,6 @@ const tareItemInclude = {
   farmer: { select: { name: true } },
   culture: { select: { name: true } },
 } as const;
-
-// Предпросмотр движений тары для AlertDialog «Отправить». Чтение, без записи.
-export async function previewShipmentTare(
-  id: number,
-): Promise<ShipmentTarePreview> {
-  const shipment = await prisma.shipment.findUnique({
-    where: { id },
-    include: { items: { include: tareItemInclude } },
-  });
-  if (!shipment) return { ok: false, driverMissing: false, missing: [] };
-
-  const { lines, missing } = await buildTarePlan(prisma, shipment.items);
-  const driverMissing = shipment.driver_id == null;
-
-  if (driverMissing || missing.length > 0) {
-    return { ok: false, driverMissing, missing };
-  }
-
-  return {
-    ok: true,
-    lines: lines.map((l) => ({
-      farmerName: l.farmerName,
-      packagingName: l.packagingName,
-      units: l.units,
-    })),
-  };
-}
 
 // Сводка по типам тары для ChangeLog: «Ящик овощной ×62; Бочка 200 ×4».
 function tareSummary(lines: TarePlanLine[]): string {

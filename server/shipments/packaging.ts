@@ -2,8 +2,8 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import type { PrismaClient } from "@/lib/generated/prisma/client";
 
 // Расчёт плановой потребности тары по позиции отгрузки (BR-3). Чистый модуль БЕЗ
-// "use server" — переиспользуется в sendShipment (запись движений), previewShipmentTare
-// (предпросмотр в UI) и далее в B3 (инфо-показ в ленте). Decimal-математика Prisma.
+// "use server" — переиспользуется в sendShipment (запись движений) и в B3
+// (инфо-показ в ленте). Decimal-математика Prisma.
 
 // Завод — фиксированная локация id=0 (DOMAIN §3, правило 1). Не FK, литерал.
 export const FACTORY_LOCATION_ID = 0;
@@ -64,7 +64,7 @@ export function tripleKey(
 }
 
 // Пачкой подтягивает нормы по тройкам позиций и имена их типов тары (без N+1).
-// Используют sendShipment и previewShipmentTare.
+// Используют sendShipment и buildTarePlan.
 export async function loadPackagingContext(
   tx: Tx,
   items: ItemLite[],
