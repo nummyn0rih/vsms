@@ -94,6 +94,14 @@
   --link: #0070f3;
   --link-deep: #0761d1;
   --link-bg-soft: #d3e5ff;
+
+  /* План · прогресс-бар (нейтраль + один ink-акцент; НЕ статусные цвета) */
+  --bar-track: #f0f0f0;
+  --bar-actual: #9a9a9a; /* перевешено (факт) */
+  --bar-plan-a: #d6d6d6; /* план — тёмная полоса штриха */
+  --bar-plan-b: #ededed; /* план — светлая полоса штриха */
+  --bar-tick: #b0b0b0; /* риска-цель */
+  --bar-accent: #171717; /* достигнуто / перелёт */
 }
 
 .dark {
@@ -421,5 +429,35 @@ table.pmatrix tfoot th, table.pmatrix tfoot td { border-top: 1px solid var(--hai
 table.pmatrix tfoot th.cult-col { position: sticky; left: 0; z-index: 10; border-right: 1px solid var(--hairline); font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
 table.pmatrix tfoot td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
 table.pmatrix tfoot td { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--body); font-variant-numeric: tabular-nums; text-align: right; }
+table.pmatrix tfoot td.week-col { text-align: left; }
+
+/* прогресс-бар (Часть B): факт (сплошной) + план (штрих) + перелёт (ink), риска-цель */
+.pbar { position: relative; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: visible; }
+.pbar .bf { position: absolute; top: 0; height: 100%; }
+.pbar .actual { left: 0; background: var(--bar-actual); border-radius: 3px 0 0 3px; }
+.pbar .plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+.pbar .over { background: var(--bar-accent); }
+.pbar .btick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--bar-tick); border-radius: 1px; }
+.pbar.met .btick { background: var(--bar-accent); }
+.pbar .plan.endcap { border-radius: 0 3px 3px 0; }
+.pbar .actual.endcap { border-radius: 3px; }
+.pbar .over.endcap { border-radius: 0 3px 3px 0; }
+
+/* подпись прогресса дневной ячейки */
+.pcap { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--body); font-variant-numeric: tabular-nums; }
+.pcap .t-goal { color: var(--mute); }
+.pcap.zero { color: var(--mute); }
+.nt-hint { font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; color: var(--hairline-strong); text-transform: uppercase; }
+
+/* подпись недельной ячейки/итога */
+.wcap { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.wcap .wval { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.wcap .wval .t-goal { color: var(--mute); }
+.wdelta { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.wdelta.under { color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+.wdelta.over { color: #fff; background: var(--bar-accent); }
+
+/* хинт «план не задан» над пустой сеткой */
+.plan-hint { padding: 11px 22px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); color: var(--mute); font-size: 13px; line-height: 18px; letter-spacing: -0.01em; }
 
 }

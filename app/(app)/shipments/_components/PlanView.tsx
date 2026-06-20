@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSession } from "next-auth/react";
 
-import type { PlanWeek } from "@/server/plan/schema";
+import type { CellProgress, PlanWeek } from "@/server/plan/schema";
 import {
   loadPlanWeek,
   upsertPlanTarget,
@@ -30,6 +30,150 @@ function dayMonth(dateStr: string): string {
 // Тонны с 3 знаками, лишние нули обрезаются: 9 → «9», 0.5 → «0,5».
 function fmtTons(n: number): string {
   return n.toFixed(3).replace(/\.?0+$/, "").replace(".", ",");
+}
+
+const EMPTY_PROGRESS: CellProgress = {
+  actualTons: 0,
+  planRemainingTons: 0,
+  effectiveTons: 0,
+};
+
+// Полка цели: риска-цель и 100%-эффективный садятся на 95,2%, оставляя ~4,8% запаса
+// под перелёт (как в макете plan-view-b4). Сравнения tons — с допуском EPS (3 знака).
+const BAR_FILL_PCT = 95.2;
+const EPS = 0.0005;
+
+type BarSeg = {
+  kind: "actual" | "plan" | "over";
+  left: number;
+  width: number;
+  endcap: boolean;
+};
+type BarGeom = { segs: BarSeg[]; tickLeft: number | null; met: boolean };
+
+// Чистая геометрия бара (BR-22). targetTons=null → нет цели: относительная шкала
+// scaleOverride (max эффективного по строке), без риски и перелёта. Эффективный вес
+// раскладывается на actual (сплошной) + planRemaining (штрих); хвост за целью — over (ink).
+function barGeometry({
+  actualTons,
+  planRemainingTons,
+  targetTons,
+  scaleOverride,
+}: {
+  actualTons: number;
+  planRemainingTons: number;
+  targetTons: number | null;
+  scaleOverride: number;
+}): BarGeom {
+  const effective = actualTons + planRemainingTons;
+
+  if (targetTons == null) {
+    const scaleMax = scaleOverride;
+    const pct = (t: number) => (scaleMax > 0 ? (t / scaleMax) * BAR_FILL_PCT : 0);
+    const segs: BarSeg[] = [];
+    const aw = pct(actualTons);
+    const pw = pct(planRemainingTons);
+    if (aw > 0) segs.push({ kind: "actual", left: 0, width: aw, endcap: pw === 0 });
+    if (pw > 0) segs.push({ kind: "plan", left: aw, width: pw, endcap: true });
+    return { segs, tickLeft: null, met: false };
+  }
+
+  const scaleMax = Math.max(targetTons, effective);
+  const pct = (t: number) => (scaleMax > 0 ? (t / scaleMax) * BAR_FILL_PCT : 0);
+  const over = Math.max(0, effective - targetTons);
+  const belowTotal = effective - over; // = min(effective, target)
+  const actualBelow = Math.min(actualTons, belowTotal);
+  const planBelow = belowTotal - actualBelow;
+
+  const segs: BarSeg[] = [];
+  const aw = pct(actualBelow);
+  const pw = pct(planBelow);
+  const ow = pct(over);
+  if (aw > 0) segs.push({ kind: "actual", left: 0, width: aw, endcap: false });
+  if (pw > 0) segs.push({ kind: "plan", left: aw, width: pw, endcap: false });
+  if (ow > 0) segs.push({ kind: "over", left: aw + pw, width: ow, endcap: false });
+  if (segs.length) segs[segs.length - 1].endcap = true; // скругление правого края
+
+  return { segs, tickLeft: pct(targetTons), met: effective >= targetTons - EPS };
+}
+
+function PlanBar({ geom }: { geom: BarGeom }) {
+  const cls = [
+    "pbar",
+    geom.tickLeft == null ? "notarget" : "",
+    geom.met ? "met" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={cls}>
+      {geom.segs.map((s, i) => (
+        <div
+          key={i}
+          className={`bf ${s.kind}${s.endcap ? " endcap" : ""}`}
+          style={{ left: `${s.left}%`, width: `${s.width}%` }}
+        />
+      ))}
+      {geom.tickLeft != null && (
+        <div className="btick" style={{ left: `${geom.tickLeft}%` }} />
+      )}
+    </div>
+  );
+}
+
+// Подпись дневной ячейки: «{эффективный} / {цель}» или «{эффективный} нет цели».
+function DayCaption({ progress, target }: { progress: CellProgress; target: number | null }) {
+  const eff = progress.effectiveTons;
+  if (target == null) {
+    return eff > EPS ? (
+      <span className="pcap tnum">
+        {fmtTons(eff)} <span className="nt-hint">нет цели</span>
+      </span>
+    ) : (
+      <span className="pcap zero tnum">
+        — <span className="nt-hint">нет</span>
+      </span>
+    );
+  }
+  return (
+    <span className={`pcap tnum${eff <= EPS ? " zero" : ""}`}>
+      {fmtTons(eff)} <span className="t-goal">/ {fmtTons(target)}</span>
+    </span>
+  );
+}
+
+// Подпись недельной ячейки/итога: «{эффективный} / {цель}» + бейдж дельты.
+function WeekCaption({ progress, target }: { progress: CellProgress; target: number | null }) {
+  const eff = progress.effectiveTons;
+  if (target == null || target <= EPS) {
+    return (
+      <div className="wcap">
+        <span className="wval tnum">{fmtTons(eff)} т</span>
+        <span className="nt-hint">цель не задана</span>
+      </div>
+    );
+  }
+  const delta = eff - target;
+  let badge: ReactNode = null;
+  if (delta > EPS) {
+    badge = <span className="wdelta over tnum">+{fmtTons(delta)}</span>;
+  } else if (delta < -EPS) {
+    // Ничего не перевешено → «факт 0»; иначе абсолютный недобор.
+    badge =
+      progress.actualTons <= EPS ? (
+        <span className="wdelta under tnum">факт 0</span>
+      ) : (
+        <span className="wdelta under tnum">−{fmtTons(Math.abs(delta))}</span>
+      );
+  }
+  return (
+    <div className="wcap">
+      <span className="wval tnum">
+        {fmtTons(eff)} <span className="t-goal">/ {fmtTons(target)}</span>
+      </span>
+      {badge}
+    </div>
+  );
 }
 
 export function PlanView({
@@ -156,7 +300,7 @@ export function PlanView({
       ? (r.weekTarget ?? 0)
       : Object.values(r.dayTargets).reduce((s, v) => s + v, 0);
 
-  // Итоги по столбцам (суммы целей; прогресс — Часть B).
+  // Итоги по столбцам (суммы целей).
   const dayTotals = days.map((d) =>
     week.rows.reduce(
       (s, r) => s + (r.mode === "day" ? (r.dayTargets[d.date] ?? 0) : 0),
@@ -164,6 +308,20 @@ export function PlanView({
     ),
   );
   const weekGrandTotal = week.rows.reduce((s, r) => s + rowWeekTotal(r), 0);
+  const weekEffectiveTotal = week.weekTotalProgress.effectiveTons;
+
+  // Цель недели по строке для бара: week-режим → r.weekTarget; day-режим → Σ дней
+  // (null, если целей нет → бар без риски).
+  const rowWeekTarget = (r: PlanWeek["rows"][number]): number | null => {
+    const t = rowWeekTotal(r);
+    return t > 0 ? t : null;
+  };
+  // No-target дневные ячейки масштабируются к max эффективного по строке (построчно).
+  const rowMaxEffective = (r: PlanWeek["rows"][number]): number =>
+    days.reduce((m, d) => Math.max(m, r.dayProgress[d.date]?.effectiveTons ?? 0), 0);
+
+  // Совсем пусто: ни целей, ни отгрузок на неделе — показываем хинт над сеткой.
+  const fullyEmpty = weekGrandTotal <= 0 && weekEffectiveTotal <= 0;
 
   return (
     <div>
@@ -180,7 +338,16 @@ export function PlanView({
           Сезон {week.seasonYear}
         </span>
         <span className="ag">
-          Цель недели <b className="tnum">{fmtTons(weekGrandTotal)} т</b>
+          {weekGrandTotal > 0 ? (
+            <>
+              Цель недели <b className="tnum">{fmtTons(weekGrandTotal)} т</b>
+            </>
+          ) : (
+            <>
+              Цель недели <b>не задана</b>
+            </>
+          )}{" "}
+          · набрано <b className="tnum">{fmtTons(weekEffectiveTotal)} т</b>
         </span>
       </div>
 
@@ -192,7 +359,14 @@ export function PlanView({
           </div>
         </div>
       ) : (
-        <div className="matrixwrap">
+        <>
+          {fullyEmpty && (
+            <div className="plan-hint">
+              План на неделю не задан — задайте недельные цели по культурам, прогресс
+              начнёт заполняться по мере планирования и перевески.
+            </div>
+          )}
+          <div className="matrixwrap">
           <table className="pmatrix">
             <colgroup>
               <col className="c-cult" />
@@ -297,6 +471,18 @@ export function PlanView({
                               }
                               onSaved={(v) => setDayTarget(r.cultureId, d.date, v)}
                             />
+                            <PlanBar
+                              geom={barGeometry({
+                                actualTons: (r.dayProgress[d.date] ?? EMPTY_PROGRESS).actualTons,
+                                planRemainingTons: (r.dayProgress[d.date] ?? EMPTY_PROGRESS).planRemainingTons,
+                                targetTons: r.dayTargets[d.date] ?? null,
+                                scaleOverride: rowMaxEffective(r),
+                              })}
+                            />
+                            <DayCaption
+                              progress={r.dayProgress[d.date] ?? EMPTY_PROGRESS}
+                              target={r.dayTargets[d.date] ?? null}
+                            />
                           </div>
                         </td>
                       ),
@@ -344,6 +530,15 @@ export function PlanView({
                             <span className="u">т</span>
                           </span>
                         )}
+                        <PlanBar
+                          geom={barGeometry({
+                            actualTons: r.weekProgress.actualTons,
+                            planRemainingTons: r.weekProgress.planRemainingTons,
+                            targetTons: rowWeekTarget(r),
+                            scaleOverride: r.weekProgress.effectiveTons,
+                          })}
+                        />
+                        <WeekCaption progress={r.weekProgress} target={rowWeekTarget(r)} />
                       </div>
                     </td>
                   </tr>
@@ -353,14 +548,44 @@ export function PlanView({
             <tfoot>
               <tr>
                 <th className="cult-col">Итого недели</th>
-                {dayTotals.map((t, i) => (
-                  <td key={days[i].date}>{fmtTons(t)}</td>
-                ))}
-                <td className="week-col">{fmtTons(weekGrandTotal)} т</td>
+                {dayTotals.map((t, i) => {
+                  const eff = week.dayTotalsProgress[i]?.effectiveTons ?? 0;
+                  return (
+                    <td key={days[i].date}>
+                      {t > 0 ? (
+                        <>
+                          {fmtTons(eff)}{" "}
+                          <span className="t-goal">/ {fmtTons(t)}</span>
+                        </>
+                      ) : eff > 0 ? (
+                        fmtTons(eff)
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  );
+                })}
+                <td className="week-col">
+                  <div className="pcell">
+                    <PlanBar
+                      geom={barGeometry({
+                        actualTons: week.weekTotalProgress.actualTons,
+                        planRemainingTons: week.weekTotalProgress.planRemainingTons,
+                        targetTons: weekGrandTotal > 0 ? weekGrandTotal : null,
+                        scaleOverride: weekEffectiveTotal,
+                      })}
+                    />
+                    <WeekCaption
+                      progress={week.weekTotalProgress}
+                      target={weekGrandTotal > 0 ? weekGrandTotal : null}
+                    />
+                  </div>
+                </td>
               </tr>
             </tfoot>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

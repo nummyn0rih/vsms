@@ -39,6 +39,15 @@ export type PlanDay = {
   weekdayName: string;
 };
 
+// Прогресс ячейки (BR-22). Раздельно факт/план — для раскраски бара (сплошное/штрих).
+// effective = actual ?? planned, посчитанное раздельно: actualTons + planRemainingTons.
+// В B4a перевески ещё нет → actualTons = 0 везде. Всё в тоннах.
+export type CellProgress = {
+  actualTons: number; // Σ actual_weight_kg позиций С перевеской
+  planRemainingTons: number; // Σ planned_weight_kg позиций БЕЗ перевески
+  effectiveTons: number; // actualTons + planRemainingTons
+};
+
 export type PlanRow = {
   cultureId: number;
   cultureName: string;
@@ -46,6 +55,8 @@ export type PlanRow = {
   mode: "day" | "week";
   weekTarget: number | null; // mode === "week"
   dayTargets: Record<string, number>; // mode === "day": date → тонны
+  dayProgress: Record<string, CellProgress>; // date → прогресс (по рабочим дням)
+  weekProgress: CellProgress; // сумма по всей неделе
 };
 
 export type PlanWeek = {
@@ -56,4 +67,6 @@ export type PlanWeek = {
   endDate: string;
   days: PlanDay[]; // рабочие дни недели (колонки сетки)
   rows: PlanRow[]; // по активным культурам
+  dayTotalsProgress: CellProgress[]; // итог по колонкам-дням (выровнен с days)
+  weekTotalProgress: CellProgress; // итог по всем культурам за неделю
 };
