@@ -39,8 +39,9 @@ export function MarkArrivedButton({
   );
 }
 
-// «Акт» — заглушка (этап C: приёмка с % брака). disabled + CSS-тултип (как у
-// SendShipmentButton, без TooltipProvider).
+// «Акт» — позиционная заглушка (этап C: приёмка с актом). disabled + CSS-тултип
+// (как у SendShipmentButton, без TooltipProvider). Приёмка позиционная (BR-13/26):
+// кнопка живёт в строке позиции arrived-машины, не на машине.
 export function ActButtonStub() {
   return (
     <div className="group relative inline-flex">
@@ -50,8 +51,8 @@ export function ActButtonStub() {
       >
         <FileText className="size-3.5" /> Акт
       </button>
-      <span className="pointer-events-none absolute bottom-[calc(100%+7px)] left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#171717] px-[10px] py-[7px] text-xs leading-4 text-white group-hover:block">
-        Приёмка с % брака — этап C
+      <span className="pointer-events-none absolute bottom-[calc(100%+7px)] right-0 hidden whitespace-nowrap rounded-md bg-[#171717] px-[10px] py-[7px] text-xs leading-4 text-white group-hover:block">
+        Приёмка с актом — этап C
       </span>
     </div>
   );

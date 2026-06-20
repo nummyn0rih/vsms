@@ -109,18 +109,19 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
           </p>
         )}
 
-        <RoleGate allow={["operator", "admin"]}>
-          <div className="mt-auto flex items-center gap-2 pt-1">
-            {isSent ? (
+        {/* Действие машины: только «Отметить прибытие» у sent. Приёмка позиционная
+            (BR-13/26) — «Акт» живёт в строке позиции, не на машине. */}
+        {isSent && (
+          <RoleGate allow={["operator", "admin"]}>
+            <div className="mt-auto flex items-center gap-2 pt-1">
               <MarkArrivedButton shipmentId={machine.id} code={machine.code} />
-            ) : (
-              <ActButtonStub />
-            )}
-          </div>
-        </RoleGate>
+            </div>
+          </RoleGate>
+        )}
       </div>
 
-      {/* Правая зона: строки позиций делят высоту поровну. */}
+      {/* Правая зона: строки позиций делят высоту поровну. «Акт» — на позиции у
+          arrived+ (зона 2). */}
       <div className="flex min-w-0 flex-1 flex-col">
         {machine.items.map((it) => (
           <div
@@ -128,7 +129,7 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
             className="grid flex-1 items-center gap-3 border-t border-[#ebebeb] px-4 py-2 first:border-t-0"
             style={{
               gridTemplateColumns:
-                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px minmax(140px,0.9fr)",
+                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px 130px 70px",
               backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
@@ -144,13 +145,15 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
               {formatWeight(it.plannedKg)}
               <span className="ml-0.5 text-xs">кг</span>
             </span>
-            <span className="flex items-center justify-end gap-1.5">
+            <span className="flex items-center justify-end">
               <WeightInput
                 shipmentItemId={it.id}
                 savedValue={it.actualKg}
                 disabled={!canEdit}
               />
-              <span className="text-xs text-muted-foreground">кг</span>
+            </span>
+            <span className="flex justify-end">
+              <ActButtonStub />
             </span>
           </div>
         ))}

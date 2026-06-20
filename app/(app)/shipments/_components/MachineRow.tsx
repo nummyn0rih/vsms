@@ -72,13 +72,27 @@ function TripDates({
   );
 }
 
-// № акта по статусу. Реальный номер появится на этапе C (приёмка); сейчас —
-// плейсхолдер по статусу.
-function ActCell({ status }: { status: FeedShipment["status"] }) {
+// № акта / факт перевески по статусу. Реальный акт — этап C; сейчас плейсхолдер.
+// arrived (B4b): есть факт → «факт {вес} кг», иначе «— приёмка».
+function ActCell({
+  status,
+  actualKg,
+}: {
+  status: FeedShipment["status"];
+  actualKg: number | null;
+}) {
   if (status === "accepted") {
     return (
       <span className="rounded border px-1.5 py-0.5 font-mono text-xs text-foreground">
         принят
+      </span>
+    );
+  }
+  if (status === "arrived" && actualKg != null) {
+    return (
+      <span className="text-xs tabular-nums text-foreground">
+        факт {formatWeight(actualKg)}
+        <span className="ml-0.5 text-muted-foreground">кг</span>
       </span>
     );
   }
@@ -189,7 +203,7 @@ export function MachineRow({
                 ""
               )}
             </span>
-            <ActCell status={shipment.status} />
+            <ActCell status={shipment.status} actualKg={it.actualKg} />
           </div>
         ))}
       </div>

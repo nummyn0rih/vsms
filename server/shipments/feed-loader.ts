@@ -91,6 +91,8 @@ export async function getFeed({
       cultureName: item.culture.name,
       color: item.culture.color,
       plannedKg: item.planned_weight_kg.toNumber(),
+      actualKg:
+        item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
       packagingTypeId: item.packaging_type_id,
       packagingTypeName: item.packagingType?.name ?? null,
       packagingKind: item.packagingType?.kind ?? null,

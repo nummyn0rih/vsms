@@ -17,6 +17,7 @@ export type FeedItem = {
   cultureName: string;
   color: string;
   plannedKg: number;
+  actualKg: number | null; // факт перевески (B4b), null = ещё не взвешено
   packagingTypeId: number | null;
   packagingTypeName: string | null;
   packagingKind: "box" | "barrel" | null; // вид тары для итогов по kind
