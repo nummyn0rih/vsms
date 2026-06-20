@@ -170,12 +170,19 @@ function WeekCaption({ progress, target }: { progress: CellProgress; target: num
     // («факт 0» убран до B4b, чтобы план не читался как факт).
     badge = <span className="wdelta under tnum">−{fmtTons(Math.abs(delta))}</span>;
   }
+  // Бейдж факта (B4b): где есть перевеска (actual > 0) — показываем набранный факт
+  // отдельным нейтральным чипом, рядом с ±delta. Где факта нет — не шумим.
+  const factBadge =
+    progress.actualTons > EPS ? (
+      <span className="wdelta fact tnum">факт {fmtTons(progress.actualTons)}</span>
+    ) : null;
   return (
     <div className="wcap">
       <span className="wval tnum">
         {fmtTons(eff)} <span className="t-goal">/ {fmtTons(target)}</span>
       </span>
       {badge}
+      {factBadge}
     </div>
   );
 }
