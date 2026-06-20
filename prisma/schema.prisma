@@ -112,6 +112,7 @@ model Culture {
   tripWeightNorms   TripWeightNorm[]
   ingredientRecipes IngredientRecipe[]
   weeklyPlans       WeeklyPlan[]
+  weeklyPlanScopes  WeeklyPlanScope[]
 }
 
 // Разрешённые типы тары культуры. Инвариант «ровно один is_default=true на культуру»
@@ -418,6 +419,22 @@ model WeeklyPlan {
   // одна недельная на (неделя,культура). Гранулярности не пересекаются по BR-20.
   @@unique([date, culture_id], map: "WeeklyPlan_date_culture_key", where: raw("\"date\" IS NOT NULL"))
   @@unique([iso_year, iso_week, culture_id], map: "WeeklyPlan_week_culture_key", where: raw("\"date\" IS NULL"))
+}
+
+// Состав плана недели (BR-23): какие культуры показываются/планируются на неделе.
+// Общий server-state (правит admin, видят все), НЕ личный фильтр. Управляет видимостью
+// ПУСТЫХ культур — у культуры с целью/отгрузками строка видна и без записи здесь.
+model WeeklyPlanScope {
+  id          Int @id @default(autoincrement())
+  season_year Int
+  iso_year    Int
+  iso_week    Int
+  culture_id  Int
+
+  culture Culture @relation(fields: [culture_id], references: [id], onDelete: Restrict)
+
+  @@unique([iso_year, iso_week, culture_id], map: "WeeklyPlanScope_week_culture_key")
+  @@index([iso_year, iso_week])
 }
 
 // =====================================================================

@@ -1,11 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import { useSession } from "next-auth/react";
 
 import type { CellProgress, PlanWeek } from "@/server/plan/schema";
 import {
-  loadPlanWeek,
   upsertPlanTarget,
   deletePlanTarget,
   convertDaysToWeek,
@@ -179,40 +184,31 @@ export function PlanView({
   seasonYear,
   isoYear,
   isoWeek,
+  week,
+  setWeek,
+  loading,
+  version,
+  reload,
+  onOpenScope,
 }: {
   seasonYear: number;
   isoYear: number;
   isoWeek: number;
+  week: PlanWeek | null;
+  setWeek: Dispatch<SetStateAction<PlanWeek | null>>;
+  loading: boolean;
+  version: number;
+  reload: () => Promise<void>;
+  onOpenScope: () => void;
 }) {
   const { data: session } = useSession();
   const canEdit = session?.user?.role === "admin";
 
-  const [week, setWeek] = useState<PlanWeek | null>(null);
-  const [loading, setLoading] = useState(true);
   const [converting, setConverting] = useState<number | null>(null);
-  // version — bump после каждой загрузки/конверсии: входит в key ячеек, заставляя
-  // PlanInput ремоунтиться со свежим savedValue (без sync-эффекта внутри ячейки).
-  const [version, setVersion] = useState(0);
   // Режим выводится из данных (есть строки → день/неделя). Но у пустой культуры
   // строк нет — нечего конвертировать. Тогда режим держим в клиенте до первого
   // ввода (при сохранении создастся строка нужной гранулярности).
   const [modeOverride, setModeOverride] = useState<Record<number, "day" | "week">>({});
-  const reqRef = useRef(0);
-
-  // Загрузка не делает синхронный setState (только в .then) — это синхронизация с
-  // внешней системой (сервером), допустимая в эффекте.
-  const fetchWeek = useCallback(async () => {
-    const my = ++reqRef.current;
-    const data = await loadPlanWeek({ seasonYear, isoYear, isoWeek });
-    if (my !== reqRef.current) return;
-    setWeek(data);
-    setVersion((v) => v + 1);
-    setLoading(false);
-  }, [seasonYear, isoYear, isoWeek]);
-
-  useEffect(() => {
-    fetchWeek();
-  }, [fetchWeek]);
 
   // --- Локальные апдейты после автосейва ячейки (без перезапроса) ---
   const setDayTarget = useCallback(
@@ -231,7 +227,7 @@ export function PlanView({
         };
       });
     },
-    [],
+    [setWeek],
   );
   const setWeekTarget = useCallback(
     (cultureId: number, value: number | null) => {
@@ -245,19 +241,19 @@ export function PlanView({
         };
       });
     },
-    [],
+    [setWeek],
   );
 
   async function toWeekMode(cultureId: number) {
     setConverting(cultureId);
     const res = await convertDaysToWeek({ seasonYear, isoYear, isoWeek, cultureId });
-    if (res.ok) await fetchWeek();
+    if (res.ok) await reload();
     setConverting(null);
   }
   async function toDayMode(cultureId: number) {
     setConverting(cultureId);
     const res = await convertWeekToDays({ seasonYear, isoYear, isoWeek, cultureId });
-    if (res.ok) await fetchWeek();
+    if (res.ok) await reload();
     setConverting(null);
   }
 
@@ -358,11 +354,40 @@ export function PlanView({
         </span>
       </div>
 
-      {week.rows.length === 0 ? (
+      {week.scopePicker.length === 0 ? (
         <div className="feedzone">
           <div className="empty">
             <h3>Нет активных культур</h3>
             <p>Заведите культуры в справочнике, чтобы планировать цели.</p>
+          </div>
+        </div>
+      ) : week.rows.length === 0 ? (
+        // Пустая неделя (BR-23): нет состава и нет активности. Не вываливаем все
+        // культуры — даём точку входа в combobox состава.
+        <div className="feedzone">
+          <div className="empty">
+            <h3>Состав недели пуст</h3>
+            <p>Выберите культуры, которые планируются на этой неделе.</p>
+            {canEdit ? (
+              <button type="button" className="scope-add-btn" onClick={onOpenScope}>
+                <svg
+                  width={15}
+                  height={15}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Добавить культуры в план недели
+              </button>
+            ) : (
+              <p className="ro-note">Состав задаёт администратор.</p>
+            )}
           </div>
         </div>
       ) : (

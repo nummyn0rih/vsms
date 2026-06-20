@@ -4,6 +4,7 @@ import { z } from "zod";
 // без prisma, можно импортировать в client-компоненты (типы сетки PlanWeek).
 
 export const ENTITY = "WeeklyPlan";
+export const ENTITY_SCOPE = "WeeklyPlanScope";
 
 const positiveInt = z.number().int().positive();
 // Дата дневной цели приходит строкой YYYY-MM-DD (как в seasons/shipments).
@@ -32,6 +33,20 @@ export const deletePlanTargetSchema = planKeySchema.extend({
 });
 export type DeletePlanTargetInput = z.infer<typeof deletePlanTargetSchema>;
 
+// --- Состав недели (BR-23) ---
+
+// add: нужен season_year (пишется в строку scope) → используем planKeySchema целиком.
+export const addScopeSchema = planKeySchema;
+export type AddScopeInput = z.infer<typeof addScopeSchema>;
+
+// remove: season_year не нужен (ищем по неделе+культуре).
+export const removeScopeSchema = z.object({
+  isoYear: positiveInt,
+  isoWeek: z.number().int().min(1).max(53),
+  cultureId: positiveInt,
+});
+export type RemoveScopeInput = z.infer<typeof removeScopeSchema>;
+
 // --- Типы формы сетки (заполняются board.ts, читаются PlanView) ---
 
 export type PlanDay = {
@@ -59,6 +74,17 @@ export type PlanRow = {
   weekProgress: CellProgress; // сумма по всей неделе
 };
 
+// Пункт combobox состава (BR-23). selected = галочка стоит; locked = снять нельзя.
+export type ScopePickerItem = {
+  cultureId: number;
+  cultureName: string;
+  color: string;
+  lockReason: "target" | "shipments" | null; // причина закрепления (есть цель/отгрузки)
+  inScope: boolean; // есть запись в WeeklyPlanScope
+  selected: boolean; // inScope || lockReason != null
+  locked: boolean; // lockReason != null (чекбокс disabled)
+};
+
 export type PlanWeek = {
   seasonYear: number;
   isoYear: number;
@@ -66,7 +92,8 @@ export type PlanWeek = {
   startDate: string;
   endDate: string;
   days: PlanDay[]; // рабочие дни недели (колонки сетки)
-  rows: PlanRow[]; // по активным культурам
+  rows: PlanRow[]; // только ВИДИМЫЕ культуры (BR-23)
+  scopePicker: ScopePickerItem[]; // все активные культуры для combobox состава
   dayTotalsProgress: CellProgress[]; // итог по колонкам-дням (выровнен с days)
   weekTotalProgress: CellProgress; // итог по всем культурам за неделю
 };

@@ -13,12 +13,17 @@ import {
 } from "@/server/shipments/workdays";
 import {
   ENTITY,
+  ENTITY_SCOPE,
   planKeySchema,
   upsertPlanTargetSchema,
   deletePlanTargetSchema,
+  addScopeSchema,
+  removeScopeSchema,
   type PlanKey,
   type UpsertPlanTargetInput,
   type DeletePlanTargetInput,
+  type AddScopeInput,
+  type RemoveScopeInput,
   type PlanWeek,
 } from "./schema";
 import { getPlanWeek } from "./board";
@@ -357,5 +362,81 @@ export async function convertWeekToDays(input: PlanKey): Promise<ActionResult> {
     return { ok: true };
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось сменить гранулярность" };
+  }
+}
+
+// BR-23: добавить культуру в состав недели. Идемпотентно — повтор не падает.
+// Видимость пустой культуры открывается заранее; у культуры с целью/отгрузками строка
+// видна и без записи здесь.
+export async function addCultureToScope(input: AddScopeInput): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const parsed = addScopeSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Некорректные данные" };
+    const { seasonYear, isoYear, isoWeek: week, cultureId } = parsed.data;
+
+    const existing = await prisma.weeklyPlanScope.findFirst({
+      where: { iso_year: isoYear, iso_week: week, culture_id: cultureId },
+      select: { id: true },
+    });
+    if (existing) return { ok: true }; // идемпотентно: уже в составе
+
+    const created = await prisma.weeklyPlanScope.create({
+      data: {
+        season_year: seasonYear,
+        iso_year: isoYear,
+        iso_week: week,
+        culture_id: cultureId,
+      },
+    });
+    await logChange(
+      {
+        entity: ENTITY_SCOPE,
+        entityId: created.id,
+        field: "scope_add",
+        newValue: String(cultureId),
+      },
+      Number(user.id),
+    );
+
+    return { ok: true };
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось обновить состав" };
+  }
+}
+
+// BR-23: убрать культуру из состава. Идемпотентно. Если у культуры есть цель/отгрузки —
+// строка остаётся видимой по другим условиям (это нормально, не ошибка).
+export async function removeCultureFromScope(
+  input: RemoveScopeInput,
+): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const parsed = removeScopeSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Некорректные данные" };
+    const { isoYear, isoWeek: week, cultureId } = parsed.data;
+
+    const existing = await prisma.weeklyPlanScope.findFirst({
+      where: { iso_year: isoYear, iso_week: week, culture_id: cultureId },
+      select: { id: true },
+    });
+    if (!existing) return { ok: true }; // идемпотентно: нечего удалять
+
+    await prisma.weeklyPlanScope.delete({ where: { id: existing.id } });
+    await logChange(
+      {
+        entity: ENTITY_SCOPE,
+        entityId: existing.id,
+        field: "scope_remove",
+        oldValue: String(cultureId),
+      },
+      Number(user.id),
+    );
+
+    return { ok: true };
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось обновить состав" };
   }
 }

@@ -15,6 +15,8 @@ import {
 } from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
 import { PlanView } from "./PlanView";
+import { ScopeCombo } from "./ScopeCombo";
+import { usePlanWeek } from "./usePlanWeek";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "./FeedToolbar";
 import { FilterCombo } from "./FilterCombo";
@@ -211,6 +213,10 @@ export function ShipmentsFeed({
     const c = currentSeasonWeek();
     return { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
   });
+  // Загрузка недели плана + состав (B4c) — общие для матрицы (PlanView) и combobox
+  // состава (в тулбаре). Фетчим только в виде «План».
+  const plan = usePlanWeek({ ...planWeek, enabled: viewMode === "plan" });
+  const [scopeOpen, setScopeOpen] = useState(false);
 
   function handleViewChange(v: "table" | "plan") {
     // При входе в «План» стартуем с недели, которую пользователь смотрел в ленте.
@@ -443,12 +449,32 @@ export function ShipmentsFeed({
           todayActive={!isCurrent}
           viewMode={viewMode}
           onViewChange={handleViewChange}
+          scopeSlot={
+            plan.week ? (
+              <ScopeCombo
+                seasonYear={planWeek.seasonYear}
+                isoYear={planWeek.isoYear}
+                isoWeek={planWeek.isoWeek}
+                items={plan.week.scopePicker}
+                count={plan.week.rows.length}
+                open={scopeOpen}
+                setOpen={setScopeOpen}
+                reload={plan.reload}
+              />
+            ) : null
+          }
           {...filterProps}
         />
         <PlanView
           seasonYear={planWeek.seasonYear}
           isoYear={planWeek.isoYear}
           isoWeek={planWeek.isoWeek}
+          week={plan.week}
+          setWeek={plan.setWeek}
+          loading={plan.loading}
+          version={plan.version}
+          reload={plan.reload}
+          onOpenScope={() => setScopeOpen(true)}
         />
         {createDialog}
       </div>

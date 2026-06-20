@@ -163,7 +163,9 @@
 .toolbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  /* Выше шапки недели (.ctx z40) и sticky-шапок матрицы (thead z20–30): иначе поповер
+     состава (.scope-pop), лежащий в стекинг-контексте тулбара, ими перекрывается. */
+  z-index: 50;
   background: color-mix(in srgb, var(--canvas) 88%, transparent);
   backdrop-filter: saturate(180%) blur(8px);
   border-bottom: 1px solid var(--hairline);
@@ -464,5 +466,104 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 
 /* хинт «план не задан» над пустой сеткой */
 .plan-hint { padding: 11px 22px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); color: var(--mute); font-size: 13px; line-height: 18px; letter-spacing: -0.01em; }
+
+/* ---------------- Состав недели · combobox (B4c, BR-23) ---------------- */
+.scope-anchor { position: relative; display: inline-flex; }
+
+.scope-btn {
+  height: 40px; padding: 0 11px 0 12px; border-radius: 6px;
+  border: 1px solid var(--hairline); background: var(--canvas); color: var(--body);
+  font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+  display: inline-flex; align-items: center; gap: 9px; cursor: pointer; white-space: nowrap;
+  box-shadow: 0 1px 1px #0000000a;
+}
+.scope-btn .lead { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+.scope-btn .lead svg { width: 15px; height: 15px; color: var(--mute); }
+.scope-btn .cnt {
+  font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0;
+  background: var(--ink); color: #fff; border-radius: 5px; padding: 1px 7px; line-height: 16px;
+}
+.scope-btn .caret { width: 14px; height: 14px; color: var(--mute); transition: transform .14s ease; }
+.scope-btn:hover { background: var(--canvas-soft); }
+/* active = нейтральная заливка + счётчик (как активный фильтр ленты) */
+.scope-btn.active { background: var(--canvas-soft-2); border-color: var(--hairline-strong); }
+.scope-btn.open { background: var(--canvas-soft-2); border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.scope-btn.open .caret { transform: rotate(180deg); }
+.scope-btn.ro { cursor: not-allowed; opacity: .85; background: var(--canvas-soft); }
+.scope-btn.ro .cnt { background: var(--hairline-strong); }
+
+.scope-pop {
+  position: absolute; top: calc(100% + 8px); left: 0; width: 320px; z-index: 60;
+  background: var(--canvas); border: 1px solid var(--hairline-strong); border-radius: 8px;
+  box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #00000014;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+
+.scope-search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-bottom: 1px solid var(--hairline); flex-shrink: 0; }
+.scope-search svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+.scope-search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); width: 100%; letter-spacing: -0.02em; }
+.scope-search input::placeholder { color: var(--mute); }
+
+.scope-list { max-height: 280px; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 1px; }
+
+.scope-sec { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); padding: 9px 9px 5px; display: flex; align-items: center; gap: 8px; }
+.scope-sec .ln { flex: 1; height: 1px; background: var(--hairline); }
+.scope-sec:first-child { padding-top: 5px; }
+
+.scope-opt {
+  display: flex; align-items: center; gap: 10px; padding: 8px 9px; border-radius: 6px;
+  font-size: 14px; color: var(--ink); letter-spacing: -0.02em; cursor: pointer; user-select: none;
+}
+.scope-opt:hover { background: var(--canvas-soft); }
+.scope-opt .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.scope-opt .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scope-opt .rsn {
+  margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+  font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--mute);
+  background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 6px;
+}
+.scope-opt .rsn svg { width: 11px; height: 11px; }
+
+.scb { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--hairline-strong); background: var(--canvas); display: grid; place-items: center; flex-shrink: 0; transition: background .1s, border-color .1s; }
+.scb svg { width: 12px; height: 12px; color: #fff; opacity: 0; }
+.scb.checked { background: var(--ink); border-color: var(--ink); }
+.scb.checked svg { opacity: 1; }
+.scb.checked.locked { background: #c2c2c2; border-color: #c2c2c2; }
+
+.scope-opt.locked { cursor: not-allowed; }
+.scope-opt.locked .nm { color: var(--body); }
+.scope-opt.locked:hover { background: var(--canvas-soft); }
+/* короткая вспышка при клике по закреплённому (неснимаемому) пункту */
+.scope-opt.shake { animation: scope-shake .32s ease; }
+@keyframes scope-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
+
+.scope-foot {
+  border-top: 1px solid var(--hairline); padding: 9px 12px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; justify-content: space-between;
+  font-size: 12px; color: var(--mute); letter-spacing: -0.01em; background: var(--canvas-soft);
+}
+.scope-foot .applied { display: inline-flex; align-items: center; gap: 6px; }
+.scope-foot .applied svg { width: 13px; height: 13px; color: #29bc9b; }
+.scope-foot b { color: var(--ink); font-weight: 600; }
+.scope-foot .esc { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); }
+
+.scope-empty { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--mute); letter-spacing: -0.01em; }
+
+/* read-only тултип «состав задаёт администратор» */
+.ro-tip { position: absolute; top: calc(100% + 9px); left: 0; z-index: 40; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; padding: 7px 11px; border-radius: 7px; white-space: nowrap; box-shadow: 0 6px 16px -4px #00000033; display: inline-flex; align-items: center; gap: 7px; }
+.ro-tip svg { width: 13px; height: 13px; opacity: .85; }
+.ro-tip::before { content: ""; position: absolute; bottom: 100%; left: 22px; border: 5px solid transparent; border-bottom-color: var(--ink); }
+
+/* точка входа «+ Добавить культуры» на пустой неделе */
+.scope-add-btn {
+  margin-top: 4px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 10px 16px; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--body); letter-spacing: -0.02em;
+  box-shadow: 0 1px 1px #0000000a;
+}
+.scope-add-btn svg { width: 16px; height: 16px; color: var(--mute); }
+.scope-add-btn:hover { background: var(--canvas-soft); color: var(--ink); }
+.scope-add-btn:hover svg { color: var(--ink); }
+.ro-note { color: var(--mute); font-size: 13px; }
 
 }

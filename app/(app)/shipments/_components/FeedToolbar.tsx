@@ -39,6 +39,8 @@ type FeedToolbarProps = {
   // Переключатель вида (B4a): «Таблица» / «План». Heatmap пока заглушка.
   viewMode: "table" | "plan";
   onViewChange: (v: "table" | "plan") => void;
+  // Combobox состава недели (B4c) — только в виде «План».
+  scopeSlot?: ReactNode;
   // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed).
   search: string;
   onSearch: (v: string) => void;
@@ -69,6 +71,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       todayActive,
       viewMode,
       onViewChange,
+      scopeSlot,
       search,
       onSearch,
       onClearSearch,
@@ -117,6 +120,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             {todayActive && <span className="dotpulse" />}
             Сегодня
           </button>
+
+          {scopeSlot}
 
           <div className="spacer" />
 

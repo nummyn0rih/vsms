@@ -5,7 +5,13 @@ import {
   isFactoryWorkday,
   type SeasonWorkdays,
 } from "@/server/shipments/workdays";
-import type { CellProgress, PlanDay, PlanRow, PlanWeek } from "./schema";
+import type {
+  CellProgress,
+  PlanDay,
+  PlanRow,
+  PlanWeek,
+  ScopePickerItem,
+} from "./schema";
 
 // Веса — Decimal(12,3) кг. Накапливаем целыми граммами (kg×1000), чтобы суммы были
 // точными без float-погрешности; на выходе граммы→тонны (÷1e6).
@@ -71,7 +77,7 @@ export async function getPlanWeek({
   const nextMonday = new Date(start);
   nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
 
-  const [cultures, plans, cfg, items] = await Promise.all([
+  const [cultures, plans, cfg, items, scope] = await Promise.all([
     prisma.culture.findMany({
       where: { active: true },
       select: { id: true, name: true, color: true },
@@ -92,6 +98,11 @@ export async function getPlanWeek({
         actual_weight_kg: true,
         shipment: { select: { arrival_date: true } },
       },
+    }),
+    // Состав недели (BR-23): какие пустые культуры заранее открыты под план.
+    prisma.weeklyPlanScope.findMany({
+      where: { iso_year: isoYear, iso_week: isoWeek },
+      select: { culture_id: true },
     }),
   ]);
 
@@ -150,7 +161,36 @@ export async function getPlanWeek({
     addItem(col, plannedG, actualG);
   }
 
-  const rows: PlanRow[] = cultures.map((c) => {
+  // Видимость строки (BR-23): культура ∈ scope ИЛИ есть цель ИЛИ есть отгрузки на неделе.
+  // Чистые выборки по уже загруженным данным — без пересчёта значений.
+  const scopeCultureIds = new Set(scope.map((s) => s.culture_id));
+  const targetCultureIds = new Set(plans.map((p) => p.culture_id));
+  const shipmentCultureIds = new Set(items.map((i) => i.culture_id));
+  // Отгрузки приоритетнее цели как причина (конкретнее), но обе закрепляют строку.
+  const lockReason = (id: number): ScopePickerItem["lockReason"] =>
+    shipmentCultureIds.has(id)
+      ? "shipments"
+      : targetCultureIds.has(id)
+        ? "target"
+        : null;
+  const visible = (id: number): boolean =>
+    scopeCultureIds.has(id) || targetCultureIds.has(id) || shipmentCultureIds.has(id);
+
+  const scopePicker: ScopePickerItem[] = cultures.map((c) => {
+    const reason = lockReason(c.id);
+    const inScope = scopeCultureIds.has(c.id);
+    return {
+      cultureId: c.id,
+      cultureName: c.name,
+      color: c.color,
+      lockReason: reason,
+      inScope,
+      selected: inScope || reason != null,
+      locked: reason != null,
+    };
+  });
+
+  const rows: PlanRow[] = cultures.filter((c) => visible(c.id)).map((c) => {
     const weekTarget = weekTargetByCulture.get(c.id) ?? null;
     const dayTargets = dayTargetsByCulture.get(c.id) ?? {};
     // Режим: есть недельная → week; есть дневные → day; пусто → day (дефолт ввода).
@@ -190,6 +230,7 @@ export async function getPlanWeek({
     endDate: end.toISOString().slice(0, 10),
     days,
     rows,
+    scopePicker,
     dayTotalsProgress,
     weekTotalProgress,
   };
