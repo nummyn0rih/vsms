@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Нормы тары — многотиповые культуры</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --success: #1d8e75;
+    --success-soft: #ddfff7;
+
+    /* culture example colors (in production come from Culture.color) */
+    --cult-squash: #7928ca;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    padding: 18px 20px 14px;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none;
+    letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--mute);
+  }
+  .nav-foot button {
+    border: 0; background: transparent; color: var(--mute); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center;
+  }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head { padding: 22px 28px 0; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 5px 0 0; color: var(--mute); font-size: 13px; max-width: 720px; line-height: 18px; }
+
+  /* settings subtabs */
+  .subtabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--hairline); padding: 16px 28px 0; }
+  .subtab {
+    margin-bottom: -1px; border-bottom: 2px solid transparent;
+    padding: 8px 12px; font-size: 14px; color: var(--mute); text-decoration: none; letter-spacing: -0.02em;
+  }
+  .subtab:hover { color: var(--ink); }
+  .subtab.active { border-bottom-color: var(--ink); color: var(--ink); font-weight: 500; }
+
+  .content { padding: 24px 28px 64px; max-width: 1040px; }
+
+  /* ---------- culture selector ---------- */
+  .selector-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .field-label { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; margin: 0 0 6px; display: block; }
+  .combo-trigger {
+    height: 40px; min-width: 280px; padding: 0 10px 0 12px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas);
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer;
+    font-size: 14px; color: var(--ink); letter-spacing: -0.02em;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .combo-trigger:hover { background: var(--canvas-soft); }
+  .combo-trigger .dot { width: 9px; height: 9px; border-radius: 999px; flex-shrink: 0; }
+  .combo-trigger .ph { color: var(--mute); }
+  .combo-trigger .caret { margin-left: auto; width: 15px; height: 15px; color: var(--mute); }
+  .selector-note { font-size: 12px; color: var(--mute); display: inline-flex; align-items: center; gap: 6px; padding-bottom: 11px; }
+  .selector-note .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--canvas-soft-2); border: 1px solid var(--hairline); color: var(--body); }
+
+  /* ---------- norms table ---------- */
+  .table-meta { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .table-meta h2 { font-size: 15px; font-weight: 500; margin: 0; letter-spacing: -0.02em; }
+  .table-meta .count { font-size: 13px; color: var(--mute); }
+
+  .tablewrap { border: 1px solid var(--hairline); border-radius: 6px; overflow: auto; max-height: 560px; background: var(--canvas); }
+  table.norms { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 14px; }
+  table.norms th, table.norms td { border-bottom: 1px solid var(--hairline); }
+
+  /* corner + column headers (sticky top) */
+  table.norms thead th {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--canvas-soft); text-align: left; vertical-align: bottom;
+    padding: 10px 16px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+  }
+  table.norms thead th.farmer-col { left: 0; z-index: 30; border-right: 1px solid var(--hairline); }
+  .col-name { font-size: 14px; color: var(--ink); font-weight: 500; }
+  .col-brutto { font-size: 12px; color: var(--mute); font-weight: 400; margin-top: 2px; }
+  .col-head { display: flex; flex-direction: column; }
+
+  /* farmer column (sticky left) */
+  table.norms tbody th.farmer-col {
+    position: sticky; left: 0; z-index: 10;
+    background: var(--canvas); border-right: 1px solid var(--hairline);
+    text-align: left; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+    padding: 0 16px; color: var(--ink); min-width: 210px;
+  }
+  table.norms tbody tr:hover th.farmer-col,
+  table.norms tbody tr:hover td { background: var(--canvas-soft); }
+  table.norms tbody td { padding: 7px 10px; }
+  table.norms tbody tr:last-child th, table.norms tbody tr:last-child td { border-bottom: 0; }
+
+  /* ---------- cell input ---------- */
+  .cell {
+    position: relative; display: inline-flex; align-items: center;
+    height: 34px; width: 116px;
+    border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas);
+    padding: 0 9px; transition: border-color .12s, box-shadow .12s;
+  }
+  .cell:hover { border-color: var(--hairline-strong); }
+  .cell:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .cell input {
+    border: 0; outline: 0; background: transparent; font: inherit;
+    width: 100%; text-align: right; color: var(--ink);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .cell input::placeholder { color: var(--mute); }
+  .cell .unit { font-size: 12px; color: var(--mute); margin-left: 5px; flex-shrink: 0; }
+
+  /* empty cell — no norm (not zero) */
+  .cell.empty input { color: var(--mute); }
+
+  /* saved flash */
+  .cell.saved { border-color: var(--success); box-shadow: 0 0 0 1px var(--success); }
+  .cell .save-ind {
+    position: absolute; left: -7px; top: -7px; width: 16px; height: 16px;
+    border-radius: 999px; display: none; place-items: center;
+    background: var(--success); color: #fff;
+  }
+  .cell.saved .save-ind { display: grid; }
+  .cell .save-ind svg { width: 10px; height: 10px; }
+
+  /* saving spinner */
+  .cell.saving { opacity: .85; }
+  .cell .spin {
+    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+    width: 13px; height: 13px; display: none; color: var(--mute);
+  }
+  .cell.saving .spin { display: block; animation: spin .8s linear infinite; }
+  .cell.saving input { padding-right: 12px; }
+  @keyframes spin { to { transform: translateY(-50%) rotate(360deg); } }
+
+  /* warning — net >= brutto (probable typo) */
+  .cell.warn { border-color: var(--warning); }
+  .cell.warn:focus-within { box-shadow: 0 0 0 1px var(--warning); border-color: var(--warning); }
+  .cell .warn-ico {
+    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+    width: 14px; height: 14px; color: var(--warning-deep); display: none;
+  }
+  .cell.warn .warn-ico { display: block; }
+  .cell.warn input { padding-right: 16px; }
+  .warn-note {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 7px;
+    font-size: 11px; color: var(--warning-deep);
+  }
+  .warn-note svg { width: 12px; height: 12px; }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 16px;
+    font-size: 12px; color: var(--mute); letter-spacing: -0.01em;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .sw { width: 24px; height: 16px; border-radius: 4px; border: 1px solid var(--hairline); flex-shrink: 0; }
+  .legend .sw.warn { border-color: var(--warning); }
+  .legend .sw.saved { border-color: var(--success); }
+
+  /* ---------- empty state (culture not chosen) ---------- */
+  .empty-state {
+    border: 1px dashed var(--hairline); border-radius: 8px; background: var(--canvas-soft);
+    padding: 56px 24px; text-align: center; color: var(--mute); font-size: 14px;
+  }
+  .empty-state svg { width: 22px; height: 22px; opacity: .5; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Логистика материалов
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Справочники
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Настройки · Нормы тары">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span>snabzhenec</span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <h1 class="page-title">Нормы тары · многотиповые культуры</h1>
+      <p class="page-sub">Культуры с одним типом тары — в общей матрице норм. Здесь — культуры, принимаемые в нескольких типах тары.</p>
+    </div>
+
+    <!-- settings subtabs -->
+    <nav class="subtabs">
+      <a class="subtab" href="#">Сезоны</a>
+      <a class="subtab active" href="#">Нормы</a>
+      <a class="subtab" href="#">Рецептуры</a>
+      <a class="subtab" href="#">Пороги алертов</a>
+    </nav>
+
+    <div class="content">
+      <!-- ===================== CULTURE SELECTOR ===================== -->
+      <div class="selector-row">
+        <div>
+          <label class="field-label">Культура</label>
+          <button class="combo-trigger" type="button">
+            <span class="dot" style="background: var(--cult-squash)"></span>
+            Патиссоны
+            <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+        <span class="selector-note">
+          <span class="pill">только многотиповые</span>
+          в списке — культуры с 2+ типами тары
+        </span>
+      </div>
+
+      <!-- ===================== NORMS TABLE ===================== -->
+      <div class="table-meta">
+        <h2>Нетто-нормы · кг на единицу тары</h2>
+        <span class="count">Патиссоны · 2 типа тары · 6 фермеров</span>
+      </div>
+
+      <div class="tablewrap">
+        <table class="norms">
+          <thead>
+            <tr>
+              <th class="farmer-col">Фермер</th>
+              <th>
+                <div class="col-head">
+                  <span class="col-name">Бочка пластиковая</span>
+                  <span class="col-brutto">250 кг брутто</span>
+                </div>
+              </th>
+              <th>
+                <div class="col-head">
+                  <span class="col-name">Бочка железная</span>
+                  <span class="col-brutto">200 кг брутто</span>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- both filled -->
+            <tr>
+              <th class="farmer-col">Ковальчук А. П.</th>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="125" aria-label="Ковальчук · бочка пластиковая, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="100" aria-label="Ковальчук · бочка железная, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- both filled + saved flash on one cell -->
+            <tr>
+              <th class="farmer-col">Гаспарян В. С.</th>
+              <td>
+                <span class="cell saved">
+                  <span class="save-ind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                  <input type="text" inputmode="decimal" value="130" aria-label="Гаспарян · бочка пластиковая, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="105" aria-label="Гаспарян · бочка железная, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- only plastic; iron empty -->
+            <tr>
+              <th class="farmer-col">Мельник И. Д.</th>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="128" aria-label="Мельник · бочка пластиковая, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+              <td>
+                <span class="cell empty">
+                  <input type="text" inputmode="decimal" placeholder="—" aria-label="Мельник · бочка железная, кг (не задано)" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- only iron; plastic mid-save -->
+            <tr>
+              <th class="farmer-col">Бондаренко О. М.</th>
+              <td>
+                <span class="cell saving">
+                  <input type="text" inputmode="decimal" value="124" aria-label="Бондаренко · бочка пластиковая, кг" />
+                  <span class="unit">кг</span>
+                  <svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                </span>
+              </td>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="98" aria-label="Бондаренко · бочка железная, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- empty both (normal — fill as needed) -->
+            <tr>
+              <th class="farmer-col">Сидоренко Р. В.</th>
+              <td>
+                <span class="cell empty">
+                  <input type="text" inputmode="decimal" placeholder="—" aria-label="Сидоренко · бочка пластиковая, кг (не задано)" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+              <td>
+                <span class="cell empty">
+                  <input type="text" inputmode="decimal" placeholder="—" aria-label="Сидоренко · бочка железная, кг (не задано)" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+            </tr>
+
+            <!-- warning: net 210 >= brutto 200 -->
+            <tr>
+              <th class="farmer-col">Ткаченко Л. Н.</th>
+              <td>
+                <span class="cell">
+                  <input type="text" inputmode="decimal" value="132" aria-label="Ткаченко · бочка пластиковая, кг" />
+                  <span class="unit">кг</span>
+                </span>
+              </td>
+              <td>
+                <span class="cell warn">
+                  <input type="text" inputmode="decimal" value="210" aria-label="Ткаченко · бочка железная, кг (нетто ≥ брутто)" />
+                  <span class="unit">кг</span>
+                  <svg class="warn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="warn-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Ткаченко · Бочка железная: нетто 210 кг ≥ брутто 200 кг — вероятная ошибка ввода. Не блокируется, проверьте значение.
+      </div>
+
+      <div class="legend">
+        <span><span class="sw"></span>пустая ячейка — нормы нет (не ноль)</span>
+        <span><span class="sw saved"></span>сохранено (автосейв по уходу с поля)</span>
+        <span><span class="sw warn"></span>нетто ≥ брутто — предупреждение</span>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -27,9 +27,10 @@ function shortWeekday(dateStr: string): string {
 function dayMonth(dateStr: string): string {
   return dayMonthFmt.format(new Date(`${dateStr}T00:00:00Z`));
 }
-// Тонны с 3 знаками, лишние нули обрезаются: 9 → «9», 0.5 → «0,5».
+// Вывод тонн: округление до 0,1 т, целые целыми, запятая. Только отображение —
+// в БД/расчётах полная точность. 123.251→«123,3»; 240→«240»; 39.001→«39»; 1.4→«1,4».
 function fmtTons(n: number): string {
-  return n.toFixed(3).replace(/\.?0+$/, "").replace(".", ",");
+  return n.toFixed(1).replace(/\.0$/, "").replace(".", ",");
 }
 
 const EMPTY_PROGRESS: CellProgress = {
@@ -98,6 +99,8 @@ function barGeometry({
 }
 
 function PlanBar({ geom }: { geom: BarGeom }) {
+  // Пустая ячейка (ни цели, ни факта) — бар не рисуем, остаётся только текст.
+  if (geom.segs.length === 0 && geom.tickLeft == null) return null;
   const cls = [
     "pbar",
     geom.tickLeft == null ? "notarget" : "",
@@ -157,14 +160,10 @@ function WeekCaption({ progress, target }: { progress: CellProgress; target: num
   let badge: ReactNode = null;
   if (delta > EPS) {
     badge = <span className="wdelta over tnum">+{fmtTons(delta)}</span>;
-  } else if (delta < -EPS) {
-    // Ничего не перевешено → «факт 0»; иначе абсолютный недобор.
-    badge =
-      progress.actualTons <= EPS ? (
-        <span className="wdelta under tnum">факт 0</span>
-      ) : (
-        <span className="wdelta under tnum">−{fmtTons(Math.abs(delta))}</span>
-      );
+  } else if (delta < -EPS && progress.actualTons > EPS) {
+    // Недобор по факту. В B4a перевески нет (actual=0) → бейдж не показываем
+    // («факт 0» убран до B4b, чтобы план не читался как факт).
+    badge = <span className="wdelta under tnum">−{fmtTons(Math.abs(delta))}</span>;
   }
   return (
     <div className="wcap">
@@ -316,6 +315,12 @@ export function PlanView({
     const t = rowWeekTotal(r);
     return t > 0 ? t : null;
   };
+  // Headline «набрано» (BR-22): только культуры, у которых есть цель. Факт неплановых
+  // культур в выполнение плана не идёт (остаётся в их строках).
+  const headlineEffective = week.rows.reduce(
+    (s, r) => s + (rowWeekTarget(r) != null ? r.weekProgress.effectiveTons : 0),
+    0,
+  );
   // No-target дневные ячейки масштабируются к max эффективного по строке (построчно).
   const rowMaxEffective = (r: PlanWeek["rows"][number]): number =>
     days.reduce((m, d) => Math.max(m, r.dayProgress[d.date]?.effectiveTons ?? 0), 0);
@@ -324,7 +329,7 @@ export function PlanView({
   const fullyEmpty = weekGrandTotal <= 0 && weekEffectiveTotal <= 0;
 
   return (
-    <div>
+    <div className="plan-view">
       <div className="ctx">
         <span className="week-num">W{week.isoWeek}</span>
         <span className="week-title">
@@ -337,17 +342,19 @@ export function PlanView({
           <span className="dot" />
           Сезон {week.seasonYear}
         </span>
-        <span className="ag">
+        <span className="plan-headline">
           {weekGrandTotal > 0 ? (
             <>
-              Цель недели <b className="tnum">{fmtTons(weekGrandTotal)} т</b>
+              План недели:{" "}
+              <b className="tnum">
+                {fmtTons(headlineEffective)} / {fmtTons(weekGrandTotal)} т
+              </b>
             </>
           ) : (
             <>
-              Цель недели <b>не задана</b>
+              План недели: <b>не задан</b>
             </>
-          )}{" "}
-          · набрано <b className="tnum">{fmtTons(weekEffectiveTotal)} т</b>
+          )}
         </span>
       </div>
 
@@ -398,13 +405,11 @@ export function PlanView({
                 return (
                   <tr key={r.cultureId}>
                     <th className="cult-col">
+                      <div className="cult-head">
                       <span className="cult-name">
                         <span className="chip" style={{ background: r.color }} />
                         {r.cultureName}
                       </span>
-                      {isWeek && (
-                        <div className="cult-meta">цель задана на неделю одним итогом</div>
-                      )}
                       <div className="gran">
                         <span className="gran-tip">
                           <button
@@ -432,6 +437,7 @@ export function PlanView({
                             <span className="gtip">суммируется в одну недельную цель</span>
                           )}
                         </span>
+                      </div>
                       </div>
                     </th>
 
@@ -547,7 +553,7 @@ export function PlanView({
             </tbody>
             <tfoot>
               <tr>
-                <th className="cult-col">Итого недели</th>
+                <th className="cult-col">Итого</th>
                 {dayTotals.map((t, i) => {
                   const eff = week.dayTotalsProgress[i]?.effectiveTons ?? 0;
                   return (
@@ -566,19 +572,9 @@ export function PlanView({
                   );
                 })}
                 <td className="week-col">
-                  <div className="pcell">
-                    <PlanBar
-                      geom={barGeometry({
-                        actualTons: week.weekTotalProgress.actualTons,
-                        planRemainingTons: week.weekTotalProgress.planRemainingTons,
-                        targetTons: weekGrandTotal > 0 ? weekGrandTotal : null,
-                        scaleOverride: weekEffectiveTotal,
-                      })}
-                    />
-                    <WeekCaption
-                      progress={week.weekTotalProgress}
-                      target={weekGrandTotal > 0 ? weekGrandTotal : null}
-                    />
+                  <div className="foot-total">
+                    Итого по неделе:{" "}
+                    <b className="tnum">{fmtTons(weekEffectiveTotal)} т</b>
                   </div>
                 </td>
               </tr>

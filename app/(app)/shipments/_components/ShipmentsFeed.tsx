@@ -10,6 +10,8 @@ import {
   isoWeekRange,
   seasonYearOf,
   currentSeasonWeek,
+  seasonWeekBounds,
+  compareIsoWeek,
 } from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
 import { PlanView } from "./PlanView";
@@ -228,7 +230,10 @@ export function ShipmentsFeed({
       const d = new Date(start);
       d.setUTCDate(d.getUTCDate() + delta * 7);
       const w = isoWeekOf(d);
-      return { seasonYear: seasonYearOf(d), isoYear: w.isoYear, isoWeek: w.isoWeek };
+      // Не уходим за границы сезона (BR-17) — на краю остаёмся на месте.
+      const b = seasonWeekBounds(p.seasonYear);
+      if (compareIsoWeek(w, b.first) < 0 || compareIsoWeek(w, b.last) > 0) return p;
+      return { seasonYear: p.seasonYear, isoYear: w.isoYear, isoWeek: w.isoWeek };
     });
   }
   function goPlanToday() {
@@ -420,6 +425,9 @@ export function ShipmentsFeed({
     const today = currentSeasonWeek();
     const isCurrent =
       planWeek.isoYear === today.isoYear && planWeek.isoWeek === today.isoWeek;
+    const bounds = seasonWeekBounds(planWeek.seasonYear);
+    const atFirst = compareIsoWeek(planWeek, bounds.first) <= 0;
+    const atLast = compareIsoWeek(planWeek, bounds.last) >= 0;
     return (
       <div ref={rootRef}>
         <FeedToolbar
@@ -430,8 +438,8 @@ export function ShipmentsFeed({
           onPrevWeek={() => stepPlanWeek(-1)}
           onNextWeek={() => stepPlanWeek(1)}
           onToday={goPlanToday}
-          prevDisabled={false}
-          nextDisabled={false}
+          prevDisabled={atFirst}
+          nextDisabled={atLast}
           todayActive={!isCurrent}
           viewMode={viewMode}
           onViewChange={handleViewChange}

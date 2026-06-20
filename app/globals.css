@@ -344,25 +344,25 @@
 
 /* ============ Вид «План» (B4a) — сетка целей. Прогресс-бары — Часть B. ============ */
 /* context strip недели плана */
-.ctx { padding: 14px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); flex-wrap: wrap; }
+.plan-view { display: inline-block; vertical-align: top; }
+.ctx { position: sticky; top: var(--toolbar-h, 0px); z-index: 40; min-height: 50px; padding: 14px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); flex-wrap: wrap; }
 .ctx .week-num { font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; color: var(--mute); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; }
 .ctx .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
 .ctx .week-title .wmeta { color: var(--mute); font-weight: 400; }
 .ctx .season { font-size: 12px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .ctx .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber, #1d8e75); }
-.ctx .ag { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
-.ctx .ag b { color: var(--ink); font-weight: 600; }
+.ctx .plan-headline { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+.ctx .plan-headline b { color: var(--ink); font-weight: 600; }
 
-/* матрица */
-.matrixwrap { overflow: auto; max-height: calc(100vh - var(--toolbar-h, 0px) - 120px); }
-table.pmatrix { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
-table.pmatrix col.c-cult { width: 232px; }
+/* матрица: один скролл (страница), без внутреннего скролла; влево, авто-ширина */
+.matrixwrap { overflow: visible; }
+table.pmatrix { border-collapse: separate; border-spacing: 0; width: auto; table-layout: auto; }
 table.pmatrix col.c-day { width: 132px; }
 table.pmatrix col.c-week { width: 168px; }
 table.pmatrix th, table.pmatrix td { border-bottom: 1px solid var(--hairline); }
 
 table.pmatrix thead th {
-  position: sticky; top: 0; z-index: 20;
+  position: sticky; top: calc(var(--toolbar-h, 0px) + 50px); z-index: 20;
   background: var(--canvas-soft); text-align: left; vertical-align: bottom;
   padding: 11px 14px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
 }
@@ -376,16 +376,18 @@ table.pmatrix thead th.week-col { border-left: 1px solid var(--hairline); backgr
 table.pmatrix tbody th.cult-col {
   position: sticky; left: 0; z-index: 10;
   background: var(--canvas); border-right: 1px solid var(--hairline);
-  text-align: left; vertical-align: top; font-weight: 500; padding: 12px 14px; color: var(--ink);
+  vertical-align: middle; font-weight: 500; padding: 12px 14px; color: var(--ink);
+  width: auto; min-width: 280px; max-width: 380px; white-space: nowrap;
 }
+/* левая зона строки: имя + тумблер-стек в одну строку, по центру по вертикали */
+.cult-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 table.pmatrix tbody tr:hover th.cult-col,
 table.pmatrix tbody tr:hover td { background: var(--canvas-soft); }
 .cult-name { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
 .cult-name .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
-.cult-meta { font-size: 11px; color: var(--mute); margin: 4px 0 10px 20px; }
 
-/* мини-сегмент гранулярности */
-.gran { display: inline-flex; padding: 2px; background: var(--canvas-soft-2); border-radius: 6px; gap: 2px; margin-left: 20px; }
+/* мини-сегмент гранулярности — однострочный, у правого края первой колонки */
+.gran { display: inline-flex; flex-direction: row; padding: 2px; background: var(--canvas-soft-2); border-radius: 6px; gap: 2px; flex-shrink: 0; }
 .gran button { border: 0; background: transparent; font-family: inherit; font-size: 11px; font-weight: 500; color: var(--mute); padding: 3px 9px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
 .gran button.on { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
 .gran button:disabled { cursor: not-allowed; opacity: .55; }
@@ -394,13 +396,13 @@ table.pmatrix tbody tr:hover td { background: var(--canvas-soft); }
 .gran-tip:hover .gtip { opacity: 1; }
 .gran-tip .gtip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--ink); }
 
-table.pmatrix td { padding: 9px 10px; vertical-align: top; }
+table.pmatrix td { padding: 9px 10px; vertical-align: middle; }
 table.pmatrix td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft); }
 table.pmatrix tbody tr:hover td.week-col { background: var(--canvas-soft-2); }
 table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { border-bottom: 0; }
-.pcell { display: flex; flex-direction: column; gap: 7px; }
+.pcell { display: flex; flex-direction: column; justify-content: center; gap: 7px; min-height: 64px; }
 
-/* ячейка-ввод цели */
+/* ячейка-ввод цели — во всю ширину ячейки */
 .ptin { display: inline-flex; align-items: center; height: 30px; width: 100%; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); padding: 0 8px; transition: border-color .12s, box-shadow .12s; }
 .ptin:hover { border-color: var(--hairline-strong); }
 .ptin:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
@@ -410,6 +412,7 @@ table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { bor
 .ptin input[type="number"] { -moz-appearance: textfield; }
 .ptin .u { font-size: 11px; color: var(--mute); margin-left: 4px; flex-shrink: 0; }
 .ptin.empty input { color: var(--mute); }
+.ptin.empty .u { display: none; }
 .ptin.ro { background: var(--canvas-soft); border-color: transparent; }
 .ptin.saved { border-color: #29bc9b; box-shadow: 0 0 0 1px #29bc9b; }
 .ptin.err { border-color: #d4322c; box-shadow: 0 0 0 1px #d4322c; }
@@ -419,17 +422,19 @@ table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { bor
 .ptin-err { color: #d4322c; font-size: 11px; }
 
 /* свёрнутая дневная ячейка (режим «на неделю») */
-.pcell.muted { align-items: center; justify-content: center; min-height: 48px; }
+.pcell.muted { align-items: center; justify-content: center; min-height: 64px; }
 .pcell.muted .dash { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; color: var(--hairline-strong); }
 td.muted { background: repeating-linear-gradient(45deg, #fcfcfc 0 8px, #f7f7f7 8px 16px); }
 table.pmatrix tbody tr:hover td.muted { background: repeating-linear-gradient(45deg, #f8f8f8 0 8px, #f2f2f2 8px 16px); }
 
 /* tfoot — итого */
 table.pmatrix tfoot th, table.pmatrix tfoot td { border-top: 1px solid var(--hairline); background: var(--canvas-soft); padding: 11px 14px; }
-table.pmatrix tfoot th.cult-col { position: sticky; left: 0; z-index: 10; border-right: 1px solid var(--hairline); font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+table.pmatrix tfoot th.cult-col { position: sticky; left: 0; z-index: 10; border-right: 1px solid var(--hairline); font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
 table.pmatrix tfoot td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
-table.pmatrix tfoot td { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--body); font-variant-numeric: tabular-nums; text-align: right; }
+table.pmatrix tfoot td { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; color: var(--body); font-variant-numeric: tabular-nums; text-align: right; }
 table.pmatrix tfoot td.week-col { text-align: left; }
+.foot-total { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; color: var(--mute); font-variant-numeric: tabular-nums; }
+.foot-total b { color: var(--ink); font-weight: 600; }
 
 /* прогресс-бар (Часть B): факт (сплошной) + план (штрих) + перелёт (ink), риска-цель */
 .pbar { position: relative; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: visible; }
@@ -447,7 +452,7 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .pcap { font-family: "Geist Mono", ui-monospace, monospace; font-size: 11px; color: var(--body); font-variant-numeric: tabular-nums; }
 .pcap .t-goal { color: var(--mute); }
 .pcap.zero { color: var(--mute); }
-.nt-hint { font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; color: var(--hairline-strong); text-transform: uppercase; }
+.nt-hint { font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; color: var(--hairline-strong); }
 
 /* подпись недельной ячейки/итога */
 .wcap { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }

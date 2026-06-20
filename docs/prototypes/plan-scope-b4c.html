@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · План — состав культур недели (B4c)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+
+    /* culture identity colors (in production come from Culture.color) */
+    --cult-tomato: #d4322c;
+    --cult-cucumber: #1d8e75;
+    --cult-pepper: #e8830c;
+    --cult-squash: #7928ca;
+    --cult-zucchini: #5a9e2f;
+    --cult-eggplant: #6b3fa0;
+    --cult-carrot: #cf6a14;
+    --cult-beet: #9c2554;
+    --cult-onion: #a8842f;
+    --cult-cabbage: #6f8f43;
+    --cult-cauli: #b59a3c;
+    --cult-greens: #2f8f4e;
+    --cult-pumpkin: #d6831a;
+    --cult-garlic: #7d8593;
+    --cult-potato: #b07a3a;
+
+    /* plan progress — neutral domain, NO shipment-status colours */
+    --bar-track: #f0f0f0;
+    --bar-actual: #9a9a9a;
+    --bar-plan-a: #d6d6d6;
+    --bar-plan-b: #ededed;
+    --bar-tick: #b0b0b0;
+    --bar-accent: #171717;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1380px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-head { margin-bottom: 48px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 10px 0 0; color: var(--body); font-size: 15px; line-height: 22px; max-width: 780px; letter-spacing: -0.01em; }
+
+  .group { margin-top: 56px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 44px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 820px; }
+
+  .stage {
+    position: relative;
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: visible;
+  }
+  .stage.clip { overflow: hidden; }
+
+  /* ---------------- toolbar ---------------- */
+  .toolbar {
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 22px;
+    display: flex; flex-direction: column; gap: 12px;
+    border-radius: 12px 12px 0 0;
+  }
+  .tbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+
+  .btn {
+    height: 40px; padding: 0 14px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 0 1px 2px #0000001f; }
+  .btn-primary:hover { background: #000; }
+  .btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--body); }
+  .btn-ghost:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
+
+  .is-disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+  .seg button.is-disabled { color: var(--mute); }
+  .seg button.is-disabled:hover { background: transparent; }
+
+  /* week switcher */
+  .weeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); box-shadow: 0 1px 1px #0000000a; overflow: hidden; }
+  .weeknav button { height: 100%; width: 36px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; }
+  .weeknav button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .weeknav button svg { width: 16px; height: 16px; }
+  .weeknav .wlabel { padding: 0 13px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .wlabel .wsub { color: var(--mute); font-weight: 400; }
+
+  /* view segmented — Plan active */
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button { border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover:not(.is-disabled):not(.active) { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  /* ============================================================ */
+  /* SCOPE COMBOBOX — button + popover                            */
+  /* ============================================================ */
+  .scope-anchor { position: relative; display: inline-flex; }
+
+  .scope-btn {
+    height: 40px; padding: 0 11px 0 12px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--body);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .scope-btn .lead { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); }
+  .scope-btn .lead svg { width: 15px; height: 15px; color: var(--mute); }
+  .scope-btn .cnt {
+    font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0;
+    background: var(--ink); color: #fff; border-radius: 5px; padding: 1px 7px; line-height: 16px;
+  }
+  .scope-btn .caret { width: 14px; height: 14px; color: var(--mute); transition: transform .14s ease; }
+  .scope-btn:hover { background: var(--canvas-soft); }
+  /* active = neutral fill + counter (как активный фильтр ленты) */
+  .scope-btn.active { background: var(--canvas-soft-2); border-color: var(--hairline-strong); }
+  .scope-btn.open { background: var(--canvas-soft-2); border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .scope-btn.open .caret { transform: rotate(180deg); }
+  .scope-btn.ro { cursor: not-allowed; opacity: .85; background: var(--canvas-soft); }
+  .scope-btn.ro .cnt { background: var(--hairline-strong); }
+  .scope-btn .lock { width: 13px; height: 13px; color: var(--mute); margin-left: -2px; }
+
+  /* popover */
+  .scope-pop {
+    position: absolute; top: calc(100% + 8px); left: 0; width: 320px; z-index: 60;
+    background: var(--canvas); border: 1px solid var(--hairline-strong); border-radius: 8px;
+    box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #00000014;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .scope-pop.static-pop { position: static; box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f; }
+  .scope-pop[hidden] { display: none; }
+
+  .scope-search { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-bottom: 1px solid var(--hairline); flex-shrink: 0; }
+  .scope-search svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+  .scope-search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); width: 100%; letter-spacing: -0.02em; }
+  .scope-search input::placeholder { color: var(--mute); }
+  .scope-search .kbd { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; background: var(--canvas-soft); flex-shrink: 0; }
+
+  .scope-list { max-height: 280px; overflow-y: auto; padding: 5px; display: flex; flex-direction: column; gap: 1px; }
+
+  .scope-sec { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); padding: 9px 9px 5px; display: flex; align-items: center; gap: 8px; }
+  .scope-sec .ln { flex: 1; height: 1px; background: var(--hairline); }
+  .scope-sec:first-child { padding-top: 5px; }
+
+  .scope-opt {
+    display: flex; align-items: center; gap: 10px; padding: 8px 9px; border-radius: 6px;
+    font-size: 14px; color: var(--ink); letter-spacing: -0.02em; cursor: pointer; user-select: none;
+  }
+  .scope-opt:hover { background: var(--canvas-soft); }
+  .scope-opt .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .scope-opt .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scope-opt .rsn {
+    margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 5px;
+    font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--mute);
+    background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 6px;
+  }
+  .scope-opt .rsn svg { width: 11px; height: 11px; }
+  .scope-opt .rsn.soft { background: transparent; border-color: transparent; color: var(--hairline-strong); }
+
+  /* checkbox */
+  .scb { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--hairline-strong); background: var(--canvas); display: grid; place-items: center; flex-shrink: 0; transition: background .1s, border-color .1s; }
+  .scb svg { width: 12px; height: 12px; color: #fff; opacity: 0; }
+  .scb.checked { background: var(--ink); border-color: var(--ink); }
+  .scb.checked svg { opacity: 1; }
+  .scb.checked.locked { background: #c2c2c2; border-color: #c2c2c2; }
+
+  .scope-opt.locked { cursor: not-allowed; }
+  .scope-opt.locked .nm { color: var(--body); }
+  .scope-opt.locked:hover { background: var(--canvas-soft); }
+  /* brief flash when user clicks a locked (non-removable) item */
+  .scope-opt.shake { animation: shake .32s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-3px)} 75%{transform:translateX(3px)} }
+
+  .scope-foot {
+    border-top: 1px solid var(--hairline); padding: 9px 12px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 8px; justify-content: space-between;
+    font-size: 12px; color: var(--mute); letter-spacing: -0.01em; background: var(--canvas-soft);
+  }
+  .scope-foot .applied { display: inline-flex; align-items: center; gap: 6px; }
+  .scope-foot .applied svg { width: 13px; height: 13px; color: var(--cult-cucumber); }
+  .scope-foot b { color: var(--ink); font-weight: 600; }
+  .scope-foot .esc { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); }
+
+  .scope-empty { padding: 22px 16px; text-align: center; font-size: 13px; color: var(--mute); letter-spacing: -0.01em; }
+
+  /* read-only tooltip bubble */
+  .ro-tip { position: absolute; top: calc(100% + 9px); left: 0; z-index: 40; background: var(--ink); color: #fff; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; padding: 7px 11px; border-radius: 7px; white-space: nowrap; box-shadow: 0 6px 16px -4px #00000033; display: inline-flex; align-items: center; gap: 7px; }
+  .ro-tip svg { width: 13px; height: 13px; opacity: .85; }
+  .ro-tip::before { content: ""; position: absolute; bottom: 100%; left: 22px; border: 5px solid transparent; border-bottom-color: var(--ink); }
+
+  /* ---------------- context strip ---------------- */
+  .ctx { padding: 14px 22px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); }
+  .ctx .week-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; letter-spacing: 0; }
+  .ctx .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .ctx .week-title .wmeta { color: var(--mute); font-weight: 400; }
+  .ctx .season { font-size: 12px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .ctx .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber); }
+  .ctx .ag { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+  .ctx .ag b { color: var(--ink); font-weight: 600; }
+
+  /* ---------------- plan matrix ---------------- */
+  .matrixwrap { overflow: auto; }
+  table.pmatrix { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+  table.pmatrix col.c-cult { width: 220px; }
+  table.pmatrix col.c-day { width: 118px; }
+  table.pmatrix col.c-week { width: 158px; }
+  table.pmatrix th, table.pmatrix td { border-bottom: 1px solid var(--hairline); }
+
+  table.pmatrix thead th {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--canvas-soft); text-align: left; vertical-align: bottom;
+    padding: 11px 14px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+  }
+  table.pmatrix thead th.cult-col { border-right: 1px solid var(--hairline); }
+  table.pmatrix thead th.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+  .dh { display: flex; flex-direction: column; gap: 2px; }
+  .dh .dh-day { font-size: 14px; color: var(--ink); font-weight: 600; }
+  .dh .dh-date { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); letter-spacing: 0; }
+  .wh { font-size: 13px; color: var(--ink); font-weight: 600; }
+
+  table.pmatrix tbody th.cult-col {
+    background: var(--canvas); border-right: 1px solid var(--hairline);
+    text-align: left; vertical-align: top; font-weight: 500;
+    padding: 12px 14px; color: var(--ink);
+  }
+  table.pmatrix tbody tr:hover th.cult-col,
+  table.pmatrix tbody tr:hover td { background: var(--canvas-soft); }
+  .cult-name { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .cult-name .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .cult-meta { font-size: 11px; color: var(--mute); margin: 4px 0 10px 20px; letter-spacing: -0.01em; }
+  .cult-fresh { display: inline-flex; align-items: center; gap: 5px; font-family: "Geist Mono", monospace; font-size: 10px; color: var(--hairline-strong); text-transform: uppercase; letter-spacing: 0.02em; margin: 6px 0 0 20px; }
+  .cult-fresh svg { width: 11px; height: 11px; }
+
+  .gran { display: inline-flex; padding: 2px; background: var(--canvas-soft-2); border-radius: 6px; gap: 2px; margin-left: 20px; }
+  .gran button { border: 0; background: transparent; font-family: inherit; font-size: 11px; font-weight: 500; letter-spacing: -0.01em; color: var(--mute); padding: 3px 9px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .gran button.on { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  table.pmatrix td { padding: 9px 10px; vertical-align: top; }
+  table.pmatrix td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft); }
+  table.pmatrix tbody tr:hover td.week-col { background: var(--canvas-soft-2); }
+  table.pmatrix tbody tr:last-child td, table.pmatrix tbody tr:last-child th { border-bottom: 0; }
+
+  .pcell { display: flex; flex-direction: column; gap: 7px; }
+  .ptin { display: inline-flex; align-items: center; height: 30px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); padding: 0 8px; transition: border-color .12s, box-shadow .12s; }
+  .ptin:hover { border-color: var(--hairline-strong); }
+  .ptin:focus-within { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .ptin input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 13px; width: 100%; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .ptin input::placeholder { color: var(--mute); }
+  .ptin .u { font-size: 11px; color: var(--mute); margin-left: 4px; flex-shrink: 0; }
+  .ptin.empty input { color: var(--mute); }
+  .week-col .ptin { height: 32px; }
+  .week-col .ptin input { font-size: 14px; font-weight: 500; }
+
+  .pbar { position: relative; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: visible; }
+  .pbar .bf { position: absolute; top: 0; height: 100%; }
+  .pbar .actual { left: 0; background: var(--bar-actual); border-radius: 3px 0 0 3px; }
+  .pbar .plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .pbar .over { background: var(--bar-accent); }
+  .pbar .btick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--bar-tick); border-radius: 1px; }
+  .pbar.met .btick { background: var(--bar-accent); }
+  .pbar .plan.endcap { border-radius: 0 3px 3px 0; }
+  .pbar .actual.endcap { border-radius: 3px; }
+  .pbar .over.endcap { border-radius: 0 3px 3px 0; }
+
+  .pcap { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0; color: var(--body); font-variant-numeric: tabular-nums; }
+  .pcap .t-goal { color: var(--mute); }
+  .pcap.zero { color: var(--mute); }
+  .nt-hint { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--hairline-strong); text-transform: uppercase; }
+  .pbar.notarget .btick { display: none; }
+
+  .wcap { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .wcap .wval { font-family: "Geist Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .wcap .wval .t-goal { color: var(--mute); }
+  .wdelta { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+  .wdelta.under { color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+  .wdelta.over { color: #fff; background: var(--bar-accent); }
+
+  table.pmatrix tfoot th, table.pmatrix tfoot td { border-top: 1px solid var(--hairline); background: var(--canvas-soft); padding: 11px 14px; }
+  table.pmatrix tfoot th.cult-col { border-right: 1px solid var(--hairline); font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  table.pmatrix tfoot td.week-col { border-left: 1px solid var(--hairline); background: var(--canvas-soft-2); }
+  table.pmatrix tfoot td { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
+
+  /* add-cultures matrix entry row */
+  .scope-add-row td { padding: 0; }
+  .scope-add-btn {
+    width: 100%; border: 0; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    padding: 16px; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--body); letter-spacing: -0.02em;
+  }
+  .scope-add-btn svg { width: 16px; height: 16px; color: var(--mute); }
+  .scope-add-btn:hover { background: var(--canvas-soft); color: var(--ink); }
+  .scope-add-btn:hover svg { color: var(--ink); }
+
+  /* empty week big entry point */
+  .empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 64px 24px; }
+  .empty .ill { width: 60px; height: 60px; border-radius: 14px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--hairline-strong); margin-bottom: 20px; }
+  .empty .ill svg { width: 28px; height: 28px; }
+  .empty h3 { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .empty p { font-size: 14px; color: var(--mute); letter-spacing: -0.01em; margin: 8px 0 0; max-width: 420px; line-height: 20px; }
+  .empty .actions { margin-top: 22px; display: flex; align-items: center; gap: 10px; }
+
+  /* spec rail (anatomy callouts) */
+  .specrow { display: grid; grid-template-columns: 360px 1fr; gap: 32px; padding: 30px 26px; align-items: start; }
+  .anno { display: flex; flex-direction: column; gap: 16px; }
+  .anno-item { display: flex; gap: 12px; }
+  .anno-key { width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; background: var(--canvas-soft-2); border: 1px solid var(--hairline); display: grid; place-items: center; font-family: "Geist Mono", monospace; font-size: 12px; color: var(--ink); }
+  .anno-txt { font-size: 13px; color: var(--body); line-height: 18px; letter-spacing: -0.01em; }
+  .anno-txt b { color: var(--ink); font-weight: 600; }
+  .anno-txt .mono { font-size: 12px; color: var(--mute); }
+
+  .btnstates { display: flex; flex-wrap: wrap; gap: 22px; padding: 28px 26px; align-items: flex-start; }
+  .bstate { display: flex; flex-direction: column; gap: 10px; }
+  .bstate .lbl { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+
+  .endnote { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+  .endnote .mono { color: var(--body); }
+  .endnote b { color: var(--body); font-weight: 600; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="360" y="150" width="300" height="56" rx="8" fill="#ffffff" stroke="#a1a1a1" stroke-width="2"/>
+    <rect x="600" y="166" width="44" height="24" rx="5" fill="#171717"/>
+    <rect x="360" y="240" width="480" height="300" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="390" y="270" width="420" height="40" rx="6" fill="#fafafa" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="402" y="332" width="18" height="18" rx="4" fill="#c2c2c2"/>
+    <circle cx="442" cy="341" r="6" fill="#d4322c"/>
+    <rect x="402" y="372" width="18" height="18" rx="4" fill="#171717"/>
+    <circle cx="442" cy="381" r="6" fill="#7928ca"/>
+    <rect x="402" y="412" width="18" height="18" rx="4" fill="#ffffff" stroke="#a1a1a1" stroke-width="2"/>
+    <circle cx="442" cy="421" r="6" fill="#1d8e75"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Лента отгрузок · B4c</p>
+    <h1 class="doc-title">План — состав культур недели</h1>
+    <p class="doc-lead">Combobox «Культуры&nbsp;·&nbsp;N» в тулбаре вида «План» управляет составом недели (<span class="mono">WeeklyPlanScope</span>) — какие культуры показываются и планируются на этой неделе. Цель — убрать пустые строки: из 10–15 культур обычно задействованы 2–5. Это общий <b>server-state</b> (редактирует admin, видят все), а не личный фильтр ленты. Визуально наследует combobox фильтра «Сырьё», но управляет только <b>пустыми</b> культурами: культуру с целью или отгрузками снять нельзя (BR-23) — она закреплена и поясняется причиной.</p>
+  </header>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 1 · WORKING                                              -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">Состав · рабочее состояние</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">01</span>
+        <div>
+          <div class="frame-name">Combobox открыт — закреплённые, выбранные и свободные</div>
+          <div class="frame-desc">Кнопка «Культуры · 5» с нейтральной заливкой и счётчиком (как активный фильтр ленты). В списке: 3 закреплённых пункта (есть отгрузки / есть цель — отмечены и неотключаемы), 2 выбранных вручную и 8 свободных. Матрица позади показывает только 5 строк состава — ради этой компактности всё и затевается. Свободные чекбоксы: вкл = строка появляется пустой, готовой под ввод; выкл = строка исчезает. Клик по закреплённому поясняет причину, а не молча игнорируется.</div>
+        </div>
+      </div>
+      <div class="stage" id="f1" data-screen-label="01 · Состав — рабочее">
+
+        <!-- toolbar -->
+        <div class="toolbar">
+          <div class="tbar-row">
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Отгрузка
+            </button>
+            <div class="weeknav">
+              <button title="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <div class="wlabel">Неделя 24 <span class="wsub">8–13 июня</span></div>
+              <button title="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+
+            <!-- SCOPE COMBOBOX -->
+            <div class="scope-anchor">
+              <button class="scope-btn active open" id="f1-btn" aria-expanded="true">
+                <span class="lead">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                  Культуры
+                </span>
+                <span class="cnt" id="f1-cnt">5</span>
+                <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              <div class="scope-pop" id="f1-pop">
+                <div class="scope-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" placeholder="Найти культуру…" id="f1-q" />
+                </div>
+                <div class="scope-list" id="f1-list">
+
+                  <div class="scope-sec">Закреплены активностью <span class="ln"></span></div>
+                  <div class="scope-opt locked" data-locked="1">
+                    <span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span>
+                    <span class="rsn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>есть отгрузки</span>
+                  </div>
+                  <div class="scope-opt locked" data-locked="1">
+                    <span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-pepper)"></span><span class="nm">Перец сладкий</span>
+                    <span class="rsn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>есть отгрузки</span>
+                  </div>
+                  <div class="scope-opt locked" data-locked="1">
+                    <span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span>
+                    <span class="rsn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>есть цель</span>
+                  </div>
+
+                  <div class="scope-sec">Свободные · добавить под план <span class="ln"></span></div>
+                  <div class="scope-opt sel-opt" data-cult="patisson" data-on="1">
+                    <span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-squash)"></span><span class="nm">Патиссоны</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="zucchini" data-on="1">
+                    <span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-zucchini)"></span><span class="nm">Кабачки</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="eggplant" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-eggplant)"></span><span class="nm">Баклажаны</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="carrot" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-carrot)"></span><span class="nm">Морковь</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="beet" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-beet)"></span><span class="nm">Свёкла столовая</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="onion" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-onion)"></span><span class="nm">Лук репчатый</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="cabbage" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-cabbage)"></span><span class="nm">Капуста белокочанная</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="greens" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-greens)"></span><span class="nm">Зелень (укроп)</span>
+                  </div>
+                  <div class="scope-opt sel-opt" data-cult="pumpkin" data-on="0">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-pumpkin)"></span><span class="nm">Тыква</span>
+                  </div>
+
+                  <div class="scope-empty" id="f1-empty" hidden>Ничего не найдено</div>
+                </div>
+                <div class="scope-foot">
+                  <span class="applied"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Сохраняется сразу · <b id="f1-foot">5</b> в плане</span>
+                  <span class="esc">Esc — закрыть</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="seg">
+              <button>Таблица</button>
+              <button class="is-disabled">Heatmap</button>
+              <button class="active">План</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- context strip -->
+        <div class="ctx">
+          <span class="week-num">W24</span>
+          <span class="week-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+          <span class="ag">В плане <b class="tnum" id="f1-ag">5</b> культур · цель недели <b class="tnum">21,5 т</b></span>
+        </div>
+
+        <!-- matrix -->
+        <div class="matrixwrap">
+          <table class="pmatrix">
+            <colgroup>
+              <col class="c-cult" />
+              <col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" />
+              <col class="c-week" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="cult-col">Культура</th>
+                <th><div class="dh"><span class="dh-day">Пн</span><span class="dh-date">8 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Вт</span><span class="dh-date">9 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Ср</span><span class="dh-date">10 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Чт</span><span class="dh-date">11 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Пт</span><span class="dh-date">12 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Сб</span><span class="dh-date">13 июня</span></div></th>
+                <th class="week-col"><span class="wh">Неделя</span></th>
+              </tr>
+            </thead>
+            <tbody id="f1-body">
+
+              <!-- ТОМАТЫ · закреплена (отгрузки) -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Томаты Пн" /><span class="u">т</span></span><div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Томаты Вт" /><span class="u">т</span></span><div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="2,0" aria-label="Томаты Ср" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">2,0 <span class="t-goal">/ 2,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Томаты Чт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Томаты Пт" /><span class="u">т</span></span><div class="pbar"><div class="bf plan endcap" style="left:0; width:63.5%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Томаты Сб" /><span class="u">т</span></span><div class="pbar"><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum zero">0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin"><input value="9,0" aria-label="Томаты неделя" readonly /><span class="u">т</span></span><div class="pbar"><div class="bf actual" style="width:29.6%"></div><div class="bf plan endcap" style="left:29.6%; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">7,3 <span class="t-goal">/ 9,0</span></span><span class="wdelta under tnum">−1,7</span></div></div></td>
+              </tr>
+
+              <!-- ПЕРЕЦ · закреплена (отгрузки) -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец сладкий</span>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Перец Пн" /><span class="u">т</span></span><div class="pbar met"><div class="bf actual" style="width:79.4%"></div><div class="bf over endcap" style="left:79.4%; width:15.8%"></div><div class="btick" style="left:79.4%"></div></div><span class="pcap tnum">1,2 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Перец Вт" /><span class="u">т</span></span><div class="pbar met"><div class="bf actual endcap" style="width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Перец Ср" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Перец Чт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div><span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Перец Пт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Перец Сб" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div><span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin"><input value="6,5" aria-label="Перец неделя" readonly /><span class="u">т</span></span><div class="pbar met"><div class="bf actual" style="width:27.2%"></div><div class="bf plan" style="left:27.2%; width:53.2%"></div><div class="bf over endcap" style="left:80.4%; width:14.8%"></div><div class="btick" style="left:80.4%"></div></div><div class="wcap"><span class="wval tnum">7,7 <span class="t-goal">/ 6,5</span></span><span class="wdelta over tnum">+1,2</span></div></div></td>
+              </tr>
+
+              <!-- ОГУРЦЫ · закреплена (цель) -->
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Огурцы Пн" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Огурцы Вт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Огурцы Ср" /><span class="u">т</span></span><div class="pbar"><div class="bf plan endcap" style="left:0; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">0,5 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,5" aria-label="Огурцы Чт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="1,0" aria-label="Огурцы Пт" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span></div></td>
+                <td><div class="pcell"><span class="ptin"><input value="0,5" aria-label="Огурцы Сб" /><span class="u">т</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div><span class="pcap tnum">0,5 <span class="t-goal">/ 0,5</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin"><input value="6,0" aria-label="Огурцы неделя" readonly /><span class="u">т</span></span><div class="pbar"><div class="bf plan endcap" style="left:0; width:87.3%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">5,5 <span class="t-goal">/ 6,0</span></span><span class="wdelta under tnum">факт 0</span></div></div></td>
+              </tr>
+
+              <!-- ПАТИССОНЫ · выбрана вручную, пустая -->
+              <tr data-cult="patisson">
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны</span>
+                  <div class="cult-fresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>добавлена · ждёт цель</div>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Пн" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Вт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Ср" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Чт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Пт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны Сб" /><span class="u">т</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Патиссоны неделя" /><span class="u">т</span></span><div class="pbar notarget"></div><div class="wcap"><span class="wval tnum" style="color:var(--mute)">—</span><span class="nt-hint">цель не задана</span></div></div></td>
+              </tr>
+
+              <!-- КАБАЧКИ · выбрана вручную, пустая -->
+              <tr data-cult="zucchini">
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-zucchini)"></span>Кабачки</span>
+                  <div class="cult-fresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>добавлена · ждёт цель</div>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Пн" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Вт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Ср" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Чт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Пт" /><span class="u">т</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки Сб" /><span class="u">т</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Кабачки неделя" /><span class="u">т</span></span><div class="pbar notarget"></div><div class="wcap"><span class="wval tnum" style="color:var(--mute)">—</span><span class="nt-hint">цель не задана</span></div></div></td>
+              </tr>
+
+            </tbody>
+            <tfoot>
+              <tr>
+                <th class="cult-col">Итого недели</th>
+                <td class="tnum">3,6 / 3,5</td>
+                <td class="tnum">3,4 / 3,5</td>
+                <td class="tnum">3,5 / 4,0</td>
+                <td class="tnum">4,5 / 4,0</td>
+                <td class="tnum">3,5 / 4,0</td>
+                <td class="tnum">2,5 / 2,5</td>
+                <td class="week-col"><div class="pcell"><div class="pbar"><div class="bf actual" style="width:28.8%"></div><div class="bf plan endcap" style="left:28.8%; width:64.2%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">20,5 <span class="t-goal">/ 21,5</span></span><span class="wdelta under tnum">−1,0</span></div></div></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+      </div>
+      <p class="frame-desc" style="margin-top:13px">Попробуйте: откройте/закройте кнопкой или Esc, отметьте свободную культуру — строка появится в матрице и счётчик вырастет; клик по закреплённой подсветит, что снять нельзя.</p>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 2 · ANATOMY                                              -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">Combobox · анатомия</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">02</span>
+        <div>
+          <div class="frame-name">Три типа пунктов в списке</div>
+          <div class="frame-desc">Поиск сверху, чекбоксы культур (чип цвета + название), нейтральная заливка. Закреплённые пункты — отмечены и неотключаемы (серый чекбокс + причина), свободные — обычные ink-чекбоксы. Подвал: «сохраняется сразу» + счётчик. Закрытие — клик вне / Esc.</div>
+        </div>
+      </div>
+      <div class="stage clip" style="background:var(--canvas-soft)" data-screen-label="02 · Анатомия">
+        <div class="specrow">
+          <div class="anno">
+            <div class="anno-item"><span class="anno-key">A</span><div class="anno-txt"><b>Поиск</b> фильтрует список по названию — для длинных перечней (15+ культур).</div></div>
+            <div class="anno-item"><span class="anno-key">B</span><div class="anno-txt"><b>Закреплена · «есть отгрузки».</b> На неделе есть неудалённые отгрузки культуры → видна по BR-23 независимо от состава. Чекбокс <span class="mono">disabled</span>, снять нельзя.</div></div>
+            <div class="anno-item"><span class="anno-key">C</span><div class="anno-txt"><b>Закреплена · «есть цель».</b> Задана <span class="mono">WeeklyPlan</span> на неделю → тоже неотключаема. Причина названа явно, клик не игнорируется молча.</div></div>
+            <div class="anno-item"><span class="anno-key">D</span><div class="anno-txt"><b>Свободная, выбрана.</b> Пустая культура в составе: строка в матрице есть, ждёт ввода цели. Снятие убирает строку.</div></div>
+            <div class="anno-item"><span class="anno-key">E</span><div class="anno-txt"><b>Свободная, не выбрана.</b> Включение добавит культуру в состав (<span class="mono">WeeklyPlanScope</span>) и пустую строку под план.</div></div>
+          </div>
+
+          <div style="display:flex; justify-content:center;">
+            <div style="width:320px;">
+              <div class="scope-pop static-pop">
+                <div class="scope-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" placeholder="Найти культуру…" />
+                  <span class="kbd">A</span>
+                </div>
+                <div class="scope-list">
+                  <div class="scope-sec">Закреплены активностью <span class="ln"></span></div>
+                  <div class="scope-opt locked">
+                    <span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span>
+                    <span class="rsn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>есть отгрузки</span>
+                  </div>
+                  <div class="scope-opt locked">
+                    <span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span>
+                    <span class="rsn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>есть цель</span>
+                  </div>
+                  <div class="scope-sec">Свободные · добавить под план <span class="ln"></span></div>
+                  <div class="scope-opt">
+                    <span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-squash)"></span><span class="nm">Патиссоны</span>
+                  </div>
+                  <div class="scope-opt">
+                    <span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                    <span class="chip" style="background:var(--cult-eggplant)"></span><span class="nm">Баклажаны</span>
+                  </div>
+                </div>
+                <div class="scope-foot">
+                  <span class="applied"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Сохраняется сразу · <b>3</b> в плане</span>
+                  <span class="esc">Esc</span>
+                </div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:0; margin-top:-260px; pointer-events:none;">
+                <span style="height:42px"></span>
+                <span style="height:29px"></span>
+                <span style="height:39px; display:flex; align-items:center; justify-content:flex-end;"><span class="anno-key" style="margin-right:-13px">B</span></span>
+                <span style="height:39px; display:flex; align-items:center; justify-content:flex-end;"><span class="anno-key" style="margin-right:-13px">C</span></span>
+                <span style="height:29px"></span>
+                <span style="height:39px; display:flex; align-items:center; justify-content:flex-end;"><span class="anno-key" style="margin-right:-13px">D</span></span>
+                <span style="height:39px; display:flex; align-items:center; justify-content:flex-end;"><span class="anno-key" style="margin-right:-13px">E</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">03</span>
+        <div>
+          <div class="frame-name">Состояния кнопки в тулбаре</div>
+          <div class="frame-desc">По умолчанию (состав пуст) — спокойная кнопка. Активный состав — нейтральная заливка + счётчик выбранных. Открыта — ink-обводка, каретка повёрнута. Только чтение (operator/user) — disabled с замком.</div>
+        </div>
+      </div>
+      <div class="stage clip" style="background:var(--canvas-soft)" data-screen-label="03 · Состояния кнопки">
+        <div class="btnstates">
+          <div class="bstate">
+            <span class="lbl">по умолчанию</span>
+            <button class="scope-btn">
+              <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Культуры</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          <div class="bstate">
+            <span class="lbl">активный состав</span>
+            <button class="scope-btn active">
+              <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Культуры</span>
+              <span class="cnt">5</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          <div class="bstate">
+            <span class="lbl">открыта</span>
+            <button class="scope-btn active open">
+              <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Культуры</span>
+              <span class="cnt">5</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+          <div class="bstate">
+            <span class="lbl">только чтение</span>
+            <button class="scope-btn ro" disabled>
+              <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Культуры</span>
+              <span class="cnt">5</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 3 · EMPTY WEEK                                           -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">Состав · пустая неделя</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">04</span>
+        <div>
+          <div class="frame-name">Состав не задан, но есть активность</div>
+          <div class="frame-desc">Состав недели пуст (<span class="mono">WeeklyPlanScope</span> = ∅). Матрица НЕ вываливает все 15 культур — показывает только то, что видно по BR-23: культуры с отгрузками или целью. Внизу — крупная, но не навязчивая точка входа «+&nbsp;Добавить культуры в план недели», открывающая тот же combobox.</div>
+        </div>
+      </div>
+      <div class="stage clip" data-screen-label="04 · Пусто, с активностью">
+        <div class="ctx">
+          <span class="week-num">W25</span>
+          <span class="week-title">Неделя 25 <span class="wmeta">· 15–20 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+          <span class="ag">Состав <b>не задан</b> · видны культуры с активностью</span>
+        </div>
+        <div class="matrixwrap">
+          <table class="pmatrix">
+            <colgroup>
+              <col class="c-cult" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-week" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="cult-col">Культура</th>
+                <th><div class="dh"><span class="dh-day">Пн</span><span class="dh-date">15 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Вт</span><span class="dh-date">16 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Ср</span><span class="dh-date">17 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Чт</span><span class="dh-date">18 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Пт</span><span class="dh-date">19 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Сб</span><span class="dh-date">20 июня</span></div></th>
+                <th class="week-col"><span class="wh">Неделя</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="cult-meta">видна: есть отгрузки</div>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Пн" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf actual endcap" style="width:70%"></div></div><span class="pcap tnum">1,4 <span class="nt-hint">факт</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Вт" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf actual endcap" style="width:55%"></div></div><span class="pcap tnum">1,1 <span class="nt-hint">факт</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Ср" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf plan endcap" style="left:0; width:60%"></div></div><span class="pcap tnum">1,2 <span class="nt-hint">план</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Чт" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Пт" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты Сб" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Томаты неделя" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf actual" style="width:42%"></div><div class="bf plan endcap" style="left:42%; width:21%"></div></div><div class="wcap"><span class="wval tnum">3,7 т</span><span class="nt-hint">цель не задана</span></div></div></td>
+              </tr>
+              <tr>
+                <th class="cult-col">
+                  <span class="cult-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец сладкий</span>
+                  <div class="cult-meta">видна: есть отгрузки</div>
+                  <div class="gran"><button class="on">Дни</button><button>Неделя</button></div>
+                </th>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Пн" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf actual endcap" style="width:48%"></div></div><span class="pcap tnum">1,0 <span class="nt-hint">факт</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Вт" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Ср" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf plan endcap" style="left:0; width:50%"></div></div><span class="pcap tnum">1,0 <span class="nt-hint">план</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Чт" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Пт" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец Сб" /><span class="u">т</span></span><div class="pbar notarget"></div><span class="pcap zero">— <span class="nt-hint">нет</span></span></div></td>
+                <td class="week-col"><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="Перец неделя" /><span class="u">т</span></span><div class="pbar notarget"><div class="bf actual" style="width:26%"></div><div class="bf plan endcap" style="left:26%; width:26%"></div></div><div class="wcap"><span class="wval tnum">2,0 т</span><span class="nt-hint">цель не задана</span></div></div></td>
+              </tr>
+              <tr class="scope-add-row">
+                <td colspan="8">
+                  <button class="scope-add-btn" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Добавить культуры в план недели
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">05</span>
+        <div>
+          <div class="frame-name">Совсем пусто — ни состава, ни активности</div>
+          <div class="frame-desc">Нет ни целей, ни отгрузок, ни состава. Нейтральное приглашение по центру — без статусных цветов и тревожного тона. Главное действие открывает combobox.</div>
+        </div>
+      </div>
+      <div class="stage clip" data-screen-label="05 · Совсем пусто">
+        <div class="ctx">
+          <span class="week-num">W27</span>
+          <span class="week-title">Неделя 27 <span class="wmeta">· 29 июня – 4 июля 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+        </div>
+        <div class="empty">
+          <div class="ill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </div>
+          <h3>Состав недели не задан</h3>
+          <p>Выберите культуры, которые планируете на неделе 27 — для них появятся пустые строки, готовые под ввод целей. Лишние 10–15 культур не нужно держать в виде.</p>
+          <div class="actions">
+            <button class="scope-btn active" style="height:40px">
+              <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Добавить культуры</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <button class="btn">Копировать состав недели 26</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 4 · READ-ONLY                                            -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">Состав · только чтение</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">06</span>
+        <div>
+          <div class="frame-name">Operator / user — состав меняет администратор</div>
+          <div class="frame-desc">Кнопка combobox видна, но неактивна (замок). Матрица показывает тот же состав, что задал admin — пользователь видит структуру, но не правит её. При наведении — тултип «состав задаёт администратор».</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="06 · Только чтение">
+        <div class="toolbar" style="border-radius:12px 12px 0 0">
+          <div class="tbar-row">
+            <button class="btn btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Отгрузка
+            </button>
+            <div class="weeknav">
+              <button title="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <div class="wlabel">Неделя 24 <span class="wsub">8–13 июня</span></div>
+              <button title="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+            </div>
+            <div class="scope-anchor">
+              <button class="scope-btn ro" disabled aria-disabled="true">
+                <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span class="lead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Культуры</span>
+                <span class="cnt">3</span>
+              </button>
+              <div class="ro-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                Состав задаёт администратор
+              </div>
+            </div>
+            <div class="spacer"></div>
+            <div class="seg">
+              <button>Таблица</button>
+              <button class="is-disabled">Heatmap</button>
+              <button class="active">План</button>
+            </div>
+          </div>
+        </div>
+        <div class="ctx">
+          <span class="week-num">W24</span>
+          <span class="week-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+          <span class="season"><span class="dot"></span>Сезон 2026 · рабочие дни Пн–Сб</span>
+          <span class="ag">В плане <b class="tnum">3</b> культуры · цель недели <b class="tnum">21,5 т</b></span>
+        </div>
+        <div class="matrixwrap">
+          <table class="pmatrix">
+            <colgroup>
+              <col class="c-cult" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-day" /><col class="c-week" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="cult-col">Культура</th>
+                <th><div class="dh"><span class="dh-day">Пн</span><span class="dh-date">8 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Вт</span><span class="dh-date">9 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Ср</span><span class="dh-date">10 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Чт</span><span class="dh-date">11 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Пт</span><span class="dh-date">12 июня</span></div></th>
+                <th><div class="dh"><span class="dh-day">Сб</span><span class="dh-date">13 июня</span></div></th>
+                <th class="week-col"><span class="wh">Неделя</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th class="cult-col"><span class="cult-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span></th>
+                <td><div class="pcell"><span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span><div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,4 <span class="t-goal">/ 1,5</span></span><div class="pbar"><div class="bf actual endcap" style="width:88.9%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">2,0 <span class="t-goal">/ 2,0</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,5</span></span><div class="pbar"><div class="bf plan endcap" style="left:0; width:63.5%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum zero">0 <span class="t-goal">/ 1,0</span></span><div class="pbar"><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td class="week-col"><div class="pcell"><div class="pbar"><div class="bf actual" style="width:29.6%"></div><div class="bf plan endcap" style="left:29.6%; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">7,3 <span class="t-goal">/ 9,0</span></span><span class="wdelta under tnum">−1,7</span></div></div></td>
+              </tr>
+              <tr>
+                <th class="cult-col"><span class="cult-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец сладкий</span></th>
+                <td><div class="pcell"><span class="pcap tnum">1,2 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf actual" style="width:79.4%"></div><div class="bf over endcap" style="left:79.4%; width:15.8%"></div><div class="btick" style="left:79.4%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf actual endcap" style="width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,5 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan" style="left:0; width:63.5%"></div><div class="bf over endcap" style="left:63.5%; width:31.7%"></div><div class="btick" style="left:63.5%"></div></div></div></td>
+                <td class="week-col"><div class="pcell"><div class="pbar met"><div class="bf actual" style="width:27.2%"></div><div class="bf plan" style="left:27.2%; width:53.2%"></div><div class="bf over endcap" style="left:80.4%; width:14.8%"></div><div class="btick" style="left:80.4%"></div></div><div class="wcap"><span class="wval tnum">7,7 <span class="t-goal">/ 6,5</span></span><span class="wdelta over tnum">+1,2</span></div></div></td>
+              </tr>
+              <tr>
+                <th class="cult-col"><span class="cult-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span></th>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">0,5 <span class="t-goal">/ 1,0</span></span><div class="pbar"><div class="bf plan endcap" style="left:0; width:47.6%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,5 <span class="t-goal">/ 1,5</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">1,0 <span class="t-goal">/ 1,0</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td><div class="pcell"><span class="pcap tnum">0,5 <span class="t-goal">/ 0,5</span></span><div class="pbar met"><div class="bf plan endcap" style="left:0; width:95.2%"></div><div class="btick" style="left:95.2%"></div></div></div></td>
+                <td class="week-col"><div class="pcell"><div class="pbar"><div class="bf plan endcap" style="left:0; width:87.3%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">5,5 <span class="t-goal">/ 6,0</span></span><span class="wdelta under tnum">факт 0</span></div></div></td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr>
+                <th class="cult-col">Итого недели</th>
+                <td class="tnum">3,6 / 3,5</td>
+                <td class="tnum">3,4 / 3,5</td>
+                <td class="tnum">3,5 / 4,0</td>
+                <td class="tnum">4,5 / 4,0</td>
+                <td class="tnum">3,5 / 4,0</td>
+                <td class="tnum">2,5 / 2,5</td>
+                <td class="week-col"><div class="pcell"><div class="pbar"><div class="bf actual" style="width:28.8%"></div><div class="bf plan endcap" style="left:28.8%; width:64.2%"></div><div class="btick" style="left:95.2%"></div></div><div class="wcap"><span class="wval tnum">20,5 <span class="t-goal">/ 21,5</span></span><span class="wdelta under tnum">−1,0</span></div></div></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 5 · LONG LIST                                            -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">Combobox · длинный список</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">07</span>
+        <div>
+          <div class="frame-name">Скролл внутри поповера · поиск фильтрует</div>
+          <div class="frame-desc">Полный справочник — 15 культур. Высота поповера ограничена, список скроллится внутри; поиск сужает по названию. Слева — закрытый список целиком, справа — состояние с запросом «ка»: остаются Кабачки и две капусты.</div>
+        </div>
+      </div>
+      <div class="stage clip" style="background:var(--canvas-soft)" data-screen-label="07 · Длинный список">
+        <div class="specrow" style="grid-template-columns:1fr 1fr; align-items:start;">
+
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <span class="lbl mono" style="font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:var(--mute)">полный список · скролл</span>
+            <div style="width:320px;">
+              <div class="scope-pop static-pop">
+                <div class="scope-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" placeholder="Найти культуру…" />
+                </div>
+                <div class="scope-list" style="max-height:248px">
+                  <div class="scope-sec">Закреплены активностью <span class="ln"></span></div>
+                  <div class="scope-opt locked"><span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="rsn soft">отгрузки</span></div>
+                  <div class="scope-opt locked"><span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-pepper)"></span><span class="nm">Перец сладкий</span><span class="rsn soft">отгрузки</span></div>
+                  <div class="scope-opt locked"><span class="scb checked locked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="rsn soft">цель</span></div>
+                  <div class="scope-sec">Свободные · добавить под план <span class="ln"></span></div>
+                  <div class="scope-opt"><span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-squash)"></span><span class="nm">Патиссоны</span></div>
+                  <div class="scope-opt"><span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-zucchini)"></span><span class="nm">Кабачки</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-eggplant)"></span><span class="nm">Баклажаны</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-carrot)"></span><span class="nm">Морковь</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-beet)"></span><span class="nm">Свёкла столовая</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-onion)"></span><span class="nm">Лук репчатый</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-cabbage)"></span><span class="nm">Капуста белокочанная</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-cauli)"></span><span class="nm">Капуста цветная</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-greens)"></span><span class="nm">Зелень (укроп)</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-pumpkin)"></span><span class="nm">Тыква</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-garlic)"></span><span class="nm">Чеснок</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-potato)"></span><span class="nm">Картофель</span></div>
+                </div>
+                <div class="scope-foot"><span class="applied"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Сохраняется сразу · <b>5</b> в плане</span><span class="esc">Esc</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+            <span class="lbl mono" style="font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:var(--mute)">поиск «ка» · отфильтровано</span>
+            <div style="width:320px;">
+              <div class="scope-pop static-pop">
+                <div class="scope-search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" value="ка" />
+                </div>
+                <div class="scope-list">
+                  <div class="scope-sec">Свободные · добавить под план <span class="ln"></span></div>
+                  <div class="scope-opt"><span class="scb checked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-zucchini)"></span><span class="nm">Каба&shy;чки</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-cabbage)"></span><span class="nm">Капуста белокочанная</span></div>
+                  <div class="scope-opt"><span class="scb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><span class="chip" style="background:var(--cult-cauli)"></span><span class="nm">Капуста цветная</span></div>
+                </div>
+                <div class="scope-foot"><span class="applied"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>3 совпадения</span><span class="esc">Esc</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <p class="endnote" id="live-note">VSMS · инструмент снабженца. Статичный макет управления составом культур недели (B4c). Состав — <b>WeeklyPlanScope</b> (общий server-state, редактирует admin): combobox управляет только пустыми культурами. По BR-23 строка видна, если культура в составе ИЛИ есть цель ИЛИ есть отгрузки — поэтому культуру с активностью снять нельзя, она закреплена и поясняется причиной. Combobox не меняет расчёты прогресса и подытогов (BR-22): после выбора в матрице остаются только видимые строки, «Итого» и headline считаются по видимому/плановому набору как раньше. Токены, бары и матрица наследуются из <span class="mono">plan-view-b4</span>; статусные цвета отгрузок в план-домене не используются.</p>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---- free-culture metadata (in production from Culture.*) ---- */
+  var CULT = {
+    patisson: { name: "Патиссоны",            varName: "--cult-squash"   },
+    zucchini: { name: "Кабачки",              varName: "--cult-zucchini" },
+    eggplant: { name: "Баклажаны",            varName: "--cult-eggplant" },
+    carrot:   { name: "Морковь",              varName: "--cult-carrot"   },
+    beet:     { name: "Свёкла столовая",      varName: "--cult-beet"     },
+    onion:    { name: "Лук репчатый",         varName: "--cult-onion"    },
+    cabbage:  { name: "Капуста белокочанная", varName: "--cult-cabbage"  },
+    greens:   { name: "Зелень (укроп)",       varName: "--cult-greens"   },
+    pumpkin:  { name: "Тыква",                varName: "--cult-pumpkin"  }
+  };
+  var LOCKED_COUNT = 3; // Томаты / Перец / Огурцы — закреплены активностью (BR-23)
+
+  var btn   = document.getElementById("f1-btn");
+  var pop   = document.getElementById("f1-pop");
+  var list  = document.getElementById("f1-list");
+  var qInp  = document.getElementById("f1-q");
+  var empty = document.getElementById("f1-empty");
+  var body  = document.getElementById("f1-body");
+  var cnt   = document.getElementById("f1-cnt");
+  var foot  = document.getElementById("f1-foot");
+  var ag    = document.getElementById("f1-ag");
+  if (!btn || !pop) return;
+
+  /* ---------- open / close ---------- */
+  function open() {
+    pop.hidden = false;
+    btn.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    setTimeout(function () { if (qInp) qInp.focus(); }, 0);
+  }
+  function close() {
+    pop.hidden = true;
+    btn.classList.remove("open");
+    btn.setAttribute("aria-expanded", "false");
+  }
+  function isOpen() { return !pop.hidden; }
+
+  btn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    isOpen() ? close() : open();
+  });
+  document.addEventListener("click", function (e) {
+    if (isOpen() && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && isOpen()) { close(); btn.focus(); }
+  });
+
+  /* ---------- counts ---------- */
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+  function recount() {
+    var selected = list.querySelectorAll('.sel-opt[data-on="1"]').length;
+    var total = LOCKED_COUNT + selected;
+    cnt.textContent = total;
+    if (foot) foot.textContent = total;
+    if (ag) ag.textContent = total;
+    var agWord = ag && ag.parentNode;
+    if (agWord) {
+      // update "культур / культуры" word after the bold count
+      var node = ag.nextSibling;
+      if (node && node.nodeType === 3) {
+        node.textContent = " " + plural(total, "культура", "культуры", "культур") + " · цель недели ";
+      }
+    }
+  }
+
+  /* ---------- matrix row build / remove ---------- */
+  function buildRow(id) {
+    var c = CULT[id];
+    var tr = document.createElement("tr");
+    tr.setAttribute("data-cult", id);
+    var days = "";
+    var labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+    for (var i = 0; i < 6; i++) {
+      days += '<td><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="' +
+        c.name + " " + labels[i] + '" /><span class="u">т</span></span></div></td>';
+    }
+    tr.innerHTML =
+      '<th class="cult-col">' +
+        '<span class="cult-name"><span class="chip" style="background:var(' + c.varName + ')"></span>' + c.name + '</span>' +
+        '<div class="cult-fresh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>добавлена · ждёт цель</div>' +
+        '<div class="gran"><button class="on">Дни</button><button>Неделя</button></div>' +
+      '</th>' +
+      days +
+      '<td class="week-col"><div class="pcell"><span class="ptin empty"><input placeholder="—" aria-label="' + c.name + ' неделя" /><span class="u">т</span></span><div class="pbar notarget"></div><div class="wcap"><span class="wval tnum" style="color:var(--mute)">—</span><span class="nt-hint">цель не задана</span></div></div></td>';
+    return tr;
+  }
+  function addRow(id) {
+    if (body.querySelector('tr[data-cult="' + id + '"]')) return;
+    var tr = buildRow(id);
+    tr.style.opacity = "0";
+    body.appendChild(tr);
+    requestAnimationFrame(function () {
+      tr.style.transition = "opacity .18s ease";
+      tr.style.opacity = "1";
+    });
+  }
+  function removeRow(id) {
+    var tr = body.querySelector('tr[data-cult="' + id + '"]');
+    if (tr) tr.parentNode.removeChild(tr);
+  }
+
+  /* ---------- option clicks ---------- */
+  list.addEventListener("click", function (e) {
+    var opt = e.target.closest(".scope-opt");
+    if (!opt) return;
+
+    // locked (есть цель / отгрузки) — нельзя снять, поясняем
+    if (opt.classList.contains("locked")) {
+      opt.classList.remove("shake");
+      void opt.offsetWidth;
+      opt.classList.add("shake");
+      var rsn = opt.querySelector(".rsn");
+      if (rsn) {
+        rsn.style.transition = "background .2s, color .2s, border-color .2s";
+        var pb = rsn.style.background, pc = rsn.style.color, pbd = rsn.style.borderColor;
+        rsn.style.background = "var(--ink)";
+        rsn.style.color = "#fff";
+        rsn.style.borderColor = "var(--ink)";
+        setTimeout(function () {
+          rsn.style.background = pb; rsn.style.color = pc; rsn.style.borderColor = pbd;
+        }, 520);
+      }
+      return;
+    }
+
+    // free culture — toggle membership
+    if (opt.classList.contains("sel-opt")) {
+      var id = opt.getAttribute("data-cult");
+      var on = opt.getAttribute("data-on") === "1";
+      var box = opt.querySelector(".scb");
+      if (on) {
+        opt.setAttribute("data-on", "0");
+        box.classList.remove("checked");
+        removeRow(id);
+      } else {
+        opt.setAttribute("data-on", "1");
+        box.classList.add("checked");
+        addRow(id);
+      }
+      recount();
+    }
+  });
+
+  /* ---------- search ---------- */
+  qInp && qInp.addEventListener("input", function () {
+    var q = qInp.value.trim().toLowerCase();
+    var anyVisible = false;
+    var secVisible = {}; // track per-section
+    var opts = list.querySelectorAll(".scope-opt");
+    opts.forEach(function (opt) {
+      var nm = (opt.querySelector(".nm") || {}).textContent || "";
+      var hit = !q || nm.toLowerCase().indexOf(q) !== -1;
+      opt.style.display = hit ? "" : "none";
+      if (hit) anyVisible = true;
+    });
+    // hide section headers whose following options are all hidden
+    list.querySelectorAll(".scope-sec").forEach(function (sec) {
+      var n = sec.nextElementSibling, show = false;
+      while (n && !n.classList.contains("scope-sec")) {
+        if (n.classList.contains("scope-opt") && n.style.display !== "none") { show = true; break; }
+        n = n.nextElementSibling;
+      }
+      sec.style.display = show ? "" : "none";
+    });
+    if (empty) empty.hidden = anyVisible;
+  });
+})();
+</script>
+</body>
+</html>

@@ -98,6 +98,24 @@ export async function getPlanWeek({
   const days = workdaysOfWeek(isoYear, isoWeek, cfg);
   const dayDates = new Set(days.map((d) => d.date));
 
+  // Группируем строки плана по культуре: недельная (date=null) или дневные (date).
+  // Считаем заранее — нужно ДО агрегации прогресса (week-mode культуры не идут в
+  // дневные ячейки/подытоги, BR-23).
+  const weekTargetByCulture = new Map<number, number>();
+  const dayTargetsByCulture = new Map<number, Record<string, number>>();
+  for (const p of plans) {
+    const tons = p.target_tons.toNumber();
+    if (p.date == null) {
+      weekTargetByCulture.set(p.culture_id, tons);
+    } else {
+      const key = p.date.toISOString().slice(0, 10);
+      const m = dayTargetsByCulture.get(p.culture_id) ?? {};
+      m[key] = tons;
+      dayTargetsByCulture.set(p.culture_id, m);
+    }
+  }
+  const weekModeCultureIds = new Set(weekTargetByCulture.keys());
+
   // Агрегация прогресса: по (культура, дата) — дневные ячейки; по культуре — недельный
   // итог; по дате — колонки tfoot; общий — grand total. Все суммы в граммах.
   const dayAccByCulture = new Map<number, Map<string, ProgAcc>>();
@@ -116,8 +134,11 @@ export async function getPlanWeek({
     addItem(wk, plannedG, actualG);
     addItem(grandAcc, plannedG, actualG);
 
-    // Дневные ячейки/колонки — только по отображаемым рабочим дням.
+    // Дневные ячейки/колонки — только по отображаемым рабочим дням. week-mode
+    // культура (цель date=null) в дневные ячейки и подытоги НЕ идёт (BR-23) —
+    // её факт виден только в колонке «Неделя».
     if (!dayDates.has(dateStr)) continue;
+    if (weekModeCultureIds.has(it.culture_id)) continue;
     let perDate = dayAccByCulture.get(it.culture_id);
     if (!perDate) dayAccByCulture.set(it.culture_id, (perDate = new Map()));
     let cell = perDate.get(dateStr);
@@ -127,21 +148,6 @@ export async function getPlanWeek({
     let col = dayTotalAcc.get(dateStr);
     if (!col) dayTotalAcc.set(dateStr, (col = newAcc()));
     addItem(col, plannedG, actualG);
-  }
-
-  // Группируем строки плана по культуре: недельная (date=null) или дневные (date).
-  const weekTargetByCulture = new Map<number, number>();
-  const dayTargetsByCulture = new Map<number, Record<string, number>>();
-  for (const p of plans) {
-    const tons = p.target_tons.toNumber();
-    if (p.date == null) {
-      weekTargetByCulture.set(p.culture_id, tons);
-    } else {
-      const key = p.date.toISOString().slice(0, 10);
-      const m = dayTargetsByCulture.get(p.culture_id) ?? {};
-      m[key] = tons;
-      dayTargetsByCulture.set(p.culture_id, m);
-    }
   }
 
   const rows: PlanRow[] = cultures.map((c) => {

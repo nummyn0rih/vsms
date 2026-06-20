@@ -122,6 +122,17 @@ export function currentSeasonWeek(date: Date = new Date()): {
   return { isoYear, isoWeek: week, seasonYear: seasonYearOf(date) };
 }
 
+// Границы сезона в ISO-неделях (BR-17): сезон = год июнь→май. Сезон seasonYear идёт
+// с 1 июня seasonYear по 31 мая seasonYear+1 — для зажима навигации недели в «Плане».
+export function seasonWeekBounds(seasonYear: number): {
+  first: { isoYear: number; isoWeek: number };
+  last: { isoYear: number; isoWeek: number };
+} {
+  const first = isoWeek(new Date(Date.UTC(seasonYear, 5, 1))); // 1 июня
+  const last = isoWeek(new Date(Date.UTC(seasonYear + 1, 4, 31))); // 31 мая
+  return { first, last };
+}
+
 // Сравнение (isoYear, isoWeek) для классификации past/current/future.
 export function compareIsoWeek(
   a: { isoYear: number; isoWeek: number },
