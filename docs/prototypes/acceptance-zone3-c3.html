@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Приёмка · Принято</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --error: #ee0000;
+
+    /* accepted status canon (status-fills) */
+    --acc-zone: #ddfff7;
+    --acc-badge: #c7f6ea;
+    --acc-dot: #29bc9b;
+    --acc-fg: #1d8e75;
+
+    /* other zone fills (context bars) */
+    --st-arrived-bg: #fff6e3;
+    --st-arrived-fg: #ab570a;
+    --st-sent-bg: #eaf2ff;
+    --st-sent-fg: #0761d1;
+
+    /* culture colors (match lenta-b0; in prod from Culture.color) */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand { padding: 18px 20px 14px; font-size: 18px; font-weight: 600; letter-spacing: -0.03em; display: flex; align-items: center; gap: 9px; }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 14px; color: var(--body); text-decoration: none; letter-spacing: -0.02em; line-height: 20px; }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot { border-top: 1px solid var(--hairline); padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--mute); }
+  .nav-foot .who { display: flex; align-items: center; gap: 7px; }
+  .nav-foot .role { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--acc-fg); background: var(--acc-badge); border-radius: 5px; padding: 2px 6px; }
+  .nav-foot button { border: 0; background: transparent; color: var(--mute); cursor: pointer; width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head { padding: 22px 28px 0; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 4px 0 0; color: var(--mute); font-size: 13px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--canvas) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 28px; margin-top: 18px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .spacer { flex: 1; }
+  .search { position: relative; flex: 0 1 340px; min-width: 220px; }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--mute); }
+  .search input { width: 100%; height: 40px; padding: 0 12px 0 34px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink); font-family: inherit; font-size: 14px; letter-spacing: -0.02em; box-shadow: 0 1px 1px #0000000a; }
+  .search input::placeholder { color: var(--mute); }
+  .search input:focus { outline: none; border-color: var(--hairline-strong); }
+  .filter { height: 40px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); color: var(--body); font-size: 14px; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 1px #0000000a; }
+  .filter:hover { background: var(--canvas-soft); }
+  .filter .fv { color: var(--ink); font-weight: 500; }
+  .filter svg { width: 14px; height: 14px; color: var(--mute); }
+  .btn { height: 40px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink); font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 1px #0000000a; }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
+
+  /* ---------- feed ---------- */
+  .feed { padding: 8px 32px 90px; max-width: 1660px; margin-inline: auto; width: 100%; }
+
+  /* zone context bars (z1 / z2 collapsed) */
+  .zonebar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 11px 14px; border-radius: 9px; margin-top: 16px;
+    border: 1px solid var(--hairline); background: var(--canvas-soft);
+    cursor: default; user-select: none;
+  }
+  .zonebar .chev { color: var(--hairline-strong); display: grid; place-items: center; width: 16px; height: 16px; flex-shrink: 0; }
+  .zonebar .ztag { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .zonebar .ztag .d { width: 8px; height: 8px; border-radius: 50%; }
+  .zonebar.z-arrived .ztag .d { background: var(--warning); }
+  .zonebar.z-sent .ztag .d { background: var(--link); }
+  .zonebar .zcount { font-size: 13px; color: var(--mute); }
+  .zonebar .zcount b { color: var(--ink); font-weight: 600; }
+  .zonebar .zright { margin-left: auto; font-size: 12.5px; color: var(--mute); white-space: nowrap; }
+
+  /* zone 3 header (active) */
+  .zone3-head { margin-top: 22px; display: flex; align-items: baseline; gap: 13px; padding: 0 2px 12px; }
+  .zone3-head .zh-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--acc-dot); align-self: center; }
+  .zone3-head .zh-title { font-size: 19px; font-weight: 600; letter-spacing: -0.035em; }
+  .zone3-head .zh-count { font-size: 13.5px; color: var(--body); }
+  .zone3-head .zh-count b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .zone3-head .zh-right { margin-left: auto; align-self: center; font-size: 13px; color: var(--mute); display: inline-flex; align-items: baseline; gap: 8px; }
+  .zone3-head .zh-right .sum { font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+  .machines { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ---------- machine ledger ---------- */
+  .machine { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; }
+
+  .mhead { display: flex; align-items: stretch; cursor: pointer; }
+  .mhead:hover .mh-chev { color: var(--ink); }
+  .mh-left {
+    width: 348px; flex-shrink: 0; padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    background: var(--acc-zone); border-right: 1px solid var(--hairline);
+  }
+  .mh-top { display: flex; align-items: center; gap: 9px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; line-height: 1; }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge.s-accepted { background: var(--acc-badge); color: var(--acc-fg); }
+  .badge.s-accepted .dot { background: var(--acc-dot); }
+  .mh-dates { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; letter-spacing: -0.02em; white-space: nowrap; }
+  .mh-dates .dep { color: var(--mute); }
+  .mh-dates .arrow { color: var(--hairline-strong); font-size: 12px; }
+  .mh-dates .arr { color: var(--ink); font-weight: 600; }
+  .driver-btn { text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 5px; }
+  .driver-btn:hover { color: var(--link); }
+  .driver-btn:hover .tk { color: var(--link); }
+  .driver-btn .tk { color: var(--mute); font-weight: 400; }
+  .driver-btn svg { width: 12px; height: 12px; color: var(--mute); margin-left: 1px; }
+
+  .mh-right { flex: 1; min-width: 0; display: flex; align-items: center; gap: 16px; padding: 12px 16px 12px 18px; }
+  .mh-summary { display: flex; align-items: center; gap: 9px; min-width: 0; flex-wrap: wrap; }
+  .mh-cultchips { display: inline-flex; align-items: center; gap: 7px; flex-wrap: wrap; min-width: 0; overflow: hidden; flex-shrink: 1; }
+  .mh-meta { flex-shrink: 0; }
+  .cchip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--body); letter-spacing: -0.01em; white-space: nowrap; }
+  .cchip .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .mh-meta { margin-left: auto; display: flex; align-items: center; gap: 18px; flex-shrink: 0; }
+  .mh-accepted { font-size: 13px; color: var(--body); letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .mh-accepted svg { width: 14px; height: 14px; color: var(--acc-fg); }
+  .mh-accepted b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mh-sum { text-align: right; white-space: nowrap; }
+  .mh-sum .lab { display: block; font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin-bottom: 2px; }
+  .mh-sum .val { font-size: 17px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .mh-sum .val .cur { font-size: 12px; font-weight: 400; color: var(--body); margin-left: 2px; }
+  .mh-chev { width: 22px; height: 22px; flex-shrink: 0; display: grid; place-items: center; color: var(--mute); transition: transform .18s; }
+  .mh-chev svg { width: 18px; height: 18px; }
+  .machine.open .mh-chev { transform: rotate(90deg); }
+
+  /* ---------- positions body ---------- */
+  .mbody { border-top: 1px solid var(--hairline); padding: 12px; display: none; flex-direction: column; gap: 10px; background: var(--canvas-soft); }
+  .machine.open .mbody { display: flex; }
+
+  .apos { border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
+  .apos-top { display: flex; align-items: flex-start; gap: 12px; padding: 11px 14px 9px; }
+  .apos-cult { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .apos-cult .name { display: inline-flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); }
+  .apos-cult .name .sq { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .apos-cult .farmer { font-size: 12.5px; color: var(--mute); letter-spacing: -0.01em; padding-left: 19px; }
+  .apos-actwrap { margin-left: auto; display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0; }
+  .actno { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--ink); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 3px 7px; letter-spacing: 0; white-space: nowrap; }
+  .act-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 6px; background: var(--acc-badge); color: var(--acc-fg); font-size: 12px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; }
+  .act-badge svg { width: 13px; height: 13px; }
+
+  /* metrics line */
+  .apos-metrics { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; padding: 2px 14px 0; }
+  .metric { display: inline-flex; align-items: baseline; gap: 6px; font-size: 13px; letter-spacing: -0.02em; white-space: nowrap; }
+  .metric .mk { color: var(--mute); }
+  .metric .mv { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .metric .mv .u { color: var(--mute); font-weight: 400; font-size: 11.5px; margin-left: 1px; }
+  .metric.pay .mv { color: var(--acc-fg); font-weight: 600; }
+  .metric.pay .mk { color: var(--acc-fg); }
+  .sep-dot { color: var(--hairline-strong); }
+
+  /* calibre breakdown chips */
+  .calrow { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 9px 14px 2px; }
+  .calrow .clab { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin-right: 2px; }
+  .calchip { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; letter-spacing: -0.01em; background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
+  .calchip .rng { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .calchip .pct { color: var(--body); font-variant-numeric: tabular-nums; }
+  .calchip .kg { color: var(--mute); font-variant-numeric: tabular-nums; }
+  .calchip.non { border-style: dashed; border-color: var(--hairline-strong); }
+  .calchip.non .tag { color: var(--mute); font-size: 11px; }
+
+  /* contract + cost footer */
+  .apos-foot {
+    display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 14px;
+    padding: 10px 14px; margin-top: 9px; border-top: 1px solid var(--hairline); background: var(--canvas);
+  }
+  .contract { display: inline-flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; letter-spacing: -0.02em; }
+  .contract .ck { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+  .contract .clabel { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contract .price { color: var(--body); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .contract .price .cur { color: var(--mute); }
+  .apos-cost { text-align: right; white-space: nowrap; }
+  .apos-cost .pay { display: block; font-size: 11.5px; color: var(--acc-fg); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-bottom: 2px; }
+  .apos-cost .rub { font-size: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .apos-cost .rub .cur { font-size: 12px; font-weight: 400; color: var(--body); margin-left: 2px; }
+
+  /* nonstandard sub-line */
+  .nonline { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--canvas); border-top: 1px dashed var(--hairline); font-size: 12.5px; letter-spacing: -0.02em; }
+  .nonline .nl-d { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; opacity: .6; }
+  .nonline .nl-name { color: var(--body); font-weight: 500; }
+  .nonline .nl-meta { color: var(--mute); font-variant-numeric: tabular-nums; }
+  .nonline .nl-tag { color: var(--mute); font-size: 11.5px; }
+  .nonline .nl-cost { margin-left: auto; font-size: 13.5px; font-weight: 600; color: var(--body); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .nonline .nl-cost .cur { font-weight: 400; color: var(--mute); }
+
+  /* rollback (admin) */
+  .rollback { position: relative; }
+  .rb-btn { height: 34px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); color: var(--body); font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 1px #0000000a; }
+  .rb-btn svg { width: 14px; height: 14px; }
+  .rb-btn:hover { background: var(--canvas-soft); border-color: var(--hairline-strong); color: var(--ink); }
+  .rb-tip { position: absolute; bottom: calc(100% + 9px); right: 0; background: var(--ink); color: #fff; font-size: 12px; letter-spacing: -0.01em; line-height: 16px; padding: 9px 11px; border-radius: 7px; width: 252px; box-shadow: 0 8px 18px -6px #00000055; pointer-events: none; opacity: 0; visibility: hidden; transition: opacity .12s; z-index: 5; }
+  .rb-tip b { font-weight: 600; }
+  .rb-tip::after { content: ""; position: absolute; top: 100%; right: 18px; border: 5px solid transparent; border-top-color: var(--ink); }
+  .rollback:hover .rb-tip { opacity: 1; visibility: visible; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="180" y="190" width="240" height="180" rx="12" fill="#ddfff7"/>
+    <rect x="440" y="190" width="600" height="180" rx="12" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="180" y="410" width="240" height="200" rx="12" fill="#ddfff7"/>
+    <rect x="440" y="410" width="600" height="200" rx="12" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <circle cx="240" cy="240" r="11" fill="#29bc9b"/>
+    <circle cx="240" cy="460" r="11" fill="#29bc9b"/>
+    <rect x="470" y="225" width="130" height="20" rx="5" fill="#30a46c"/>
+    <rect x="900" y="220" width="110" height="28" rx="6" fill="#171717"/>
+    <rect x="900" y="440" width="110" height="28" rx="6" fill="#171717"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Приёмка">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Справочники
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span class="who">admin <span class="role">админ</span></span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <h1 class="page-title">Приёмка</h1>
+      <p class="page-sub">Позиционная приёмка машин · сезон 2026</p>
+    </div>
+
+    <!-- ===================== TOOLBAR ===================== -->
+    <div class="toolbar">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Поиск: фермер, культура, № акта…" />
+      </div>
+      <button class="filter">Сырьё<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="filter">Период: <span class="fv">сезон</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+
+      <div class="spacer"></div>
+
+      <button class="btn btn-sm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Excel
+      </button>
+    </div>
+
+    <!-- ===================== FEED ===================== -->
+    <div class="feed">
+
+      <!-- ---------- ZONE 1 — Прибыли (context, collapsed) ---------- -->
+      <div class="zonebar z-arrived" data-screen-label="Зона 1 · Прибыли (свёрнута)">
+        <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        <span class="ztag"><span class="d"></span>Прибыли</span>
+        <span class="zcount"><b class="tnum">4</b> машины ожидают приёмки</span>
+        <span class="zright">требуют акта</span>
+      </div>
+
+      <!-- ---------- ZONE 2 — В приёмке (context, collapsed) ---------- -->
+      <div class="zonebar z-sent" data-screen-label="Зона 2 · В приёмке (свёрнута)">
+        <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+        <span class="ztag"><span class="d"></span>В приёмке</span>
+        <span class="zcount"><b class="tnum">1</b> машина · часть позиций принята</span>
+        <span class="zright">в работе</span>
+      </div>
+
+      <!-- ---------- ZONE 3 — Принято (active) ---------- -->
+      <div class="zone3-head" data-screen-label="Зона 3 · Принято">
+        <span class="zh-dot"></span>
+        <span class="zh-title">Принято</span>
+        <span class="zh-count"><b>3</b> машины за сезон</span>
+        <span class="zh-right">сумма к оплате <span class="sum tnum">1 472 318&nbsp;₽</span></span>
+      </div>
+
+      <div class="machines">
+
+        <!-- ===== MACHINE 1 — simple, 2 позиции (открыта) ===== -->
+        <article class="machine open" data-screen-label="Машина · принята · simple">
+          <div class="mhead" onclick="this.parentNode.classList.toggle('open')">
+            <div class="mh-left">
+              <div class="mh-top">
+                <span class="badge s-accepted"><span class="dot"></span>Принята</span>
+                <span class="mh-dates"><span class="dep tnum">6</span><span class="arrow">&rarr;</span><span class="arr tnum">8 июня</span></span>
+              </div>
+              <button class="driver-btn" onclick="event.stopPropagation()">Петренко А. В. <span class="tk">· Юг-Логистик</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="mh-right">
+              <div class="mh-cultchips">
+                <span class="cchip"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span>
+                <span class="cchip"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span>
+              </div>
+              <div class="mh-meta">
+                <span class="mh-accepted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>принято <b>2/2</b></span>
+                <span class="mh-sum"><span class="lab">сумма машины</span><span class="val tnum">594 066<span class="cur">₽</span></span></span>
+                <span class="mh-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mbody">
+            <!-- pos 1: Томаты -->
+            <div class="apos" style="background:color-mix(in srgb, var(--cult-tomato) 9%, #fff)">
+              <div class="apos-top">
+                <div class="apos-cult">
+                  <span class="name"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты · стандарт</span>
+                  <span class="farmer">ИП Ковальчук</span>
+                </div>
+                <div class="apos-actwrap">
+                  <span class="actno">№&nbsp;П-0608-014</span>
+                  <span class="act-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Акт принят</span>
+                </div>
+              </div>
+              <div class="apos-metrics">
+                <span class="metric"><span class="mk">факт</span><span class="mv tnum">13 945<span class="u">кг</span></span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric"><span class="mk">брак</span><span class="mv tnum">4&nbsp;%</span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric pay"><span class="mk">к оплате</span><span class="mv tnum">13 387<span class="u">кг</span></span></span>
+              </div>
+              <div class="apos-foot">
+                <div class="contract"><span class="ck">контракт</span><span class="clabel">Томаты · стандарт</span><span class="price"><span class="tnum">38</span> <span class="cur">₽/кг</span></span></div>
+                <div class="apos-cost"><span class="pay tnum">13 387 кг × 38 ₽</span><span class="rub tnum">508 706<span class="cur">₽</span></span></div>
+                <div class="rollback">
+                  <button class="rb-btn" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить акт</button>
+                  <span class="rb-tip">Вернёт машину в статус <b>«Прибыла»</b> и сторнирует движения ингредиентов. Откат обратим и штатен.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- pos 2: Перец -->
+            <div class="apos" style="background:color-mix(in srgb, var(--cult-pepper) 9%, #fff)">
+              <div class="apos-top">
+                <div class="apos-cult">
+                  <span class="name"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий · маринад</span>
+                  <span class="farmer">ООО «Юг-Агро»</span>
+                </div>
+                <div class="apos-actwrap">
+                  <span class="actno">№&nbsp;П-0608-015</span>
+                  <span class="act-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Акт принят</span>
+                </div>
+              </div>
+              <div class="apos-metrics">
+                <span class="metric"><span class="mk">факт</span><span class="mv tnum">2 000<span class="u">кг</span></span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric"><span class="mk">брак</span><span class="mv tnum">3&nbsp;%</span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric pay"><span class="mk">к оплате</span><span class="mv tnum">1 940<span class="u">кг</span></span></span>
+              </div>
+              <div class="apos-foot">
+                <div class="contract"><span class="ck">контракт</span><span class="clabel">Перец · маринад</span><span class="price"><span class="tnum">44</span> <span class="cur">₽/кг</span></span></div>
+                <div class="apos-cost"><span class="pay tnum">1 940 кг × 44 ₽</span><span class="rub tnum">85 360<span class="cur">₽</span></span></div>
+                <div class="rollback">
+                  <button class="rb-btn" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить акт</button>
+                  <span class="rb-tip">Вернёт машину в статус <b>«Прибыла»</b> и сторнирует движения ингредиентов. Откат обратим и штатен.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===== MACHINE 2 — калибр + simple (открыта) ===== -->
+        <article class="machine open" data-screen-label="Машина · принята · калибр">
+          <div class="mhead" onclick="this.parentNode.classList.toggle('open')">
+            <div class="mh-left">
+              <div class="mh-top">
+                <span class="badge s-accepted"><span class="dot"></span>Принята</span>
+                <span class="mh-dates"><span class="dep tnum">8</span><span class="arrow">&rarr;</span><span class="arr tnum">10 июня</span></span>
+              </div>
+              <button class="driver-btn" onclick="event.stopPropagation()">Коваль Р. С. <span class="tk">· Юг-Логистик</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="mh-right">
+              <div class="mh-cultchips">
+                <span class="cchip"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                <span class="cchip"><span class="sq" style="background:var(--cult-squash)"></span>Патиссоны</span>
+              </div>
+              <div class="mh-meta">
+                <span class="mh-accepted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>принято <b>2/2</b></span>
+                <span class="mh-sum"><span class="lab">сумма машины</span><span class="val tnum">761 740<span class="cur">₽</span></span></span>
+                <span class="mh-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mbody">
+            <!-- pos 1: Огурцы (калибр) -->
+            <div class="apos" style="background:color-mix(in srgb, var(--cult-cucumber) 9%, #fff)">
+              <div class="apos-top">
+                <div class="apos-cult">
+                  <span class="name"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы · корнишон</span>
+                  <span class="farmer">ИП Ковальчук</span>
+                </div>
+                <div class="apos-actwrap">
+                  <span class="actno">№&nbsp;П-0610-023</span>
+                  <span class="act-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Акт принят</span>
+                </div>
+              </div>
+              <div class="apos-metrics">
+                <span class="metric"><span class="mk">факт</span><span class="mv tnum">11 200<span class="u">кг</span></span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric"><span class="mk">брак</span><span class="mv tnum">5&nbsp;%</span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric pay"><span class="mk">к оплате</span><span class="mv tnum">9 072<span class="u">кг</span></span></span>
+              </div>
+              <div class="calrow">
+                <span class="clab">калибр</span>
+                <span class="calchip"><span class="rng">6–9 см</span><span class="pct tnum">38 %</span><span class="kg tnum">4 256 кг</span></span>
+                <span class="calchip"><span class="rng">9–12 см</span><span class="pct tnum">43 %</span><span class="kg tnum">4 816 кг</span></span>
+                <span class="calchip non"><span class="rng">&gt;12 см</span><span class="pct tnum">14 %</span><span class="tag">не в зачёт</span></span>
+                <span class="calchip non"><span class="rng">брак</span><span class="pct tnum">5 %</span><span class="tag">не в зачёт</span></span>
+              </div>
+              <div class="apos-foot">
+                <div class="contract"><span class="ck">контракт</span><span class="clabel">Огурцы · корнишон (стандарт)</span><span class="price"><span class="tnum">52</span> <span class="cur">₽/кг</span></span></div>
+                <div class="apos-cost"><span class="pay tnum">9 072 кг × 52 ₽</span><span class="rub tnum">471 744<span class="cur">₽</span></span></div>
+                <div class="rollback">
+                  <button class="rb-btn" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить акт</button>
+                  <span class="rb-tip">Вернёт машину в статус <b>«Прибыла»</b> и сторнирует движения ингредиентов. Откат обратим и штатен.</span>
+                </div>
+              </div>
+              <div class="nonline">
+                <span class="nl-d" style="background:var(--cult-cucumber)"></span>
+                <span class="nl-name">Нестандарт &gt;12 см</span>
+                <span class="nl-meta">1 596 кг · 18 ₽/кг</span>
+                <span class="nl-tag">своя строка контракта · не в зачёт принятого</span>
+                <span class="nl-cost tnum">28 728<span class="cur">&nbsp;₽</span></span>
+              </div>
+            </div>
+
+            <!-- pos 2: Патиссоны (simple) -->
+            <div class="apos" style="background:color-mix(in srgb, var(--cult-squash) 9%, #fff)">
+              <div class="apos-top">
+                <div class="apos-cult">
+                  <span class="name"><span class="sq" style="background:var(--cult-squash)"></span>Патиссоны · маринад</span>
+                  <span class="farmer">ООО «Зелёный Дол»</span>
+                </div>
+                <div class="apos-actwrap">
+                  <span class="actno">№&nbsp;П-0610-024</span>
+                  <span class="act-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Акт принят</span>
+                </div>
+              </div>
+              <div class="apos-metrics">
+                <span class="metric"><span class="mk">факт</span><span class="mv tnum">8 600<span class="u">кг</span></span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric"><span class="mk">брак</span><span class="mv tnum">2&nbsp;%</span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric pay"><span class="mk">к оплате</span><span class="mv tnum">8 428<span class="u">кг</span></span></span>
+              </div>
+              <div class="apos-foot">
+                <div class="contract"><span class="ck">контракт</span><span class="clabel">Патиссоны · маринад</span><span class="price"><span class="tnum">31</span> <span class="cur">₽/кг</span></span></div>
+                <div class="apos-cost"><span class="pay tnum">8 428 кг × 31 ₽</span><span class="rub tnum">261 268<span class="cur">₽</span></span></div>
+                <div class="rollback">
+                  <button class="rb-btn" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить акт</button>
+                  <span class="rb-tip">Вернёт машину в статус <b>«Прибыла»</b> и сторнирует движения ингредиентов. Откат обратим и штатен.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- ===== MACHINE 3 — simple, свёрнута ===== -->
+        <article class="machine" data-screen-label="Машина · принята · свёрнута">
+          <div class="mhead" onclick="this.parentNode.classList.toggle('open')">
+            <div class="mh-left">
+              <div class="mh-top">
+                <span class="badge s-accepted"><span class="dot"></span>Принята</span>
+                <span class="mh-dates"><span class="dep tnum">10</span><span class="arrow">&rarr;</span><span class="arr tnum">12 июня</span></span>
+              </div>
+              <button class="driver-btn" onclick="event.stopPropagation()">Гнатюк В. П. <span class="tk">· Магистраль</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="mh-right">
+              <div class="mh-cultchips">
+                <span class="cchip"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span>
+              </div>
+              <div class="mh-meta">
+                <span class="mh-accepted"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>принято <b>1/1</b></span>
+                <span class="mh-sum"><span class="lab">сумма машины</span><span class="val tnum">116 512<span class="cur">₽</span></span></span>
+                <span class="mh-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mbody">
+            <div class="apos" style="background:color-mix(in srgb, var(--cult-pepper) 9%, #fff)">
+              <div class="apos-top">
+                <div class="apos-cult">
+                  <span class="name"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий · маринад</span>
+                  <span class="farmer">ИП Мельник</span>
+                </div>
+                <div class="apos-actwrap">
+                  <span class="actno">№&nbsp;П-0612-007</span>
+                  <span class="act-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>Акт принят</span>
+                </div>
+              </div>
+              <div class="apos-metrics">
+                <span class="metric"><span class="mk">факт</span><span class="mv tnum">2 730<span class="u">кг</span></span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric"><span class="mk">брак</span><span class="mv tnum">3&nbsp;%</span></span>
+                <span class="sep-dot">·</span>
+                <span class="metric pay"><span class="mk">к оплате</span><span class="mv tnum">2 648<span class="u">кг</span></span></span>
+              </div>
+              <div class="apos-foot">
+                <div class="contract"><span class="ck">контракт</span><span class="clabel">Перец · маринад</span><span class="price"><span class="tnum">44</span> <span class="cur">₽/кг</span></span></div>
+                <div class="apos-cost"><span class="pay tnum">2 648 кг × 44 ₽</span><span class="rub tnum">116 512<span class="cur">₽</span></span></div>
+                <div class="rollback">
+                  <button class="rb-btn" onclick="event.stopPropagation()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить акт</button>
+                  <span class="rb-tip">Вернёт машину в статус <b>«Прибыла»</b> и сторнирует движения ингредиентов. Откат обратим и штатен.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

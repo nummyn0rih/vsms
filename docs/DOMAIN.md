@@ -20,7 +20,7 @@
 **Три веса позиции (ShipmentItem):**
 - `planned_weight_kg` — приблизительный, при создании отгрузки.
 - `actual_weight_kg` — после сплошной перевески на воротах.
-- `accepted_weight_kg` — производное (одноступенчато, база = факт): **simple** = actual × (1 − brak%); **calibre** = actual × Σ(% принятых категорий). Брак — поле акта у всех (у calibre брак входит в 100% факта наравне с категориями).
+- `accepted_weight_kg` — производное (одноступенчато, база = факт): **simple** = actual × (1 − brak%); **calibre** = actual × Σ(% принятых категорий). Брак — поле акта у всех (у calibre брак входит в 100% факта наравне с категориями). **Вычисляется на лету (`server/acceptance/accepted.ts` → `computeAcceptedKg`); одноимённая колонка БД — снимок-заглушка, фактически НЕ пишется (deprecated, см. §5). Источник истины — инпуты акта (actual, brak%, CalibreResult.percent).**
 
 ---
 
@@ -94,7 +94,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | TripWeightNorm | farmer_id, culture_id, planned_trip_weight_kg | основа «осталось ~N машин» |
 | IngredientRecipe | culture_id, ingredient_id, qty_per_kg_product | рецептура на кг продукции (M:N) |
 | CalibreScheme | id, culture_id | привязана к калибруемой культуре |
-| CalibreRange | id, scheme_id, label, min_cm (nullable), max_cm (nullable), is_accepted | **категория годного.** Размерная (min/max заданы; max пуст = открытый верх, >предел) ИЛИ безразмерная (оба пусты — качественная, напр. «Стандарт»/«Пульпа»). Категории «брак» среди них НЕТ — брак вынесен в поле `brak_percent` акта (BR-10). Σ % категорий = 100% годного. |
+| CalibreRange | id, scheme_id, label, min_cm (nullable), max_cm (nullable), is_accepted | **приёмная категория.** Размерная (min/max заданы; max пуст = открытый верх, >предел) ИЛИ безразмерная (оба пусты — качественная, напр. «Стандарт»/«Пульпа»). Категории «брак» среди них НЕТ — брак вынесен в поле `brak_percent` акта (BR-10). **Σ % категорий + brak% = 100% от ФАКТА (actual)** — одноступенчато, «годного» как промежуточной базы НЕТ. |
 | SeasonConfig | season_year, summer_start, summer_end, summer_workdays `Int[]`, winter_workdays `Int[]` (массивы дней недели, 0=Пн … 6=Вс; дефолт лето Пн–Сб, зима Пн–Пт) | источник рабочих дней |
 | AlertRule | id, item_kind, item_id, location_scope, threshold | пороги дефицита |
 
@@ -110,7 +110,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Сущность | Атрибуты |
 |---|---|
 | Shipment | id, code, departure_date, arrival_date, status {planned\|sent\|arrived\|accepted}, driver_id (FK), created_by, timestamps. **`accepted` — АВТО** (все позиции приняты, BR-13), руками не выставляется; UI-состояние «частично принята» — производное, не хранится (хранимый статус остаётся `arrived`). |
-| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал; выбор из разрешённых типов культуры), contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное) |
+| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал; выбор из разрешённых типов культуры), contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное; колонка-снимок DEPRECATED — не пишется, считается на лету) |
 | AcceptanceAct | id, shipment_item_id (FK), brak_percent, accepted_percent (simple), comment, act_number, weighed_at |
 | CalibreResult | id, acceptance_act_id (FK), calibre_range_id (FK), percent, contract_line_id (FK, nullable) — привязка категории к строке = оплата по этой строке (объём+цена строки); null = только статистика |
 
@@ -184,6 +184,15 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 ---
 
 ## 5. Производные величины (вычислять, НЕ хранить)
+
+> **Колонки-снимки `ShipmentItem.accepted_weight_kg` и `AcceptanceAct.brak_weight_kg` — DEPRECATED:**
+> фактически НЕ пишутся; принятый/браковый вес выводятся на лету из инпутов акта
+> (`computeAcceptedKg`, `accepted.ts`). Снимок создавал бы второй источник истины и риск
+> рассинхрона при правке акта — противоречит принципу «вычислять, не хранить» (CLAUDE.md §2).
+> Снос колонок — отдельной cleanup-миграцией (этап D), не блокирует C3.
+> _Заметка (на будущее, не C3):_ `is_accepted` берётся из текущей схемы калибров (`CalibreRange`),
+> а не из снимка акта — при правке схемы исторические accepted пересчитаются. Решить
+> «морозить is_accepted в CalibreResult vs живо», когда появится workflow редактирования схем.
 
 | Что | Формула | База |
 |---|---|---|
