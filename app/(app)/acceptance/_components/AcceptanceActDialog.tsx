@@ -36,6 +36,9 @@ import {
 const M_CONTENT_CLS =
   "gap-0 overflow-hidden rounded-lg border border-[#ebebeb] bg-white p-0 sm:max-w-[520px]";
 
+// Radix Select не допускает value="" — сентинел для «— не в зачёт» (contract_line_id=null).
+const NONE = "__none__";
+
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
@@ -125,8 +128,8 @@ export function AcceptanceActDialog({
         ex?.contractLineId != null
           ? String(ex.contractLineId)
           : r.isAccepted
-            ? defaultBind
-            : "";
+            ? defaultBind || NONE
+            : NONE;
     }
     return o;
   });
@@ -138,15 +141,12 @@ export function AcceptanceActDialog({
     return Number.isFinite(n) ? n : 0;
   }, [brakStr]);
 
-  // Чистый вес (= годное) — база калибровки (BR-10).
-  const cleanWeight =
-    savedWeight != null ? savedWeight * (1 - brak / 100) : null;
-
-  // --- calibre агрегаты ---
+  // --- calibre агрегаты (одноступенчато, база = факт; BR-10) ---
   const pctNum = (id: number) => {
     const n = Number((percents[id] ?? "").replace(",", "."));
     return Number.isFinite(n) ? n : 0;
   };
+  // Σ размерных/безразмерных категорий (без брака — брак отдельное поле акта).
   const sumPct = useMemo(
     () => context.calibreRanges.reduce((s, r) => s + pctNum(r.id), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,22 +161,24 @@ export function AcceptanceActDialog({
     [percents, context.calibreRanges],
   );
   const nonAcceptedKg =
-    cleanWeight != null ? (cleanWeight * (sumPct - acceptedPct)) / 100 : null;
+    savedWeight != null ? (savedWeight * (sumPct - acceptedPct)) / 100 : null;
 
-  // Принятый вес — производное.
+  // Принятый вес — производное (база = факт).
   const accepted =
     savedWeight == null
       ? null
       : isCalibre
-        ? cleanWeight != null
-          ? Math.round((cleanWeight * acceptedPct) / 100)
-          : null
+        ? Math.round((savedWeight * acceptedPct) / 100)
         : Math.round(savedWeight * (1 - brak / 100));
 
   const calibreBindMissing =
     isCalibre &&
-    context.calibreRanges.some((r) => r.isAccepted && (bindings[r.id] ?? "") === "");
-  const sumOk = !isCalibre || Math.abs(sumPct - 100) <= 0.01;
+    context.calibreRanges.some((r) => {
+      const b = bindings[r.id] ?? NONE;
+      return r.isAccepted && (b === "" || b === NONE);
+    });
+  // Σ категорий + брак = 100% факта.
+  const sumOk = !isCalibre || Math.abs(sumPct + brak - 100) <= 0.01;
 
   const blockReason =
     savedWeight == null || savedWeight <= 0
@@ -188,7 +190,7 @@ export function AcceptanceActDialog({
           : !isCalibre && lineId === ""
             ? "Выберите строку контракта"
             : isCalibre && !sumOk
-              ? "Сумма категорий должна быть 100%"
+              ? "Сумма категорий и брака = 100% факта"
               : calibreBindMissing
                 ? "Привяжите принятые категории к строке"
                 : null;
@@ -238,12 +240,14 @@ export function AcceptanceActDialog({
       brakPercent: brak,
       ...(isCalibre
         ? {
-            calibres: context.calibreRanges.map((r) => ({
-              calibreRangeId: r.id,
-              percent: pctNum(r.id),
-              contractLineId:
-                (bindings[r.id] ?? "") !== "" ? Number(bindings[r.id]) : null,
-            })),
+            calibres: context.calibreRanges.map((r) => {
+              const b = bindings[r.id] ?? NONE;
+              return {
+                calibreRangeId: r.id,
+                percent: pctNum(r.id),
+                contractLineId: b === "" || b === NONE ? null : Number(b),
+              };
+            }),
           }
         : { contractLineId: Number(lineId) }),
     });
@@ -292,13 +296,15 @@ export function AcceptanceActDialog({
     }
     return (
       <Select
-        value={bindings[r.id] ?? ""}
+        value={bindings[r.id] ?? NONE}
         onValueChange={(v) => setBindings((b) => ({ ...b, [r.id]: v }))}
       >
         <SelectTrigger className="h-8 w-full text-[12.5px]">
           <SelectValue placeholder={r.isAccepted ? "выберите" : "не в зачёт"} />
         </SelectTrigger>
         <SelectContent>
+          {/* Дефолт/сброс: вернуть «не в зачёт» (line=null) после случайного выбора (фикс 5). */}
+          <SelectItem value={NONE}>— не в зачёт</SelectItem>
           {context.contractLines.map((l) => (
             <SelectItem key={l.id} value={String(l.id)}>
               {l.label?.trim() || context.cultureName}
@@ -308,6 +314,59 @@ export function AcceptanceActDialog({
       </Select>
     );
   }
+
+  // Поля-заготовки (одна разметка, разное расположение в calibre/simple).
+  const actNumberField = (
+    <Field label="№ акта (партии)" hint="обязателен">
+      <input
+        value={actNumber}
+        onChange={(e) => setActNumber(e.target.value)}
+        placeholder="не задан"
+        className="h-12 w-full rounded-md border border-[#ebebeb] bg-white px-3 font-mono text-sm tracking-normal text-[#171717] outline-none placeholder:text-[#888888] focus:border-[#171717] focus:ring-1 focus:ring-[#171717]"
+      />
+    </Field>
+  );
+
+  const weightField = (
+    <Field
+      label="Фактический вес"
+      tag={savedWeight != null && !weightEditing ? "из перевески" : "вводится здесь"}
+    >
+      <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+        <input
+          inputMode="decimal"
+          value={weightDisplay}
+          onFocus={() => {
+            setWeightEditing(true);
+            setWeightStr(savedWeight != null ? String(savedWeight) : "");
+          }}
+          onChange={(e) => setWeightStr(e.target.value)}
+          onBlur={commitWeight}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          placeholder="не перевешивали"
+          className="w-full bg-transparent text-[18px] font-medium tabular-nums text-[#171717] outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-[#888888]"
+        />
+        <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
+      </div>
+    </Field>
+  );
+
+  const brakField = (
+    <Field label="% брака">
+      <div className="flex h-12 items-center justify-end rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+        <input
+          inputMode="decimal"
+          value={brakStr}
+          onChange={(e) => setBrakStr(e.target.value)}
+          placeholder="0"
+          className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
+        />
+        <span className="ml-1 shrink-0 text-sm text-[#888888]">%</span>
+      </div>
+    </Field>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -350,93 +409,39 @@ export function AcceptanceActDialog({
             </div>
           )}
 
-          {/* № акта */}
-          <Field label="№ акта (партии)" hint="присваивается на заводе · обязателен">
-            <input
-              value={actNumber}
-              onChange={(e) => setActNumber(e.target.value)}
-              placeholder="не задан"
-              className="h-10 w-full rounded-md border border-[#ebebeb] bg-white px-3 font-mono text-sm tracking-normal text-[#171717] outline-none placeholder:text-[#888888] focus:border-[#171717] focus:ring-1 focus:ring-[#171717]"
-            />
-          </Field>
-
-          {/* Вес + % брака — один ряд (фикс 1) */}
-          <div className="grid grid-cols-[1fr_120px] items-end gap-3">
-            <Field
-              label="Фактический вес"
-              tag={savedWeight != null && !weightEditing ? "из перевески" : "вводится здесь"}
-            >
-              <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
-                <input
-                  inputMode="decimal"
-                  value={weightDisplay}
-                  onFocus={() => {
-                    setWeightEditing(true);
-                    setWeightStr(savedWeight != null ? String(savedWeight) : "");
-                  }}
-                  onChange={(e) => setWeightStr(e.target.value)}
-                  onBlur={commitWeight}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                  }}
-                  placeholder="не перевешивали"
-                  className="w-full bg-transparent text-[18px] font-medium tabular-nums text-[#171717] outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-[#888888]"
-                />
-                <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
-              </div>
-            </Field>
-            <Field label="% брака">
-              <div className="flex h-12 items-center justify-end rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
-                <input
-                  inputMode="decimal"
-                  value={brakStr}
-                  onChange={(e) => setBrakStr(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
-                />
-                <span className="ml-1 shrink-0 text-sm text-[#888888]">%</span>
-              </div>
-            </Field>
-          </div>
-
           {isCalibre ? (
             <>
-              {/* Чистый вес (= годное, база калибровки) */}
-              <div className="flex items-baseline gap-2.5 rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 py-2.5">
-                <span className="text-[12.5px] tracking-tight text-[#4d4d4d]">
-                  Чистый вес{" "}
-                  <span className="text-[#888888]">(после брака — база калибровки)</span>
-                </span>
-                <span className="ml-auto text-[15px] font-semibold tabular-nums text-[#171717]">
-                  {cleanWeight != null ? formatWeight(Math.round(cleanWeight)) : "—"}
-                  <span className="ml-0.5 text-xs font-normal text-[#888888]">кг</span>
-                </span>
+              {/* № акта + фактический вес — один ряд, одинаковая ширина (BR-10) */}
+              <div className="grid grid-cols-2 items-start gap-3">
+                {actNumberField}
+                {weightField}
               </div>
 
-              {/* Таблица категорий схемы культуры */}
+              {/* Таблица категорий схемы культуры (+ брак последней строкой) */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-baseline gap-2">
                   <span className="text-[13px] font-medium tracking-tight text-[#171717]">
-                    Размерные категории
+                    Категории
                   </span>
-                  <span className="text-[11.5px] text-[#888888]">% от чистого веса</span>
+                  <span className="text-[11.5px] text-[#888888]">% от факта</span>
                 </div>
                 <div className="overflow-hidden rounded-lg border border-[#ebebeb]">
-                  <div className="grid grid-cols-[1fr_136px_150px] gap-2 border-b border-[#ebebeb] bg-[#fafafa] px-3 py-2 font-mono text-[9.5px] uppercase tracking-wide text-[#888888]">
+                  <div className="grid grid-cols-[1fr_84px_72px_150px] items-center gap-2 border-b border-[#ebebeb] bg-[#fafafa] px-3 py-2 font-mono text-[9.5px] uppercase tracking-wide text-[#888888]">
                     <span>Категория</span>
-                    <span className="text-right">% · кг</span>
-                    <span>Строка</span>
+                    <span className="text-right">кг</span>
+                    <span className="text-right">%</span>
+                    <span>Строка контракта</span>
                   </div>
                   {context.calibreRanges.map((r) => {
                     const rt = rangeText(r);
                     const kg =
-                      cleanWeight != null
-                        ? Math.round((cleanWeight * pctNum(r.id)) / 100)
+                      savedWeight != null
+                        ? Math.round((savedWeight * pctNum(r.id)) / 100)
                         : null;
                     return (
                       <div
                         key={r.id}
-                        className="grid grid-cols-[1fr_136px_150px] items-center gap-2 border-b border-[#ebebeb] px-3 py-2 last:border-b-0"
+                        className="grid grid-cols-[1fr_84px_72px_150px] items-center gap-2 border-b border-[#ebebeb] px-3 py-2 last:border-b-0"
                       >
                         <span className="flex flex-col gap-0.5">
                           <span className="text-[13.5px] font-medium tabular-nums text-[#171717]">
@@ -458,33 +463,52 @@ export function AcceptanceActDialog({
                             {r.isAccepted ? "принято" : "нестандарт"}
                           </span>
                         </span>
-                        <span className="flex flex-col items-end gap-0.5">
-                          <div className="flex h-8 w-[84px] items-center rounded-md border border-[#ebebeb] bg-white px-2 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
-                            <input
-                              inputMode="decimal"
-                              value={percents[r.id] ?? ""}
-                              onChange={(e) =>
-                                setPercents((p) => ({ ...p, [r.id]: e.target.value }))
-                              }
-                              placeholder="0"
-                              className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
-                            />
-                            <span className="ml-1 shrink-0 text-xs text-[#888888]">%</span>
-                          </div>
-                          <span className="text-[10.5px] tabular-nums text-[#888888]">
-                            {kg != null ? `${formatWeight(kg)} кг` : "—"}
-                          </span>
+                        {/* кг (расчёт из точного %) — read-only, выровнен по высоте инпута (фикс 6). */}
+                        <span className="flex h-8 items-center justify-end tabular-nums text-[12px] text-[#888888]">
+                          {kg != null ? `${formatWeight(kg)} кг` : "—"}
                         </span>
+                        <div className="flex h-8 w-full shrink-0 items-center rounded-md border border-[#ebebeb] bg-white px-2 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+                          <input
+                            inputMode="decimal"
+                            value={percents[r.id] ?? ""}
+                            onChange={(e) =>
+                              setPercents((p) => ({ ...p, [r.id]: e.target.value }))
+                            }
+                            placeholder="0"
+                            className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
+                          />
+                          <span className="ml-1 shrink-0 text-xs text-[#888888]">%</span>
+                        </div>
                         {bindingSelect(r)}
                       </div>
                     );
                   })}
+                  {/* Брак — поле акта, рендерится последней строкой категорий (BR-10). */}
+                  <div className="grid grid-cols-[1fr_84px_72px_150px] items-center gap-2 border-b border-[#ebebeb] px-3 py-2 last:border-b-0">
+                    <span className="text-[13.5px] font-medium text-[#171717]">Брак</span>
+                    <span className="flex h-8 items-center justify-end tabular-nums text-[12px] text-[#888888]">
+                      {savedWeight != null
+                        ? `${formatWeight(Math.round((savedWeight * brak) / 100))} кг`
+                        : "—"}
+                    </span>
+                    <div className="flex h-8 w-full shrink-0 items-center rounded-md border border-[#ebebeb] bg-white px-2 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+                      <input
+                        inputMode="decimal"
+                        value={brakStr}
+                        onChange={(e) => setBrakStr(e.target.value)}
+                        placeholder="0"
+                        className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
+                      />
+                      <span className="ml-1 shrink-0 text-xs text-[#888888]">%</span>
+                    </div>
+                    <span className="pl-2 text-[12px] text-[#888888]">— не в зачёт</span>
+                  </div>
                   {/* Σ */}
                   <div className="flex items-center gap-2 border-t border-[#ebebeb] bg-[#fafafa] px-3 py-2.5">
                     <span className="text-[12.5px] font-medium tracking-tight text-[#171717]">
-                      Σ категорий
+                      Σ
                     </span>
-                    <span className="text-[11px] text-[#888888]">= 100% годного</span>
+                    <span className="text-[11px] text-[#888888]">= 100% факта</span>
                     <span
                       className={`ml-auto inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums ${
                         sumOk ? "text-[#1d8e75]" : "text-[#c50000]"
@@ -495,7 +519,7 @@ export function AcceptanceActDialog({
                       ) : (
                         <AlertCircle className="size-3.5" />
                       )}
-                      {sumPct.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} %
+                      {(sumPct + brak).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} %
                       {!sumOk && <span className="font-normal text-[#888888]">/ 100%</span>}
                     </span>
                   </div>
@@ -509,8 +533,8 @@ export function AcceptanceActDialog({
               <AcceptedStrip
                 accepted={accepted}
                 formula={
-                  cleanWeight != null
-                    ? `${formatWeight(Math.round(cleanWeight))} кг × ${acceptedPct.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}% (принятые) = ${accepted != null ? formatWeight(accepted) : "—"} кг`
+                  savedWeight != null
+                    ? `${formatWeight(savedWeight)} кг × ${acceptedPct.toLocaleString("ru-RU", { maximumFractionDigits: 2 })}% (принятые) = ${accepted != null ? formatWeight(accepted) : "—"} кг`
                     : null
                 }
                 note="принятые категории"
@@ -533,6 +557,15 @@ export function AcceptanceActDialog({
             </>
           ) : (
             <>
+              {/* № акта */}
+              {actNumberField}
+
+              {/* Вес + % брака — один ряд (фикс 1) */}
+              <div className="grid grid-cols-[1fr_120px] items-end gap-3">
+                {weightField}
+                {brakField}
+              </div>
+
               {/* Строка контракта (simple) — отдельным полем (фикс 1) */}
               <Field label="Строка контракта">
                 {context.autoLineId != null ? (
@@ -572,7 +605,7 @@ export function AcceptanceActDialog({
                     ? `${formatWeight(savedWeight)} кг × (1 − ${(brak / 100).toLocaleString("ru-RU", { minimumFractionDigits: 2 })}) = ${accepted != null ? formatWeight(accepted) : "—"} кг`
                     : null
                 }
-                note="пойдёт в выполнение строки"
+                note="пойдёт в выполнение контракта"
               />
             </>
           )}
@@ -604,10 +637,9 @@ export function AcceptanceActDialog({
 
         {context.isLastUnaccepted && !context.existing && (
           <div className="px-5 pb-4">
-            <div className="flex items-center gap-2 rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-3 py-2 text-xs leading-4 tracking-tight text-[#1d8e75]">
+            <div className="flex items-center gap-2 whitespace-nowrap rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-3 py-2 text-xs leading-4 tracking-tight text-[#1d8e75]">
               <Check className="size-3.5 shrink-0" />
-              Последняя непринятая позиция — машина будет принята полностью (авто,
-              BR-13).
+              Последняя непринятая позиция — машина будет принята полностью.
             </div>
           </div>
         )}

@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { seasonYearOf } from "@/server/shipments/workdays";
+import { stripSeasonPrefix } from "./accepted";
 import type { AcceptanceBoard, AcceptanceMachine } from "./schema";
 
 // Загрузчик доски приёмки (B4b, BR-26). Server-only (тянет prisma) — типы для
@@ -39,6 +41,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
   ]);
 
   const mapMachine = (s: (typeof shipments)[number]): AcceptanceMachine => {
+    const season = seasonYearOf(s.arrival_date ?? s.departure_date ?? new Date());
     const items = s.items.map((it) => ({
       id: it.id,
       cultureName: it.culture.name,
@@ -47,7 +50,9 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       plannedKg: it.planned_weight_kg.toNumber(),
       actualKg: it.actual_weight_kg != null ? it.actual_weight_kg.toNumber() : null,
       accepted: it.acceptanceAct != null,
-      actNumber: it.acceptanceAct?.act_number ?? null,
+      actNumber: it.acceptanceAct
+        ? stripSeasonPrefix(it.acceptanceAct.act_number, season)
+        : null,
     }));
     return {
       id: s.id,

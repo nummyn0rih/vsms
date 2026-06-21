@@ -8,6 +8,7 @@ import { requireRole, AuthError } from "@/server/auth/session";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { seasonYearOf } from "@/server/shipments/workdays";
+import { withSeasonPrefix, stripSeasonPrefix } from "./accepted";
 import {
   saveActSchema,
   revertActSchema,
@@ -157,7 +158,7 @@ export async function getActContext({
     itemLineId: item.contract_line_id,
     existing: item.acceptanceAct
       ? {
-          actNumber: item.acceptanceAct.act_number,
+          actNumber: stripSeasonPrefix(item.acceptanceAct.act_number, season),
           brakPercent:
             item.acceptanceAct.brak_percent != null
               ? item.acceptanceAct.brak_percent.toNumber()
@@ -206,7 +207,14 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
               },
             },
           },
-          shipment: { select: { id: true, status: true } },
+          shipment: {
+            select: {
+              id: true,
+              status: true,
+              arrival_date: true,
+              departure_date: true,
+            },
+          },
           acceptanceAct: { select: { id: true } },
         },
       });
@@ -239,7 +247,8 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       }[] = [];
 
       if (isCalibre) {
-        // Калибр (BR-10): Σ% = 100 от чистого; принятые категории обязаны иметь строку.
+        // Калибр (BR-10, одноступенчато): Σ% категорий + brak% = 100% от факта;
+        // принятые категории обязаны иметь строку.
         const calibres = parsed.data.calibres;
         if (!calibres || calibres.length === 0) {
           return { ok: false as const, error: "Заполните калибровочные категории" };
@@ -252,11 +261,11 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
             return { ok: false as const, error: "Категория не из схемы культуры" };
           }
         }
-        const sum = calibres.reduce((s, c) => s + c.percent, 0);
+        const sum = calibres.reduce((s, c) => s + c.percent, 0) + brakPercent;
         if (Math.abs(sum - 100) > 0.01) {
           return {
             ok: false as const,
-            error: "Сумма категорий должна быть 100% годного (BR-10)",
+            error: "Сумма категорий и брака = 100% факта (BR-10)",
           };
         }
 
@@ -310,16 +319,22 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         resolvedLineId = lineId;
       }
 
+      // № акта уникален в рамках сезона (BR-9): хранится с префиксом года сезона.
+      const refDate =
+        item.shipment.arrival_date ?? item.shipment.departure_date ?? new Date();
+      const season = seasonYearOf(refDate);
+      const storedActNumber = withSeasonPrefix(actNumber, season);
+
       const isNew = item.acceptanceAct == null;
       const act = await tx.acceptanceAct.upsert({
         where: { shipment_item_id: shipmentItemId },
         create: {
           shipment_item_id: shipmentItemId,
-          act_number: actNumber,
+          act_number: storedActNumber,
           brak_percent: new Prisma.Decimal(brakPercent),
         },
         update: {
-          act_number: actNumber,
+          act_number: storedActNumber,
           brak_percent: new Prisma.Decimal(brakPercent),
         },
         select: { id: true },
@@ -338,7 +353,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           entity: ACT,
           entityId: shipmentItemId,
           field: isNew ? "created" : "updated",
-          newValue: actNumber,
+          newValue: storedActNumber,
         },
       ];
 
@@ -384,7 +399,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
     return result;
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { ok: false, error: "№ акта уже занят (BR-9)" };
+      return { ok: false, error: "№ акта занят в этом сезоне (BR-9)" };
     }
     return authFail(e) ?? { ok: false, error: "Не удалось сохранить акт" };
   }

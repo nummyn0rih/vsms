@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { computeAcceptedKg } from "@/server/acceptance/accepted";
 import {
   calcPackagingUnits,
   loadPackagingContext,
@@ -30,6 +31,18 @@ const feedItemInclude = {
   culture: { select: { name: true, color: true } },
   packagingType: { select: { name: true, kind: true } },
   contractLine: { select: { label: true } },
+  // Приёмка по позиции (BR-13): акт + категории для расчёта «к оплате».
+  acceptanceAct: {
+    select: {
+      brak_percent: true,
+      calibreResults: {
+        select: {
+          percent: true,
+          calibreRange: { select: { is_accepted: true } },
+        },
+      },
+    },
+  },
 } as const;
 
 export async function getFeed({
@@ -100,6 +113,19 @@ export async function getFeed({
       tareMissingNorm: calc.status === "missing_norm",
       contractLineId: item.contract_line_id,
       contractLineLabel: item.contractLine?.label ?? null,
+      accepted: item.acceptanceAct != null,
+      acceptedKg: item.acceptanceAct
+        ? computeAcceptedKg(
+            item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
+            item.acceptanceAct.brak_percent != null
+              ? item.acceptanceAct.brak_percent.toNumber()
+              : null,
+            item.acceptanceAct.calibreResults.map((c) => ({
+              percent: c.percent.toNumber(),
+              isAccepted: c.calibreRange.is_accepted,
+            })),
+          )
+        : null,
     };
   }
 

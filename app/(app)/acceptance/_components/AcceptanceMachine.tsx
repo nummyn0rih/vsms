@@ -64,16 +64,24 @@ function TripDates({
   );
 }
 
-export function AcceptanceMachine({ machine }: { machine: Machine }) {
+export function AcceptanceMachine({
+  machine,
+  onOpenAct,
+  pendingId,
+}: {
+  machine: Machine;
+  onOpenAct: (
+    itemId: number,
+    machineId: number,
+    machineStatus: "sent" | "arrived",
+  ) => void;
+  pendingId: number | null;
+}) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canEdit = role === "operator" || role === "admin";
-  const isAdmin = role === "admin";
   const zoneBg = STATUS_STYLE[machine.status].zone;
   const isSent = machine.status === "sent";
-  // «Частично принята» — производное (BR-13): ≥1 акт, но не все. Хранимый статус — arrived.
-  const isPartial =
-    machine.acceptedCount > 0 && machine.acceptedCount < machine.total;
 
   return (
     <div className="flex overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
@@ -82,7 +90,7 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
         className="flex w-[330px] shrink-0 flex-col gap-2 border-r border-[#ebebeb] p-3"
         style={{ backgroundColor: zoneBg }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <StatusBadge status={machine.status} />
           <span className="text-[13px] tracking-tight">
             <TripDates
@@ -90,16 +98,17 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
               arrival={machine.arrivalDate}
             />
           </span>
-          {isPartial && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-[#ffefcf] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#ab570a]">
-              Частично принята · {machine.acceptedCount}/{machine.total}
+          {/* Короткие бейджи в одну строку: взвешено + (если есть акты) принято (фикс 2). */}
+          <div className="ml-auto flex items-center gap-1">
+            <span className="rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+              взвешено · {machine.weighed}/{machine.total}
             </span>
-          )}
-          <span
-            className={`${isPartial ? "" : "ml-auto"} rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground`}
-          >
-            {machine.weighed}/{machine.total} взвешено
-          </span>
+            {machine.acceptedCount > 0 && (
+              <span className="inline-flex items-center rounded-md bg-[#c7f6ea] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#1d8e75]">
+                принято · {machine.acceptedCount}/{machine.total}
+              </span>
+            )}
+          </div>
         </div>
 
         {machine.driverName ? (
@@ -141,7 +150,7 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
             className="grid flex-1 items-center gap-3 border-t border-[#ebebeb] px-4 py-2 first:border-t-0"
             style={{
               gridTemplateColumns:
-                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px 130px 70px",
+                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px 130px 110px",
               backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
@@ -162,9 +171,10 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
                 shipmentItemId={it.id}
                 savedValue={it.actualKg}
                 disabled={!canEdit}
+                locked={it.accepted}
               />
             </span>
-            <span className="flex justify-end">
+            <span className="flex items-center justify-end">
               <ActButton
                 shipmentItemId={it.id}
                 machineId={machine.id}
@@ -172,7 +182,8 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
                 accepted={it.accepted}
                 actNumber={it.actNumber}
                 canEdit={canEdit}
-                isAdmin={isAdmin}
+                pending={pendingId === it.id}
+                onOpenAct={onOpenAct}
               />
             </span>
           </div>

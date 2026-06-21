@@ -1,8 +1,17 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
+
 import type { AcceptanceBoard as Board } from "@/server/acceptance/schema";
+import type { ActContext } from "@/server/acceptance/schema";
+import { markArrived } from "@/server/acceptance/actions";
+import { getActContext } from "@/server/acceptance/act";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AcceptanceMachine } from "./AcceptanceMachine";
+import { AcceptanceActDialog } from "./AcceptanceActDialog";
 
 function ZoneHeader({ title, count }: { title: string; count: number }) {
   return (
@@ -22,6 +31,43 @@ function EmptyZone({ note }: { note: string }) {
 }
 
 export function AcceptanceBoard({ board }: { board: Board }) {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
+
+  // Состояние диалога акта держим ЗДЕСЬ (на доске), не в карточке: markArrived
+  // перетасовывает зоны (sent→arrived), карточка размонтируется — диалог жил бы внутри
+  // и терялся. Доска поверх перетасовки сохраняет состояние (фикс 1).
+  const [actState, setActState] = useState<{
+    context: ActContext;
+    fromSent: boolean;
+  } | null>(null);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+
+  async function onOpenAct(
+    itemId: number,
+    machineId: number,
+    machineStatus: "sent" | "arrived",
+  ) {
+    setPendingId(itemId);
+    const fromSent = machineStatus === "sent";
+    if (fromSent) {
+      const arr = await markArrived({ shipmentId: machineId });
+      if (!arr.ok) {
+        setPendingId(null);
+        toast.error(arr.error);
+        return;
+      }
+    }
+    const ctx = await getActContext({ shipmentItemId: itemId });
+    setPendingId(null);
+    if (!ctx) {
+      toast.error("Позиция не найдена");
+      return;
+    }
+    setActState({ context: ctx, fromSent });
+  }
+
   return (
     <TooltipProvider>
       <div className="flex flex-col gap-8">
@@ -33,7 +79,12 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           ) : (
             <div className="flex flex-col gap-3">
               {board.zone1.map((m) => (
-                <AcceptanceMachine key={m.id} machine={m} />
+                <AcceptanceMachine
+                  key={m.id}
+                  machine={m}
+                  onOpenAct={onOpenAct}
+                  pendingId={pendingId}
+                />
               ))}
             </div>
           )}
@@ -47,7 +98,12 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           ) : (
             <div className="flex flex-col gap-3">
               {board.zone2.map((m) => (
-                <AcceptanceMachine key={m.id} machine={m} />
+                <AcceptanceMachine
+                  key={m.id}
+                  machine={m}
+                  onOpenAct={onOpenAct}
+                  pendingId={pendingId}
+                />
               ))}
             </div>
           )}
@@ -59,6 +115,23 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           <EmptyZone note="Принятые машины появятся здесь (этап C)." />
         </section>
       </div>
+
+      {/* Один диалог акта на доску — переживает перетасовку зон (фикс 1/3). */}
+      {actState && (
+        <AcceptanceActDialog
+          key={actState.context.shipmentItemId}
+          context={actState.context}
+          open
+          onOpenChange={(v) => {
+            if (!v) {
+              setActState(null);
+              router.refresh();
+            }
+          }}
+          openedFromSent={actState.fromSent}
+          isAdmin={isAdmin}
+        />
+      )}
     </TooltipProvider>
   );
 }

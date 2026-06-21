@@ -1,6 +1,6 @@
 "use client";
 
-import type { FeedShipment } from "@/server/shipments/feed";
+import type { FeedItem, FeedShipment } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { StatusBadge, STATUS_STYLE } from "./shipment-status";
@@ -72,32 +72,36 @@ function TripDates({
   );
 }
 
-// № акта / факт перевески по статусу. Реальный акт — этап C; сейчас плейсхолдер.
-// arrived (B4b): есть факт → «факт {вес} кг», иначе «— приёмка».
+// Статус приёмки ПО ПОЗИЦИИ (BR-13, DESIGN §2), независимо от статуса машины. Числа —
+// целые (информативная зона; точные — в статистике). «К оплате» = accepted_weight.
 function ActCell({
   status,
-  actualKg,
+  item,
 }: {
   status: FeedShipment["status"];
-  actualKg: number | null;
+  item: FeedItem;
 }) {
-  if (status === "accepted") {
-    return (
-      <span className="rounded border px-1.5 py-0.5 font-mono text-xs text-foreground">
-        принят
-      </span>
-    );
+  if (status === "planned") {
+    return <span className="text-xs text-muted-foreground">— не отправлена</span>;
   }
-  if (status === "arrived" && actualKg != null) {
-    return (
-      <span className="text-xs tabular-nums text-foreground">
-        факт {formatWeight(actualKg)}
-        <span className="ml-0.5 text-muted-foreground">кг</span>
-      </span>
-    );
+  if (item.actualKg == null) {
+    return <span className="text-xs text-muted-foreground">— приёмка</span>;
   }
-  const text = status === "planned" ? "— не отправлена" : "— приёмка";
-  return <span className="text-xs text-muted-foreground">{text}</span>;
+  return (
+    <span className="whitespace-nowrap text-xs tabular-nums text-foreground">
+      факт {formatWeight(Math.round(item.actualKg))}
+      <span className="ml-0.5 text-muted-foreground">кг</span>
+      {item.accepted && item.acceptedKg != null && (
+        <>
+          <span className="mx-1 text-muted-foreground">·</span>
+          <span className="text-[#1d8e75]">
+            к оплате {formatWeight(Math.round(item.acceptedKg))}
+            <span className="ml-0.5">кг</span>
+          </span>
+        </>
+      )}
+    </span>
+  );
 }
 
 export function MachineRow({
@@ -171,7 +175,7 @@ export function MachineRow({
             className="grid flex-1 items-center gap-3 border-t border-[#ebebeb] px-4 py-2 first:border-t-0"
             style={{
               gridTemplateColumns:
-                "minmax(150px,1.4fr) 110px minmax(160px,1.5fr) 150px minmax(110px,0.9fr)",
+                "minmax(140px,1.2fr) 96px minmax(150px,1.2fr) 128px minmax(184px,1.1fr)",
               backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
@@ -203,7 +207,7 @@ export function MachineRow({
                 ""
               )}
             </span>
-            <ActCell status={shipment.status} actualKg={it.actualKg} />
+            <ActCell status={shipment.status} item={it} />
           </div>
         ))}
       </div>

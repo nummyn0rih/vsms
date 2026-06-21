@@ -25,10 +25,12 @@ export function WeightInput({
   shipmentItemId,
   savedValue,
   disabled,
+  locked,
 }: {
   shipmentItemId: number;
   savedValue: number | null;
   disabled?: boolean;
+  locked?: boolean; // позиция принята: вес зафиксирован актом, правка — через диалог (фикс 4)
 }) {
   const router = useRouter();
   const [value, setValue] = useState(savedValue != null ? String(savedValue) : "");
@@ -44,10 +46,19 @@ export function WeightInput({
     return () => clearTimeout(t);
   }, [status]);
 
-  // Read-only для user: значение или «—», без поля ввода.
+  // Принята (locked) или роль user (disabled): read-only, без поля ввода. Принятый
+  // вес зафиксирован актом — правка только через «Редактировать акт» (фикс 4).
+  // h-8 + justify-end: read-only значение на одной высоте/линии с инпутом соседних строк.
+  if (locked) {
+    return (
+      <span className="flex h-8 items-center justify-end text-sm tabular-nums text-[#888888]">
+        {savedValue != null ? `${formatWeight(savedValue)} кг` : "—"}
+      </span>
+    );
+  }
   if (disabled) {
     return (
-      <span className="text-right text-sm tabular-nums text-muted-foreground">
+      <span className="flex h-8 items-center justify-end text-sm tabular-nums text-muted-foreground">
         {savedValue != null ? `${formatWeight(savedValue)} кг` : "—"}
       </span>
     );

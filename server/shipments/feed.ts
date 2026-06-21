@@ -25,6 +25,8 @@ export type FeedItem = {
   tareMissingNorm: boolean; // тип задан, нормы по тройке нет → UI «?»
   contractLineId: number | null;
   contractLineLabel: string | null;
+  accepted: boolean; // есть AcceptanceAct (BR-13: приёмка по позиции)
+  acceptedKg: number | null; // «к оплате», точное (округление на показе), null если нет акта
 };
 
 export type FeedShipment = {
