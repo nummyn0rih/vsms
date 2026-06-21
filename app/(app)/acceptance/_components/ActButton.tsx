@@ -35,6 +35,9 @@ export function ActButton({
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<ActContext | null>(null);
   const [fromSent, setFromSent] = useState(false);
+  // Счётчик открытий: ключ ремонтирует диалог, чтобы его состояние (вес/№/проценты)
+  // переинициализировалось из свежего контекста при каждом открытии.
+  const [openSeq, setOpenSeq] = useState(0);
 
   // user: только индикатор, без действий.
   if (!canEdit) {
@@ -66,6 +69,7 @@ export function ActButton({
     }
     setContext(ctx);
     setFromSent(openedFromSent);
+    setOpenSeq((s) => s + 1);
     setOpen(true);
   }
 
@@ -97,6 +101,7 @@ export function ActButton({
 
       {context && (
         <AcceptanceActDialog
+          key={openSeq}
           context={context}
           open={open}
           onOpenChange={(v) => {
@@ -104,7 +109,7 @@ export function ActButton({
             if (!v) router.refresh();
           }}
           openedFromSent={fromSent}
-          canRevert={isAdmin}
+          isAdmin={isAdmin}
         />
       )}
     </>

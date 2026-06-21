@@ -55,7 +55,27 @@ export async function getActContext({
       culture_id: true,
       actual_weight_kg: true,
       contract_line_id: true,
-      culture: { select: { name: true, color: true, acceptance_type: true } },
+      culture: {
+        select: {
+          name: true,
+          color: true,
+          acceptance_type: true,
+          calibreScheme: {
+            select: {
+              ranges: {
+                select: {
+                  id: true,
+                  label: true,
+                  min_cm: true,
+                  max_cm: true,
+                  is_accepted: true,
+                },
+                orderBy: { id: "asc" },
+              },
+            },
+          },
+        },
+      },
       farmer: { select: { name: true } },
       shipment: {
         select: {
@@ -73,7 +93,17 @@ export async function getActContext({
         },
       },
       acceptanceAct: {
-        select: { act_number: true, brak_percent: true },
+        select: {
+          act_number: true,
+          brak_percent: true,
+          calibreResults: {
+            select: {
+              calibre_range_id: true,
+              percent: true,
+              contract_line_id: true,
+            },
+          },
+        },
       },
     },
   });
@@ -117,6 +147,14 @@ export async function getActContext({
     })),
     autoLineId: lines.length === 1 ? lines[0].id : null,
     isLastUnaccepted: item.acceptanceAct == null && unaccepted === 1,
+    calibreRanges: (item.culture.calibreScheme?.ranges ?? []).map((r) => ({
+      id: r.id,
+      label: r.label,
+      minCm: r.min_cm != null ? r.min_cm.toString() : null,
+      maxCm: r.max_cm != null ? r.max_cm.toString() : null,
+      isAccepted: r.is_accepted,
+    })),
+    itemLineId: item.contract_line_id,
     existing: item.acceptanceAct
       ? {
           actNumber: item.acceptanceAct.act_number,
@@ -125,13 +163,19 @@ export async function getActContext({
               ? item.acceptanceAct.brak_percent.toNumber()
               : 0,
           contractLineId: item.contract_line_id,
+          calibres: item.acceptanceAct.calibreResults.map((c) => ({
+            calibreRangeId: c.calibre_range_id,
+            percent: c.percent.toNumber(),
+            contractLineId: c.contract_line_id,
+          })),
         }
       : null,
   };
 }
 
-// Приёмка позиции актом (C1a, simple). operator/admin. Принятый вес — производное,
-// не пишем (BR-10). При приёмке ПОСЛЕДНЕЙ позиции машина авто-→accepted (BR-13).
+// Приёмка позиции актом (C1, simple+calibre). operator/admin. Принятый вес —
+// производное, не пишем (BR-10). При приёмке ПОСЛЕДНЕЙ позиции машина авто-→accepted
+// (BR-13). Калибр: Σ% категорий = 100% годного, CalibreResult на каждую категорию.
 export async function saveAct(input: SaveActInput): Promise<ActionResult> {
   try {
     const user = await requireRole("operator", "admin");
@@ -144,7 +188,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
       };
     }
-    const { shipmentItemId, actNumber, brakPercent, contractLineId } = parsed.data;
+    const { shipmentItemId, actNumber, brakPercent } = parsed.data;
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.shipmentItem.findUnique({
@@ -154,6 +198,14 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           culture_id: true,
           actual_weight_kg: true,
           contract_line_id: true,
+          culture: {
+            select: {
+              acceptance_type: true,
+              calibreScheme: {
+                select: { ranges: { select: { id: true, is_accepted: true } } },
+              },
+            },
+          },
           shipment: { select: { id: true, status: true } },
           acceptanceAct: { select: { id: true } },
         },
@@ -165,24 +217,101 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         return { ok: false as const, error: "Сначала внесите фактический вес" };
       }
 
-      // BR-8: строка должна быть того же фермера и культуры (как BR-7 в отгрузках).
-      const line = await tx.contractLine.findUnique({
-        where: { id: contractLineId },
-        select: { culture_id: true, contract: { select: { farmer_id: true } } },
-      });
-      if (!line) return { ok: false as const, error: "Строка контракта не найдена" };
-      if (
-        line.culture_id !== item.culture_id ||
-        line.contract.farmer_id !== item.farmer_id
-      ) {
-        return {
-          ok: false as const,
-          error: "Строка контракта должна быть того же фермера и культуры (BR-8)",
-        };
+      // BR-7: строка должна быть того же фермера и культуры.
+      const lineMatches = async (lineId: number): Promise<boolean> => {
+        const l = await tx.contractLine.findUnique({
+          where: { id: lineId },
+          select: { culture_id: true, contract: { select: { farmer_id: true } } },
+        });
+        return (
+          l != null &&
+          l.culture_id === item.culture_id &&
+          l.contract.farmer_id === item.farmer_id
+        );
+      };
+
+      const isCalibre = item.culture.acceptance_type === "calibre";
+      let resolvedLineId: number | null = null;
+      let calibreData: {
+        calibre_range_id: number;
+        percent: Prisma.Decimal;
+        contract_line_id: number | null;
+      }[] = [];
+
+      if (isCalibre) {
+        // Калибр (BR-10): Σ% = 100 от чистого; принятые категории обязаны иметь строку.
+        const calibres = parsed.data.calibres;
+        if (!calibres || calibres.length === 0) {
+          return { ok: false as const, error: "Заполните калибровочные категории" };
+        }
+        const ranges = item.culture.calibreScheme?.ranges ?? [];
+        const acceptedById = new Map(ranges.map((r) => [r.id, r.is_accepted]));
+
+        for (const c of calibres) {
+          if (!acceptedById.has(c.calibreRangeId)) {
+            return { ok: false as const, error: "Категория не из схемы культуры" };
+          }
+        }
+        const sum = calibres.reduce((s, c) => s + c.percent, 0);
+        if (Math.abs(sum - 100) > 0.01) {
+          return {
+            ok: false as const,
+            error: "Сумма категорий должна быть 100% годного (BR-10)",
+          };
+        }
+
+        let acceptedCount = 0;
+        for (const c of calibres) {
+          const accepted = acceptedById.get(c.calibreRangeId) === true;
+          if (accepted) {
+            acceptedCount++;
+            if (c.contractLineId == null) {
+              return {
+                ok: false as const,
+                error: "Привяжите принятые категории к строке (BR-8)",
+              };
+            }
+            if (!(await lineMatches(c.contractLineId))) {
+              return {
+                ok: false as const,
+                error: "Строка категории — другой культуры/фермера (BR-7)",
+              };
+            }
+            if (resolvedLineId == null) resolvedLineId = c.contractLineId;
+          } else if (c.contractLineId != null) {
+            if (!(await lineMatches(c.contractLineId))) {
+              return {
+                ok: false as const,
+                error: "Строка категории — другой культуры/фермера (BR-7)",
+              };
+            }
+          }
+        }
+        if (acceptedCount === 0) {
+          return { ok: false as const, error: "Нужна хотя бы одна принятая категория" };
+        }
+        calibreData = calibres.map((c) => ({
+          calibre_range_id: c.calibreRangeId,
+          percent: new Prisma.Decimal(c.percent),
+          contract_line_id: c.contractLineId,
+        }));
+      } else {
+        // simple (BR-8): одна строка на позицию.
+        const lineId = parsed.data.contractLineId;
+        if (lineId == null) {
+          return { ok: false as const, error: "Выберите строку контракта (BR-8)" };
+        }
+        if (!(await lineMatches(lineId))) {
+          return {
+            ok: false as const,
+            error: "Строка контракта должна быть того же фермера и культуры (BR-8)",
+          };
+        }
+        resolvedLineId = lineId;
       }
 
       const isNew = item.acceptanceAct == null;
-      await tx.acceptanceAct.upsert({
+      const act = await tx.acceptanceAct.upsert({
         where: { shipment_item_id: shipmentItemId },
         create: {
           shipment_item_id: shipmentItemId,
@@ -193,7 +322,16 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           act_number: actNumber,
           brak_percent: new Prisma.Decimal(brakPercent),
         },
+        select: { id: true },
       });
+
+      // Калибр: полная замена результатов категорий.
+      if (isCalibre) {
+        await tx.calibreResult.deleteMany({ where: { acceptance_act_id: act.id } });
+        await tx.calibreResult.createMany({
+          data: calibreData.map((d) => ({ acceptance_act_id: act.id, ...d })),
+        });
+      }
 
       const entries = [
         {
@@ -204,18 +342,19 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         },
       ];
 
-      // BR-8: фиксируем привязку строки на позиции, если изменилась.
-      if (item.contract_line_id !== contractLineId) {
+      // BR-8: фиксируем привязку строки на позиции, если изменилась. Для калибра —
+      // строка первой принятой категории (выполнение C3 читает CalibreResult).
+      if (item.contract_line_id !== resolvedLineId) {
         await tx.shipmentItem.update({
           where: { id: shipmentItemId },
-          data: { contract_line_id: contractLineId },
+          data: { contract_line_id: resolvedLineId },
         });
         entries.push({
           entity: ITEM,
           entityId: shipmentItemId,
           field: "contract_line_id",
           oldValue: item.contract_line_id != null ? String(item.contract_line_id) : null,
-          newValue: String(contractLineId),
+          newValue: resolvedLineId != null ? String(resolvedLineId) : null,
         } as (typeof entries)[number]);
       }
 
