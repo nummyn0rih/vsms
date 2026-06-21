@@ -5,10 +5,11 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole, AuthError } from "@/server/auth/session";
-import { logChange } from "@/server/changelog";
+import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { seasonYearOf } from "@/server/shipments/workdays";
 import { withSeasonPrefix, stripSeasonPrefix } from "./accepted";
+import { calcIngredientConsumption } from "./ingredients";
 import {
   saveActSchema,
   revertActSchema,
@@ -391,6 +392,60 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         } as (typeof entries)[number]);
       }
 
+      // C2 (BR-4): авто-расход ингредиентов по рецептуре культуры. База = ФАКТ
+      // перевески (item.actual_weight_kg, не null по BR-25 выше). Списание у фермера
+      // позиции (from=farmer, to=null — уходит в производство). Идемпотентно:
+      // actual_weight у принятой позиции read-only, расход инвариантен — повторный
+      // saveAct не дублирует движения. Культура без рецептуры → движений нет.
+      const recipe = await tx.ingredientRecipe.findMany({
+        where: { culture_id: item.culture_id },
+        select: { ingredient_id: true, qty_per_kg_product: true },
+      });
+      let movementsCount = 0;
+      const already = await tx.stockMovement.count({
+        where: {
+          source_doc_type: "acceptance_act",
+          source_doc_id: act.id,
+          kind: "ingredient",
+        },
+      });
+      if (already === 0) {
+        const consumption = calcIngredientConsumption(
+          item.actual_weight_kg,
+          recipe.map((r) => ({
+            ingredientId: r.ingredient_id,
+            qtyPerKgProduct: r.qty_per_kg_product,
+          })),
+        );
+        if (consumption.length > 0) {
+          await tx.stockMovement.createMany({
+            data: consumption.map((m) => ({
+              date: refDate,
+              kind: "ingredient" as const,
+              ingredient_id: m.ingredientId,
+              quantity: m.quantity,
+              from_location_id: item.farmer_id,
+              to_location_id: null,
+              from_state: null,
+              to_state: null,
+              movement_type: "consumption" as const,
+              source_doc_type: "acceptance_act" as const,
+              source_doc_id: act.id,
+            })),
+          });
+          movementsCount = consumption.length;
+        }
+      }
+      entries.push({
+        entity: ACT,
+        entityId: shipmentItemId,
+        field: "movements",
+        newValue:
+          already > 0
+            ? "расход ингр.: 0 движ. (уже списано)"
+            : `расход ингр.: ${movementsCount} движ.`,
+      } as (typeof entries)[number]);
+
       await logChange(entries, Number(user.id), tx);
       return { ok: true as const };
     });
@@ -421,21 +476,73 @@ export async function revertAct(input: {
       const item = await tx.shipmentItem.findUnique({
         where: { id: shipmentItemId },
         select: {
+          farmer_id: true,
           shipment: { select: { id: true, status: true } },
-          acceptanceAct: { select: { act_number: true } },
+          acceptanceAct: { select: { id: true, act_number: true } },
         },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
       if (item.acceptanceAct == null) return { ok: true as const }; // идемпотентно
+      const act = item.acceptanceAct;
+
+      // C2: сторно расхода ингредиентов ДО удаления акта. Исходные движения НЕ трогаем
+      // (аудит). Сторнируем НЕТТО по (ingredient_id × фермер): оригинал (from=farmer,
+      // to=null) плюс, уже созданное сторно (from=null, to=farmer) минус — повторный
+      // откат даёт нетто 0 (идемпотентно). Паттерн revertShipmentToPlanned.
+      const movements = await tx.stockMovement.findMany({
+        where: {
+          source_doc_type: "acceptance_act",
+          source_doc_id: act.id,
+          kind: "ingredient",
+        },
+      });
+      const net = new Map<string, { ingredientId: number; farmerId: number; qty: Prisma.Decimal }>();
+      for (const m of movements) {
+        const isOriginal = m.to_location_id == null;
+        const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
+        if (m.ingredient_id == null || farmerId == null) continue;
+        const key = `${m.ingredient_id}:${farmerId}`;
+        const cur = net.get(key) ?? {
+          ingredientId: m.ingredient_id,
+          farmerId,
+          qty: new Prisma.Decimal(0),
+        };
+        cur.qty = isOriginal ? cur.qty.plus(m.quantity) : cur.qty.minus(m.quantity);
+        net.set(key, cur);
+      }
+      const storno = [...net.values()].filter((g) => g.qty.gt(0));
+      if (storno.length > 0) {
+        await tx.stockMovement.createMany({
+          data: storno.map((g) => ({
+            date: new Date(),
+            kind: "ingredient" as const,
+            ingredient_id: g.ingredientId,
+            quantity: g.qty,
+            from_location_id: null,
+            to_location_id: g.farmerId,
+            from_state: null,
+            to_state: null,
+            movement_type: "consumption" as const,
+            source_doc_type: "acceptance_act" as const,
+            source_doc_id: act.id,
+          })),
+        });
+      }
 
       await tx.acceptanceAct.delete({ where: { shipment_item_id: shipmentItemId } });
 
-      const entries = [
+      const entries: ChangeEntry[] = [
         {
           entity: ACT,
           entityId: shipmentItemId,
           field: "deleted",
-          oldValue: item.acceptanceAct.act_number,
+          oldValue: act.act_number,
+        },
+        {
+          entity: ACT,
+          entityId: shipmentItemId,
+          field: "storno",
+          newValue: `сторно ингр.: ${storno.length} групп`,
         },
       ];
 

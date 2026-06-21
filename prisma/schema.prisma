@@ -61,6 +61,7 @@ enum MovementType {
   scrap // годная→лом, та же локация
   disposal // лом→out, утилизация
   adjustment // ручная правка
+  consumption // расход ингредиента в производство, авто из AcceptanceAct
 }
 
 // Состояние тары. Лом — это СОСТОЯНИЕ, не локация (DOMAIN.md разд. 3).
@@ -75,6 +76,7 @@ enum SourceDocType {
   shipment
   material_shipment
   manual
+  acceptance_act
 }
 
 // =====================================================================
@@ -450,7 +452,7 @@ model StockMovement {
   packaging_type_id Int?
   ingredient_id     Int?
 
-  quantity Decimal @db.Decimal(12, 3)
+  quantity Decimal @db.Decimal(15, 6)
 
   // Локации — НЕ FK на отдельную таблицу. Локация = завод (фикс. id=0) ∪ Farmer.id.
   // null = вне системы (например, утиль наружу). Лом/утиль — НЕ локации.
