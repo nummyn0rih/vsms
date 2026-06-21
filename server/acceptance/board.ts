@@ -19,6 +19,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
           include: {
             culture: { select: { name: true, color: true } },
             farmer: { select: { name: true } },
+            acceptanceAct: { select: { act_number: true } },
           },
           orderBy: { id: "asc" },
         },
@@ -45,6 +46,8 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       farmerName: it.farmer.name,
       plannedKg: it.planned_weight_kg.toNumber(),
       actualKg: it.actual_weight_kg != null ? it.actual_weight_kg.toNumber() : null,
+      accepted: it.acceptanceAct != null,
+      actNumber: it.acceptanceAct?.act_number ?? null,
     }));
     return {
       id: s.id,
@@ -58,6 +61,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       driverInfo: s.driver?.info ?? null,
       comment: s.comment,
       weighed: items.filter((i) => i.actualKg != null).length,
+      acceptedCount: items.filter((i) => i.accepted).length,
       total: items.length,
       items,
     };

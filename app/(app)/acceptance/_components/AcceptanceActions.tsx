@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MapPin, FileText } from "lucide-react";
+import { MapPin } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { markArrived } from "@/server/acceptance/actions";
@@ -36,24 +36,5 @@ export function MarkArrivedButton({
     <Button variant="outline" size="sm" onClick={onClick} disabled={busy}>
       <MapPin className="size-3.5" /> Отметить прибытие
     </Button>
-  );
-}
-
-// «Акт» — позиционная заглушка (этап C: приёмка с актом). disabled + CSS-тултип
-// (как у SendShipmentButton, без TooltipProvider). Приёмка позиционная (BR-13/26):
-// кнопка живёт в строке позиции arrived-машины, не на машине.
-export function ActButtonStub() {
-  return (
-    <div className="group relative inline-flex">
-      <button
-        aria-disabled="true"
-        className="inline-flex h-7 cursor-not-allowed items-center gap-1.5 rounded-md border border-[#ebebeb] bg-[#f1f1f1] px-2.5 text-[0.8rem] font-medium tracking-tight text-[#888]"
-      >
-        <FileText className="size-3.5" /> Акт
-      </button>
-      <span className="pointer-events-none absolute bottom-[calc(100%+7px)] right-0 hidden whitespace-nowrap rounded-md bg-[#171717] px-[10px] py-[7px] text-xs leading-4 text-white group-hover:block">
-        Приёмка с актом — этап C
-      </span>
-    </div>
   );
 }

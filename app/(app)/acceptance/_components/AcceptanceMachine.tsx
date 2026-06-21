@@ -11,7 +11,8 @@ import {
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import { DriverModal } from "@/app/(app)/shipments/_components/DriverModal";
 import { WeightInput } from "./WeightInput";
-import { MarkArrivedButton, ActButtonStub } from "./AcceptanceActions";
+import { MarkArrivedButton } from "./AcceptanceActions";
+import { ActButton } from "./ActButton";
 
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -67,8 +68,12 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canEdit = role === "operator" || role === "admin";
+  const isAdmin = role === "admin";
   const zoneBg = STATUS_STYLE[machine.status].zone;
   const isSent = machine.status === "sent";
+  // «Частично принята» — производное (BR-13): ≥1 акт, но не все. Хранимый статус — arrived.
+  const isPartial =
+    machine.acceptedCount > 0 && machine.acceptedCount < machine.total;
 
   return (
     <div className="flex overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
@@ -85,7 +90,14 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
               arrival={machine.arrivalDate}
             />
           </span>
-          <span className="ml-auto rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+          {isPartial && (
+            <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-[#ffefcf] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#ab570a]">
+              Частично принята · {machine.acceptedCount}/{machine.total}
+            </span>
+          )}
+          <span
+            className={`${isPartial ? "" : "ml-auto"} rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground`}
+          >
             {machine.weighed}/{machine.total} взвешено
           </span>
         </div>
@@ -153,7 +165,15 @@ export function AcceptanceMachine({ machine }: { machine: Machine }) {
               />
             </span>
             <span className="flex justify-end">
-              <ActButtonStub />
+              <ActButton
+                shipmentItemId={it.id}
+                machineId={machine.id}
+                machineStatus={machine.status}
+                accepted={it.accepted}
+                actNumber={it.actNumber}
+                canEdit={canEdit}
+                isAdmin={isAdmin}
+              />
             </span>
           </div>
         ))}

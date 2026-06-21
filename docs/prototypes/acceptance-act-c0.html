@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Акт приёмки позиции</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --link-bg-tint: #eaf2ff;
+    --error: #ee0000;
+    --error-soft: #f7d4d6;
+    --error-deep: #c50000;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --success: #1d8e75;
+    --success-soft: #ddfff7;
+    --success-soft-2: #c7f6ea;
+
+    /* culture colors (in production come from Culture.color) */
+    --cult-tomato: #d4322c;
+    --cult-cucumber: #1d8e75;
+    --cult-pepper: #e8830c;
+    --cult-squash: #7928ca;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #f1f1f1 0%, transparent 55%),
+      var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+    min-height: 100vh;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- page scaffold ---------- */
+  .wrap { max-width: 1680px; margin-inline: auto; padding: 40px 32px 80px; }
+  .page-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 6px; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 6px 0 0; color: var(--body); font-size: 14px; letter-spacing: -0.02em; max-width: 760px; line-height: 21px; }
+  .page-sub code { font-family: "Geist Mono", monospace; font-size: 12.5px; background: var(--canvas-soft-2); padding: 1px 5px; border-radius: 4px; letter-spacing: 0; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(490px, 1fr)); gap: 26px; margin-top: 34px; align-items: start; }
+
+  .stage {
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(23,23,23,0.05), rgba(23,23,23,0.10));
+    padding: 28px 24px 32px;
+    display: flex; flex-direction: column; align-items: center; gap: 18px;
+  }
+  .stage-cap { align-self: flex-start; display: flex; align-items: baseline; gap: 9px; }
+  .stage-cap .n { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); letter-spacing: 0; }
+  .stage-cap .t { font-size: 12.5px; color: var(--body); letter-spacing: -0.01em; }
+
+  /* ---------- modal / form ---------- */
+  .modal {
+    width: 100%; max-width: 484px;
+    background: var(--canvas); border-radius: 8px;
+    border: 1px solid var(--hairline);
+    box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 40px -10px #0000001f;
+    overflow: hidden;
+  }
+  .modal.wide { max-width: 484px; }
+
+  .m-head { padding: 18px 20px 16px; border-bottom: 1px solid var(--hairline); display: flex; align-items: flex-start; gap: 12px; }
+  .m-head-txt { flex: 1; min-width: 0; }
+  .m-title-row { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .m-title { font-size: 18px; font-weight: 600; letter-spacing: -0.035em; margin: 0; line-height: 24px; }
+  .m-actno { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); letter-spacing: 0; background: var(--canvas-soft-2); padding: 2px 7px; border-radius: 5px; }
+  .m-ctx { margin: 8px 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13px; color: var(--body); letter-spacing: -0.02em; }
+  .m-ctx .cult { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); }
+  .m-ctx .cult .chip { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .m-ctx .sep { color: var(--hairline-strong); }
+  .m-ctx .farmer { display: inline-flex; align-items: center; gap: 5px; }
+  .m-ctx .farmer svg { width: 12px; height: 12px; color: var(--mute); }
+  .m-ctx .mach { color: var(--mute); display: inline-flex; align-items: center; gap: 5px; }
+  .m-ctx .mach svg { width: 12px; height: 12px; }
+  .m-x { width: 28px; height: 28px; flex-shrink: 0; border: 0; background: transparent; border-radius: 6px; color: var(--mute); cursor: pointer; display: grid; place-items: center; }
+  .m-x:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .m-x svg { width: 16px; height: 16px; }
+
+  .m-body { padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 15px; }
+
+  /* arrival banner (opened from sent zone) */
+  .banner {
+    display: flex; align-items: flex-start; gap: 9px;
+    background: var(--link-bg-tint); border: 1px solid #cfe1ff; border-radius: 8px;
+    padding: 9px 12px; font-size: 12.5px; color: var(--link-deep); line-height: 17px; letter-spacing: -0.01em;
+  }
+  .banner svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+  .banner b { font-weight: 600; }
+
+  /* ---------- field ---------- */
+  .fld { display: flex; flex-direction: column; gap: 7px; }
+  .fld-lab { display: flex; align-items: baseline; gap: 8px; }
+  .fld-lab .k { font-size: 13px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
+  .fld-lab .req { font-size: 11px; color: var(--mute); letter-spacing: -0.01em; }
+  .fld-lab .req b { color: var(--error-deep); font-weight: 500; }
+  .fld-lab .src { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: var(--link-bg-tint); color: var(--link-deep); display: inline-flex; align-items: center; gap: 4px; }
+  .fld-lab .src svg { width: 10px; height: 10px; }
+  .fld-lab .src.manual { background: var(--canvas-soft-2); color: var(--body); }
+  .fld-hint { font-size: 11.5px; color: var(--mute); letter-spacing: -0.01em; line-height: 16px; margin: -1px 0 0; }
+
+  /* generic control box */
+  .ctl {
+    position: relative; display: flex; align-items: center;
+    height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas);
+    padding: 0 12px; transition: border-color .12s, box-shadow .12s;
+  }
+  .ctl:hover { border-color: var(--hairline-strong); }
+  .ctl.focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .ctl input { border: 0; outline: 0; background: transparent; font: inherit; width: 100%; color: var(--ink); letter-spacing: -0.01em; }
+  .ctl input::placeholder { color: var(--mute); }
+  .ctl .unit { font-size: 13px; color: var(--mute); margin-left: 6px; flex-shrink: 0; }
+  .ctl.mono input { font-family: "Geist Mono", monospace; letter-spacing: 0; }
+
+  /* weight: large numeric */
+  .ctl.weight { height: 48px; }
+  .ctl.weight input { font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: left; }
+  .ctl.weight .unit { font-size: 14px; }
+  .ctl.empty input { color: var(--mute); }
+  .ctl.err { border-color: var(--error); }
+  .ctl.err.focus, .ctl.err:hover { border-color: var(--error); box-shadow: 0 0 0 1px var(--error-soft); }
+  .ctl .err-ico { width: 15px; height: 15px; color: var(--error); flex-shrink: 0; margin-left: 6px; }
+
+  /* two-up row */
+  .row2 { display: grid; grid-template-columns: 1fr 132px; gap: 12px; align-items: end; }
+  .ctl.pct { justify-content: flex-end; }
+  .ctl.pct input { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---------- contract line binding ---------- */
+  .line {
+    display: flex; align-items: center; gap: 10px;
+    height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas);
+    padding: 0 10px 0 12px; cursor: pointer; transition: border-color .12s;
+  }
+  .line:hover { border-color: var(--hairline-strong); }
+  .line .ln-cult { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+  .line .ln-cult .chip { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .line .ln-name { font-size: 13.5px; color: var(--ink); letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .line .ln-price { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 12.5px; color: var(--body); letter-spacing: 0; flex-shrink: 0; }
+  .line .caret { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+  .line.auto { cursor: default; background: var(--canvas-soft); }
+  .line.auto:hover { border-color: var(--hairline); }
+  .line.auto .tag { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--mute); }
+  .line.auto .ln-price { margin-left: 0; }
+  .line.err { border-color: var(--error); }
+  .line.placeholder .ln-name { color: var(--mute); }
+
+  /* ---------- result strip (accepted weight) ---------- */
+  .result { border: 1px solid var(--success-soft-2); border-radius: 8px; overflow: hidden; }
+  .result-main { background: var(--success-soft); padding: 12px 14px; display: flex; align-items: baseline; gap: 12px; }
+  .result-main .lab { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--success); align-self: center; }
+  .result-main .val { margin-left: auto; font-size: 22px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+  .result-main .val .u { font-size: 14px; font-weight: 400; color: var(--body); margin-left: 3px; }
+  .result-main .val .acc { display: block; text-align: right; font-size: 10.5px; font-weight: 400; color: var(--success); letter-spacing: 0; margin-top: 4px; }
+  .result-formula { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); letter-spacing: 0; padding: 8px 14px; border-top: 1px solid var(--success-soft-2); background: var(--canvas); }
+  .result.muted { border-color: var(--hairline); }
+  .result.muted .result-main { background: var(--canvas-soft); }
+  .result.muted .lab { color: var(--mute); }
+  .result.muted .val { color: var(--mute); }
+  .result.muted .result-formula { border-top-color: var(--hairline); }
+
+  /* sub result (годное, after brak) */
+  .subval { display: flex; align-items: baseline; gap: 10px; padding: 9px 12px; background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 7px; }
+  .subval .lab { font-size: 12.5px; color: var(--body); letter-spacing: -0.02em; }
+  .subval .lab .q { color: var(--mute); }
+  .subval .val { margin-left: auto; flex-shrink: 0; white-space: nowrap; font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .subval .fx { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .subval .val .u { font-size: 12px; font-weight: 400; color: var(--mute); margin-left: 2px; }
+  .subval .fx { font-family: "Geist Mono", monospace; font-size: 10.5px; color: var(--mute); letter-spacing: 0; }
+
+  /* ---------- calibre table ---------- */
+  .cal-cap { display: flex; align-items: baseline; gap: 8px; }
+  .cal-cap .k { font-size: 13px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
+  .cal-cap .q { font-size: 11.5px; color: var(--mute); }
+  .cal { border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
+  table.cal-t { width: 100%; border-collapse: collapse; }
+  table.cal-t thead th {
+    font-family: "Geist Mono", monospace; font-size: 9.5px; font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--mute); text-align: left; padding: 8px 10px; background: var(--canvas-soft); border-bottom: 1px solid var(--hairline); white-space: nowrap;
+  }
+  table.cal-t thead th.c { text-align: right; }
+  table.cal-t tbody td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+  table.cal-t tbody tr:hover td { background: var(--canvas-soft); }
+  .cat { display: flex; flex-direction: column; gap: 3px; }
+  .cat .rng { font-size: 13.5px; font-weight: 500; color: var(--ink); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .cat .badge { font-size: 10px; padding: 1px 7px; border-radius: 999px; width: fit-content; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 4px; }
+  .badge.acc { background: var(--success-soft); color: var(--success); }
+  .badge.non { background: var(--canvas-soft-2); color: var(--body); }
+  .badge .d { width: 5px; height: 5px; border-radius: 999px; }
+  .badge.acc .d { background: var(--success); }
+  .badge.non .d { background: var(--hairline-strong); }
+
+  /* percent cell */
+  td.pct-cell { width: 96px; }
+  .pctbox { position: relative; display: flex; align-items: center; height: 34px; width: 84px; margin-left: auto; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); padding: 0 9px; }
+  .pctbox:hover { border-color: var(--hairline-strong); }
+  .pctbox.focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+  .pctbox input { border: 0; outline: 0; background: transparent; font: inherit; width: 100%; text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .pctbox .u { font-size: 12px; color: var(--mute); margin-left: 3px; }
+
+  /* binding cell (compact line) */
+  td.bind-cell { width: 178px; }
+  .line.sm { height: 34px; padding: 0 8px 0 10px; gap: 7px; }
+  .line.sm .ln-name { font-size: 12.5px; }
+  .line.sm .ln-price { display: none; }
+  .line.sm .caret { width: 13px; height: 13px; }
+  .line.sm.placeholder { border-color: var(--error); }
+
+  /* sum footer */
+  table.cal-t tfoot td { padding: 10px; background: var(--canvas-soft); }
+  .sum-row { display: flex; align-items: center; gap: 9px; }
+  .sum-row .lab { font-size: 12.5px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em; }
+  .sum-row .sub { font-size: 11px; color: var(--mute); }
+  .sum-row .val { margin-left: auto; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 7px; }
+  .sum-row .val.ok { color: var(--success); }
+  .sum-row .val.bad { color: var(--error-deep); }
+  .sum-row .val svg { width: 14px; height: 14px; }
+  .sum-row .target { color: var(--mute); font-weight: 400; }
+
+  /* nonstandard line */
+  .nonstd { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px dashed var(--hairline-strong); border-radius: 7px; background: var(--canvas); }
+  .nonstd .lab { font-size: 12.5px; color: var(--body); letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; }
+  .nonstd .lab .d { width: 6px; height: 6px; border-radius: 999px; background: var(--hairline-strong); }
+  .nonstd .val { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .nonstd .val .u { font-size: 11px; font-weight: 400; color: var(--mute); margin-left: 2px; }
+  .nonstd .tag { font-size: 10.5px; color: var(--mute); letter-spacing: -0.01em; }
+
+  /* ---------- error block (blocking) ---------- */
+  .errbox { border: 1px solid var(--error-soft); border-radius: 8px; overflow: hidden; background: #fff7f7; }
+  .errbox-head { display: flex; align-items: center; gap: 9px; padding: 10px 13px; }
+  .errbox-head svg { width: 15px; height: 15px; color: var(--error); flex-shrink: 0; }
+  .errbox-head .et { font-size: 12.5px; font-weight: 600; color: var(--error-deep); letter-spacing: -0.02em; }
+  .err-list { display: flex; flex-direction: column; padding: 0 13px 6px 13px; }
+  .err-item { display: flex; align-items: center; gap: 8px; padding: 6px 0 6px 24px; font-size: 12.5px; color: var(--ink); letter-spacing: -0.02em; position: relative; }
+  .err-item + .err-item { border-top: 1px dashed var(--error-soft); }
+  .err-item::before { content: ""; position: absolute; left: 6px; top: 50%; transform: translateY(-50%); width: 5px; height: 5px; border-radius: 999px; background: var(--error); }
+  .err-item .br { color: var(--mute); margin-left: auto; font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; }
+
+  /* ---------- footer ---------- */
+  .m-foot { display: flex; gap: 8px; padding: 14px 20px 18px; border-top: 1px solid var(--hairline); }
+  .m-foot .btn { flex: 1; justify-content: center; }
+  .btn {
+    height: 40px; padding: 0 16px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 0 1px 2px #0000001f; }
+  .btn-primary:hover { background: #000; }
+  .btn-secondary { color: var(--body); }
+  .btn-wrap { flex: 1; position: relative; display: flex; }
+  .btn-wrap .btn { flex: 1; }
+  .btn.disabled { background: #f1f1f1; color: var(--mute); border-color: var(--hairline); box-shadow: none; cursor: not-allowed; }
+  .btn.disabled svg { opacity: .6; }
+  .tip {
+    position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; font-size: 12px; letter-spacing: -0.01em; line-height: 16px;
+    padding: 8px 11px; border-radius: 6px; text-align: center; width: 230px;
+    box-shadow: 0 8px 16px -6px #0000004d; pointer-events: none;
+    opacity: 0; visibility: hidden; transition: opacity .12s;
+  }
+  .tip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: var(--ink); }
+  .btn-wrap:hover .tip { opacity: 1; visibility: visible; }
+
+  /* footer note (machine fully accepted hint) */
+  .foot-note { padding: 0 20px 16px; margin-top: -2px; }
+  .foot-note .n { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--success); letter-spacing: -0.01em; background: var(--success-soft); border: 1px solid var(--success-soft-2); border-radius: 7px; padding: 8px 11px; line-height: 16px; }
+  .foot-note .n svg { width: 14px; height: 14px; flex-shrink: 0; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="330" y="170" width="540" height="460" rx="16" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <path d="M380 230 L404 278 H356 Z" fill="#1d8e75"/>
+    <rect x="380" y="320" width="440" height="46" rx="8" fill="#fafafa" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="380" y="386" width="440" height="74" rx="8" fill="#ddfff7" stroke="#c7f6ea" stroke-width="3"/>
+    <rect x="380" y="556" width="200" height="50" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="620" y="556" width="200" height="50" rx="8" fill="#171717"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="wrap">
+  <p class="page-eyebrow">VSMS · Вкладка «Приёмка» · форма акта</p>
+  <h1 class="page-title">Акт приёмки позиции</h1>
+  <p class="page-sub">Диалог приёмки одной партии (<code>ShipmentItem</code>), открывается кнопкой «Акт» на позиции <code>arrived+</code>. Два режима по типу культуры: <b>simple</b> (брак% → принятый вес) и <b>calibre</b> — двухступенчато (брак% → раскладка <i>годного</i> по размерным категориям, BR-10). Стиль наследует модалку подтверждения отгрузки. Принятый вес — производное, не хранится.</p>
+
+  <div class="grid">
+
+    <!-- ============================================================ -->
+    <!-- STATE 1 — SIMPLE · вес автоподставлен (перевеска) -->
+    <!-- ============================================================ -->
+    <div class="stage">
+      <div class="stage-cap"><span class="n">01</span><span class="t">simple · вес из перевески · последняя позиция машины</span></div>
+
+      <div class="modal" data-screen-label="Акт · simple · вес авто">
+        <div class="m-head">
+          <div class="m-head-txt">
+            <div class="m-title-row">
+              <h2 class="m-title">Акт приёмки</h2>
+            </div>
+            <div class="m-ctx">
+              <span class="cult"><span class="chip" style="background: var(--cult-tomato)"></span>Томаты</span>
+              <span class="sep">·</span>
+              <span class="farmer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>ИП Ковальчук</span>
+              <span class="sep">·</span>
+              <span class="mach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>10&nbsp;июня · Коваль&nbsp;Р.&nbsp;С. · Юг-Логистик</span>
+            </div>
+          </div>
+          <button class="m-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+
+        <div class="m-body">
+          <!-- № акта -->
+          <div class="fld">
+            <div class="fld-lab"><span class="k">№ акта (партии)</span><span class="req">присваивается на заводе · <b>обязателен</b></span></div>
+            <div class="ctl mono"><input value="П-0610-021" /></div>
+          </div>
+
+          <!-- фактический вес (авто) -->
+          <div class="fld">
+            <div class="fld-lab"><span class="k">Фактический вес</span><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>из перевески</span></div>
+            <div class="ctl weight"><input class="tnum" value="13 945" /><span class="unit">кг</span></div>
+            <p class="fld-hint">Сплошная перевеска на воротах (B4b). База для брака и расхода ингредиентов.</p>
+          </div>
+
+          <!-- % брака + привязка -->
+          <div class="row2">
+            <div class="fld">
+              <div class="fld-lab"><span class="k">Строка контракта</span></div>
+              <div class="line auto">
+                <span class="ln-cult"><span class="chip" style="background: var(--cult-tomato)"></span><span class="ln-name">Томаты · стандарт</span></span>
+                <span class="ln-price">38&nbsp;₽/кг</span>
+                <span class="tag">авто</span>
+              </div>
+            </div>
+            <div class="fld">
+              <div class="fld-lab"><span class="k">% брака</span></div>
+              <div class="ctl pct"><input class="tnum" value="4" /><span class="unit">%</span></div>
+            </div>
+          </div>
+          <p class="fld-hint" style="margin-top:-7px">Единственная строка культуры — привязана автоматически (BR-8). Брак — статистический, % от факта (BR-2).</p>
+
+          <!-- принятый вес -->
+          <div class="result">
+            <div class="result-main">
+              <span class="lab">Принятый вес</span>
+              <span class="val tnum">13 387<span class="u">кг</span><span class="acc">пойдёт в выполнение строки</span></span>
+            </div>
+            <div class="result-formula">13 945 кг × (1 − 0,04) = 13 387 кг</div>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <button class="btn btn-secondary">Отмена</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Принять</button>
+        </div>
+        <div class="foot-note">
+          <div class="n"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>Последняя непринятая позиция — машина будет принята полностью (авто, BR-13).</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- STATE 2 — SIMPLE · вес вводится здесь (бочки) -->
+    <!-- ============================================================ -->
+    <div class="stage">
+      <div class="stage-cap"><span class="n">02</span><span class="t">simple · вес вносится в акте · открыт из зоны «sent»</span></div>
+
+      <div class="modal" data-screen-label="Акт · simple · вес вручную">
+        <div class="m-head">
+          <div class="m-head-txt">
+            <div class="m-title-row">
+              <h2 class="m-title">Акт приёмки</h2>
+            </div>
+            <div class="m-ctx">
+              <span class="cult"><span class="chip" style="background: var(--cult-squash)"></span>Патиссоны</span>
+              <span class="sep">·</span>
+              <span class="farmer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>ООО Юг-Агро</span>
+              <span class="sep">·</span>
+              <span class="mach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>11&nbsp;июня · Сидоренко&nbsp;П. · Агро-Транс</span>
+            </div>
+          </div>
+          <button class="m-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+
+        <div class="m-body">
+          <!-- arrival banner (sent zone) -->
+          <div class="banner">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+            <span>Машина отмечена <b>прибывшей</b> — приёмка с этой позиции (<code style="font-family:'Geist Mono',monospace;font-size:11px">sent → arrived</code>, BR-24).</span>
+          </div>
+
+          <div class="fld">
+            <div class="fld-lab"><span class="k">№ акта (партии)</span><span class="req">присваивается на заводе · <b>обязателен</b></span></div>
+            <div class="ctl mono"><input value="П-0611-014" /></div>
+          </div>
+
+          <!-- вес — введён вручную -->
+          <div class="fld">
+            <div class="fld-lab"><span class="k">Фактический вес</span><span class="src manual">вводится здесь</span></div>
+            <div class="ctl weight focus"><input class="tnum" value="8 600" /><span class="unit">кг</span></div>
+            <p class="fld-hint">Сырьё не перевешивали заранее на воротах. Запись пишет то же поле <code style="font-family:'Geist Mono',monospace;font-size:11px">actual_weight_kg</code> (один источник, BR-25).</p>
+          </div>
+
+          <div class="row2">
+            <div class="fld">
+              <div class="fld-lab"><span class="k">Строка контракта</span></div>
+              <div class="line auto">
+                <span class="ln-cult"><span class="chip" style="background: var(--cult-squash)"></span><span class="ln-name">Патиссоны · маринад</span></span>
+                <span class="ln-price">31&nbsp;₽/кг</span>
+                <span class="tag">авто</span>
+              </div>
+            </div>
+            <div class="fld">
+              <div class="fld-lab"><span class="k">% брака</span></div>
+              <div class="ctl pct"><input class="tnum" value="2" /><span class="unit">%</span></div>
+            </div>
+          </div>
+
+          <div class="result">
+            <div class="result-main">
+              <span class="lab">Принятый вес</span>
+              <span class="val tnum">8 428<span class="u">кг</span><span class="acc">пойдёт в выполнение строки</span></span>
+            </div>
+            <div class="result-formula">8 600 кг × (1 − 0,02) = 8 428 кг</div>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <button class="btn btn-secondary">Отмена</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Принять</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- STATE 3 — CALIBRE · огурцы (двухступенчато) -->
+    <!-- ============================================================ -->
+    <div class="stage">
+      <div class="stage-cap"><span class="n">03</span><span class="t">calibre · брак% → раскладка годного по размерам · Σ=100%</span></div>
+
+      <div class="modal wide" data-screen-label="Акт · calibre · огурцы">
+        <div class="m-head">
+          <div class="m-head-txt">
+            <div class="m-title-row">
+              <h2 class="m-title">Акт приёмки</h2>
+              <span class="m-actno mono">№&nbsp;П-0610-023</span>
+            </div>
+            <div class="m-ctx">
+              <span class="cult"><span class="chip" style="background: var(--cult-cucumber)"></span>Огурцы</span>
+              <span class="sep">·</span>
+              <span class="farmer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>ИП Ковальчук</span>
+              <span class="sep">·</span>
+              <span class="mach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>10&nbsp;июня · Коваль&nbsp;Р.&nbsp;С.</span>
+            </div>
+          </div>
+          <button class="m-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+
+        <div class="m-body">
+          <!-- вес + брак -->
+          <div class="row2">
+            <div class="fld">
+              <div class="fld-lab"><span class="k">Фактический вес</span><span class="src"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>перевеска</span></div>
+              <div class="ctl weight"><input class="tnum" value="11 200" /><span class="unit">кг</span></div>
+            </div>
+            <div class="fld">
+              <div class="fld-lab"><span class="k">% брака</span></div>
+              <div class="ctl pct" style="height:48px"><input class="tnum" value="5" /><span class="unit">%</span></div>
+              <p class="fld-hint" style="text-align:right">порча, % от факта</p>
+            </div>
+          </div>
+
+          <!-- годное (база калибровки) -->
+          <div class="subval">
+            <span class="lab">Годное <span class="q">(после брака — база для калибровки)</span></span>
+            <span class="fx">11 200 × (1 − 0,05)</span>
+            <span class="val tnum">10&nbsp;640<span class="u">кг</span></span>
+          </div>
+
+          <!-- таблица размерных категорий -->
+          <div class="fld" style="gap:9px">
+            <div class="cal-cap"><span class="k">Размерные категории</span><span class="q">% от годного · схема культуры «Огурцы»</span></div>
+            <div class="cal">
+              <table class="cal-t">
+                <thead>
+                  <tr>
+                    <th>Категория</th>
+                    <th class="c">% от годного</th>
+                    <th>Строка контракта</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="cat"><span class="rng">6–9 см</span><span class="badge acc"><span class="d"></span>принято</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="40" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm"><span class="ln-cult"><span class="chip" style="background: var(--cult-cucumber)"></span><span class="ln-name">Стандарт</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cat"><span class="rng">9–12 см</span><span class="badge acc"><span class="d"></span>принято</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="45" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm"><span class="ln-cult"><span class="chip" style="background: var(--cult-cucumber)"></span><span class="ln-name">Стандарт</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cat"><span class="rng">&gt;12 см</span><span class="badge non"><span class="d"></span>нестандарт</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="15" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm"><span class="ln-cult"><span class="chip" style="background: var(--cult-cucumber)"></span><span class="ln-name">Нестандарт&nbsp;&gt;12</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr><td colspan="3">
+                    <div class="sum-row">
+                      <span class="lab">Σ категорий</span>
+                      <span class="sub">должно быть = 100% годного</span>
+                      <span class="val ok tnum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>100&nbsp;%</span>
+                    </div>
+                  </td></tr>
+                </tfoot>
+              </table>
+            </div>
+            <p class="fld-hint">Дефолт привязки: принятые → строка позиции; нестандарт → отдельная строка (BR-10). Объёмы стандарта и нестандарта не смешиваются.</p>
+          </div>
+
+          <!-- принятый вес -->
+          <div class="result">
+            <div class="result-main">
+              <span class="lab">Принятый вес</span>
+              <span class="val tnum">9 044<span class="u">кг</span><span class="acc">стандарт 6–9 + 9–12 см</span></span>
+            </div>
+            <div class="result-formula">10 640 кг × 85% (принятые категории) = 9 044 кг</div>
+          </div>
+
+          <!-- нестандарт -->
+          <div class="nonstd">
+            <span class="lab"><span class="d"></span>Нестандарт &gt;12 см</span>
+            <span class="val tnum">1 596<span class="u">кг</span></span>
+            <span class="tag">не в зачёт принятого · своя строка</span>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <button class="btn btn-secondary">Отмена</button>
+          <button class="btn btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Принять</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- STATE 4 — CALIBRE · ошибки валидации -->
+    <!-- ============================================================ -->
+    <div class="stage">
+      <div class="stage-cap"><span class="n">04</span><span class="t">ошибки: нет веса · нет № акта · Σ≠100% · нет привязки</span></div>
+
+      <div class="modal wide" data-screen-label="Акт · ошибки валидации">
+        <div class="m-head">
+          <div class="m-head-txt">
+            <div class="m-title-row">
+              <h2 class="m-title">Акт приёмки</h2>
+            </div>
+            <div class="m-ctx">
+              <span class="cult"><span class="chip" style="background: var(--cult-cucumber)"></span>Огурцы</span>
+              <span class="sep">·</span>
+              <span class="farmer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>ООО Зелёный Дол</span>
+              <span class="sep">·</span>
+              <span class="mach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>12&nbsp;июня · Панько&nbsp;И.</span>
+            </div>
+          </div>
+          <button class="m-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+
+        <div class="m-body">
+          <!-- № акта пустой -->
+          <div class="fld">
+            <div class="fld-lab"><span class="k">№ акта (партии)</span><span class="req"><b>обязателен</b> для приёмки (BR-9)</span></div>
+            <div class="ctl mono err"><input placeholder="не задан" /><svg class="err-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          </div>
+
+          <div class="row2">
+            <div class="fld">
+              <div class="fld-lab"><span class="k">Фактический вес</span><span class="req"><b>обязателен</b> (BR-25)</span></div>
+              <div class="ctl weight err empty"><input class="tnum" placeholder="не перевешивали" /><span class="unit">кг</span></div>
+            </div>
+            <div class="fld">
+              <div class="fld-lab"><span class="k">% брака</span></div>
+              <div class="ctl pct" style="height:48px"><input class="tnum" value="6" /><span class="unit">%</span></div>
+            </div>
+          </div>
+
+          <!-- годное недоступно -->
+          <div class="subval">
+            <span class="lab">Годное <span class="q">(после брака)</span></span>
+            <span class="val tnum" style="color:var(--mute)">—<span class="u">нет веса</span></span>
+          </div>
+
+          <!-- таблица с Σ≠100% и без привязки -->
+          <div class="fld" style="gap:9px">
+            <div class="cal-cap"><span class="k">Размерные категории</span><span class="q">% от годного</span></div>
+            <div class="cal">
+              <table class="cal-t">
+                <thead>
+                  <tr>
+                    <th>Категория</th>
+                    <th class="c">% от годного</th>
+                    <th>Строка контракта</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><div class="cat"><span class="rng">6–9 см</span><span class="badge acc"><span class="d"></span>принято</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="40" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm"><span class="ln-cult"><span class="chip" style="background: var(--cult-cucumber)"></span><span class="ln-name">Стандарт</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cat"><span class="rng">9–12 см</span><span class="badge acc"><span class="d"></span>принято</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="35" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm"><span class="ln-cult"><span class="chip" style="background: var(--cult-cucumber)"></span><span class="ln-name">Стандарт</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                  <tr>
+                    <td><div class="cat"><span class="rng">&gt;12 см</span><span class="badge non"><span class="d"></span>нестандарт</span></div></td>
+                    <td class="pct-cell"><div class="pctbox"><input class="tnum" value="15" /><span class="u">%</span></div></td>
+                    <td class="bind-cell"><div class="line sm placeholder"><span class="ln-cult"><span class="ln-name">Не привязана</span></span><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr><td colspan="3">
+                    <div class="sum-row">
+                      <span class="lab">Σ категорий</span>
+                      <span class="sub">не хватает 10% до 100%</span>
+                      <span class="val bad tnum"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>90&nbsp;% <span class="target">/ 100%</span></span>
+                    </div>
+                  </td></tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- blocking reasons -->
+          <div class="errbox">
+            <div class="errbox-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="et">Нельзя принять — не выполнено:</span>
+            </div>
+            <div class="err-list">
+              <div class="err-item">Не задан фактический вес <span class="br">BR-25</span></div>
+              <div class="err-item">Не задан № акта (партии) <span class="br">BR-9</span></div>
+              <div class="err-item">Σ размерных категорий ≠ 100% годного <span class="br">BR-10</span></div>
+              <div class="err-item">Категория «&gt;12 см» не привязана к строке <span class="br">BR-8</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="m-foot">
+          <button class="btn btn-secondary">Отмена</button>
+          <div class="btn-wrap">
+            <button class="btn disabled" aria-disabled="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Принять</button>
+            <span class="tip">Заполните вес, № акта, доведите Σ до 100% и привяжите все категории</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

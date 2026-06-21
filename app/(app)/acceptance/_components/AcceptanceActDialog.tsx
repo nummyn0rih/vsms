@@ -1,0 +1,450 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Check, Truck, AlertCircle, RotateCcw } from "lucide-react";
+
+import type { ActContext } from "@/server/acceptance/schema";
+import { setActualWeight } from "@/server/acceptance/actions";
+import { saveAct, revertAct } from "@/server/acceptance/act";
+import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const M_CONTENT_CLS =
+  "gap-0 overflow-hidden rounded-lg border border-[#ebebeb] bg-white p-0 sm:max-w-[480px]";
+
+const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+  timeZone: "UTC",
+});
+
+function priceLabel(line: ActContext["contractLines"][number], cultureName: string) {
+  const name = line.label?.trim() || cultureName;
+  return `${name} · ${Number(line.pricePerKg)} ₽/кг`;
+}
+
+export function AcceptanceActDialog({
+  context,
+  open,
+  onOpenChange,
+  openedFromSent,
+  canRevert,
+}: {
+  context: ActContext;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  openedFromSent: boolean;
+  canRevert: boolean;
+}) {
+  const router = useRouter();
+  const isCalibre = context.acceptanceType === "calibre";
+
+  // Вес — то же поле actual_weight_kg (setActualWeight), один источник (BR-25).
+  const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
+  const [weightStr, setWeightStr] = useState(
+    context.actualKg != null ? String(context.actualKg) : "",
+  );
+  const [weightEditing, setWeightEditing] = useState(false);
+  const [weightBusy, setWeightBusy] = useState(false);
+
+  const [actNumber, setActNumber] = useState(context.existing?.actNumber ?? "");
+  const [brakStr, setBrakStr] = useState(
+    context.existing ? String(context.existing.brakPercent) : "",
+  );
+  const [lineId, setLineId] = useState<string>(
+    context.existing?.contractLineId != null
+      ? String(context.existing.contractLineId)
+      : context.autoLineId != null
+        ? String(context.autoLineId)
+        : "",
+  );
+  const [submitting, setSubmitting] = useState(false);
+
+  const brak = useMemo(() => {
+    const n = Number(brakStr.replace(",", "."));
+    return Number.isFinite(n) ? n : 0;
+  }, [brakStr]);
+
+  const accepted =
+    savedWeight != null ? Math.round(savedWeight * (1 - brak / 100)) : null;
+
+  // Причина блокировки «Принять» (для tooltip).
+  const blockReason =
+    savedWeight == null || savedWeight <= 0
+      ? "Внесите фактический вес"
+      : actNumber.trim() === ""
+        ? "Укажите № акта"
+        : lineId === ""
+          ? "Выберите строку контракта"
+          : brak < 0 || brak > 100
+            ? "Брак 0–100%"
+            : null;
+
+  async function commitWeight() {
+    setWeightEditing(false);
+    const cleaned = weightStr.replace(/\s|кг/gi, "").replace(",", ".").trim();
+    if (cleaned === "") {
+      if (savedWeight == null) return;
+      setWeightBusy(true);
+      const res = await setActualWeight({
+        shipmentItemId: context.shipmentItemId,
+        actualWeightKg: null,
+      });
+      setWeightBusy(false);
+      if (res.ok) {
+        setSavedWeight(null);
+        setWeightStr("");
+        router.refresh();
+      } else toast.error(res.error);
+      return;
+    }
+    const num = Number(cleaned);
+    if (!Number.isFinite(num) || num <= 0) {
+      toast.error("Вес должен быть больше 0");
+      return;
+    }
+    if (num === savedWeight) return;
+    setWeightBusy(true);
+    const res = await setActualWeight({
+      shipmentItemId: context.shipmentItemId,
+      actualWeightKg: num,
+    });
+    setWeightBusy(false);
+    if (res.ok) {
+      setSavedWeight(num);
+      router.refresh();
+    } else toast.error(res.error);
+  }
+
+  async function onSubmit() {
+    if (blockReason) return;
+    setSubmitting(true);
+    const res = await saveAct({
+      shipmentItemId: context.shipmentItemId,
+      actNumber: actNumber.trim(),
+      brakPercent: brak,
+      contractLineId: Number(lineId),
+    });
+    setSubmitting(false);
+    if (res.ok) {
+      toast.success("Позиция принята");
+      onOpenChange(false);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  async function onRevert() {
+    const res = await revertAct({ shipmentItemId: context.shipmentItemId });
+    if (res.ok) {
+      toast.success("Приёмка откатена");
+      onOpenChange(false);
+      router.refresh();
+    } else {
+      toast.error(res.error);
+    }
+  }
+
+  const weightDisplay =
+    weightEditing || weightBusy
+      ? weightStr
+      : savedWeight != null
+        ? `${formatWeight(savedWeight)} кг`
+        : "";
+
+  const machineLine = [
+    context.departureDate
+      ? dayMonthFmt.format(new Date(`${context.departureDate}T00:00:00Z`))
+      : null,
+    context.driverName,
+    context.transportCompanyName,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent showCloseButton className={M_CONTENT_CLS}>
+        {/* Шапка */}
+        <div className="border-b border-[#ebebeb] px-5 pb-4 pt-[18px]">
+          <DialogTitle className="text-[18px] font-semibold leading-6 tracking-[-0.035em] text-[#171717]">
+            Акт приёмки
+          </DialogTitle>
+          <div className="mt-2 flex flex-wrap items-center gap-x-[7px] gap-y-1 text-[13px] tracking-tight text-[#4d4d4d]">
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#171717]">
+              <span
+                className="inline-block size-[9px] shrink-0 rounded-[3px]"
+                style={{ backgroundColor: context.cultureColor }}
+              />
+              {context.cultureName}
+            </span>
+            <span className="text-[#a1a1a1]">·</span>
+            <span>{context.farmerName}</span>
+            {machineLine && (
+              <>
+                <span className="text-[#a1a1a1]">·</span>
+                <span className="inline-flex items-center gap-1.5 text-[#888888]">
+                  <Truck className="size-3" />
+                  {machineLine}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {isCalibre ? (
+          <div className="px-5 py-8 text-center text-sm text-[#888888]">
+            Калибровочная культура — приёмка с раскладкой по размерам появится на
+            этапе C1b.
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-[15px] px-5 pb-[18px] pt-4">
+              {openedFromSent && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-[#cfe1ff] bg-[#eaf2ff] px-3 py-2.5 text-[12.5px] leading-[17px] tracking-tight text-[#0761d1]">
+                  <Truck className="mt-px size-3.5 shrink-0" />
+                  <span>
+                    Машина отмечена <b className="font-semibold">прибывшей</b> —
+                    приёмка с этой позиции (sent → arrived).
+                  </span>
+                </div>
+              )}
+
+              {/* № акта */}
+              <Field
+                label="№ акта (партии)"
+                hint="присваивается на заводе · обязателен"
+              >
+                <input
+                  value={actNumber}
+                  onChange={(e) => setActNumber(e.target.value)}
+                  placeholder="не задан"
+                  className="h-10 w-full rounded-md border border-[#ebebeb] bg-white px-3 font-mono text-sm tracking-normal text-[#171717] outline-none placeholder:text-[#888888] focus:border-[#171717] focus:ring-1 focus:ring-[#171717]"
+                />
+              </Field>
+
+              {/* Фактический вес */}
+              <Field
+                label="Фактический вес"
+                tag={savedWeight != null && !weightEditing ? "из перевески" : "вводится здесь"}
+              >
+                <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+                  <input
+                    inputMode="decimal"
+                    value={weightDisplay}
+                    onFocus={() => {
+                      setWeightEditing(true);
+                      setWeightStr(savedWeight != null ? String(savedWeight) : "");
+                    }}
+                    onChange={(e) => setWeightStr(e.target.value)}
+                    onBlur={commitWeight}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    placeholder="не перевешивали"
+                    className="w-full bg-transparent text-[18px] font-medium tabular-nums text-[#171717] outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-[#888888]"
+                  />
+                  <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
+                </div>
+              </Field>
+
+              {/* Строка контракта + % брака */}
+              <div className="grid grid-cols-[1fr_120px] items-end gap-3">
+                <Field label="Строка контракта">
+                  {context.autoLineId != null ? (
+                    <div className="flex h-10 items-center gap-2 rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 text-[13.5px] text-[#171717]">
+                      <span
+                        className="inline-block size-[9px] shrink-0 rounded-[3px]"
+                        style={{ backgroundColor: context.cultureColor }}
+                      />
+                      <span className="truncate">
+                        {priceLabel(context.contractLines[0], context.cultureName)}
+                      </span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] uppercase tracking-wide text-[#888888]">
+                        авто
+                      </span>
+                    </div>
+                  ) : (
+                    <Select value={lineId} onValueChange={setLineId}>
+                      <SelectTrigger className="h-10 w-full">
+                        <SelectValue placeholder="выберите строку" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {context.contractLines.map((l) => (
+                          <SelectItem key={l.id} value={String(l.id)}>
+                            {priceLabel(l, context.cultureName)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </Field>
+                <Field label="% брака">
+                  <div className="flex h-10 items-center justify-end rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+                    <input
+                      inputMode="decimal"
+                      value={brakStr}
+                      onChange={(e) => setBrakStr(e.target.value)}
+                      placeholder="0"
+                      className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
+                    />
+                    <span className="ml-1 shrink-0 text-sm text-[#888888]">%</span>
+                  </div>
+                </Field>
+              </div>
+
+              {/* Принятый вес — производное */}
+              <div className="overflow-hidden rounded-lg border border-[#c7f6ea]">
+                <div className="flex items-baseline gap-3 bg-[#ddfff7] px-3.5 py-3">
+                  <span className="self-center font-mono text-[10px] uppercase tracking-wide text-[#1d8e75]">
+                    Принятый вес
+                  </span>
+                  <span className="ml-auto text-[22px] font-semibold leading-none tabular-nums tracking-tight text-[#171717]">
+                    {accepted != null ? formatWeight(accepted) : "—"}
+                    <span className="ml-0.5 text-sm font-normal text-[#4d4d4d]">
+                      кг
+                    </span>
+                  </span>
+                </div>
+                {accepted != null && (
+                  <div className="border-t border-[#c7f6ea] bg-white px-3.5 py-2 font-mono text-[11px] text-[#888888]">
+                    {formatWeight(savedWeight!)} кг × (1 −{" "}
+                    {(brak / 100).toLocaleString("ru-RU", {
+                      minimumFractionDigits: 2,
+                    })}
+                    ) = {formatWeight(accepted)} кг
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Футер */}
+            <div className="flex gap-2 border-t border-[#ebebeb] px-5 pb-[18px] pt-3.5">
+              <button
+                onClick={() => onOpenChange(false)}
+                className="h-10 flex-1 rounded-md border border-[#ebebeb] bg-white px-4 text-sm font-medium tracking-tight text-[#4d4d4d] hover:bg-[#fafafa]"
+              >
+                Отмена
+              </button>
+              <div className="group relative flex flex-1">
+                <button
+                  onClick={onSubmit}
+                  disabled={blockReason != null || submitting}
+                  className="flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[#171717] bg-[#171717] px-4 text-sm font-medium tracking-tight text-white shadow-[0_1px_2px_#0000001f] hover:bg-[#171717]/90 disabled:cursor-not-allowed disabled:border-[#ebebeb] disabled:bg-[#f1f1f1] disabled:text-[#888888] disabled:shadow-none"
+                >
+                  <Check className="size-[15px]" /> Принять
+                </button>
+                {blockReason && (
+                  <span className="pointer-events-none absolute bottom-[calc(100%+9px)] left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#171717] px-[10px] py-2 text-xs text-white group-hover:block">
+                    {blockReason}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Подсказка: машина будет принята полностью */}
+            {context.isLastUnaccepted && !context.existing && (
+              <div className="px-5 pb-4">
+                <div className="flex items-center gap-2 rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-3 py-2 text-xs leading-4 tracking-tight text-[#1d8e75]">
+                  <Check className="size-3.5 shrink-0" />
+                  Последняя непринятая позиция — машина будет принята полностью
+                  (авто, BR-13).
+                </div>
+              </div>
+            )}
+
+            {/* Откат (admin, если акт уже есть) */}
+            {canRevert && context.existing && (
+              <div className="border-t border-[#ebebeb] px-5 py-3">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button className="inline-flex items-center gap-1.5 text-xs font-medium text-[#888888] hover:text-[#c50000]">
+                      <RotateCcw className="size-3.5" /> Откатить приёмку
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="flex items-center gap-2">
+                        <AlertCircle className="size-4 text-[#c50000]" /> Откатить
+                        приёмку позиции?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Акт №{context.existing.actNumber} будет удалён. Если машина
+                        была принята полностью — вернётся в «прибыла».
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Отмена</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={onRevert}
+                        className="bg-[#c50000] hover:bg-[#c50000]/90"
+                      >
+                        Откатить
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  tag,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  tag?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-[7px]">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[13px] font-medium tracking-tight text-[#171717]">
+          {label}
+        </span>
+        {hint && (
+          <span className="text-[11px] tracking-tight text-[#888888]">{hint}</span>
+        )}
+        {tag && (
+          <span className="ml-auto rounded-full bg-[#eaf2ff] px-[7px] py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#0761d1]">
+            {tag}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
