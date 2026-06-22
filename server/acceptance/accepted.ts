@@ -22,6 +22,19 @@ export function computeAcceptedKg(
   return (actualKg * acceptedPct) / 100;
 }
 
+// Подпись калибр-категории для показа (чипы зоны 3). Размерная — из min/max (см),
+// безразмерная (оба null) — label категории. Числа уже в см (number|null).
+export function calibreRangeLabel(
+  minCm: number | null,
+  maxCm: number | null,
+  fallbackLabel: string,
+): string {
+  if (minCm != null && maxCm != null) return `${minCm}–${maxCm} см`;
+  if (minCm != null) return `>${minCm} см`;
+  if (maxCm != null) return `<${maxCm} см`;
+  return fallbackLabel;
+}
+
 // № акта в рамках сезона (BR-9): хранится с префиксом года сезона «{season}-{введённое}».
 // Глобальный @unique на act_number => уникум по паре (сезон, введённое) без миграции.
 export function withSeasonPrefix(input: string, season: number): string {

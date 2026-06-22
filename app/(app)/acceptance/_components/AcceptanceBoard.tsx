@@ -11,6 +11,7 @@ import { markArrived } from "@/server/acceptance/actions";
 import { getActContext } from "@/server/acceptance/act";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AcceptanceMachine } from "./AcceptanceMachine";
+import { AcceptedMachine } from "./AcceptedMachine";
 import { AcceptanceActDialog } from "./AcceptanceActDialog";
 
 function ZoneHeader({ title, count }: { title: string; count: number }) {
@@ -109,10 +110,18 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           )}
         </section>
 
-        {/* Зона 3: принято (заглушка, этап C). */}
+        {/* Зона 3: принято (accepted) — карточки свёрнуты, разворот по клику. */}
         <section>
           <ZoneHeader title="Принято" count={board.acceptedCount} />
-          <EmptyZone note="Принятые машины появятся здесь (этап C)." />
+          {board.zone3.length === 0 ? (
+            <EmptyZone note="Нет принятых машин." />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {board.zone3.map((m) => (
+                <AcceptedMachine key={m.id} machine={m} />
+              ))}
+            </div>
+          )}
         </section>
       </div>
 

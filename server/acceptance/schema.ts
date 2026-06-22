@@ -124,8 +124,61 @@ export type AcceptanceMachine = {
   items: AcceptanceItem[];
 };
 
+// --- Зона 3 «Принято» (C3c). Принятый вес и стоимость — вычисляемые (BR-2/10/§5),
+// ничего не хранится. Веса в КГ, цены/суммы в ₽ (number; округление — на показе). ---
+
+// Чип калибр-разбивки. У принятых категорий показываем kg; у непринятых (нестандарт)
+// и строки «брак» — пометку «не в зачёт». isBrak — последняя строка (percent=brak%).
+export type AcceptedCalibreChip = {
+  label: string; // «6–9 см» | «>12 см» | label безразмерной категории | «брак»
+  percent: number;
+  kg: number; // actual × percent/100
+  isAccepted: boolean;
+  isBrak?: boolean;
+};
+
+// Нестандарт со своей строкой контракта (is_accepted=false, contract_line_id != null):
+// информационная подстрока, в принятый вес и стоимость НЕ идёт (решение по C3c).
+export type AcceptedNonStandard = {
+  label: string; // «Нестандарт {диапазон}»
+  kg: number;
+  lineLabel: string | null;
+};
+
+export type AcceptedPosition = {
+  id: number; // shipmentItemId
+  cultureName: string;
+  color: string;
+  farmerName: string;
+  actNumber: string | null;
+  actualKg: number;
+  brakPercent: number;
+  acceptedKg: number; // computeAcceptedKg (BR-10), к оплате
+  calibres: AcceptedCalibreChip[]; // [] для simple; иначе категории + «брак» последней
+  nonStandard: AcceptedNonStandard[]; // непринятые категории со своей строкой
+  lineLabel: string | null; // строка контракта для футера (основная)
+  pricePerKg: number | null; // цена основной строки (null → «× цена» не показываем)
+  costRub: number; // itemCost (C3a)
+};
+
+export type AcceptedMachine = {
+  id: number;
+  code: string;
+  departureDate: string | null;
+  arrivalDate: string | null;
+  driverName: string | null;
+  transportCompanyName: string | null;
+  driverPhone: string | null;
+  driverInfo: string | null;
+  acceptedCount: number; // принято позиций (= total, машина accepted)
+  total: number;
+  machineSumRub: number; // Σ costRub позиций
+  positions: AcceptedPosition[];
+};
+
 export type AcceptanceBoard = {
   zone1: AcceptanceMachine[]; // sent — ожидают перевески
   zone2: AcceptanceMachine[]; // arrived — на приёмке
-  acceptedCount: number; // зона 3 (заглушка, этап C)
+  zone3: AcceptedMachine[]; // accepted — принято (C3c)
+  acceptedCount: number; // счётчик зоны 3 (= zone3.length)
 };
