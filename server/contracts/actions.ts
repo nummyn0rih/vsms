@@ -12,12 +12,14 @@ import {
   type ContractInput,
   type ContractListRow,
   type ContractDetail,
+  type ContractDetailView,
   type CultureVolume,
   type FarmerOption,
   type SeasonOption,
   type CultureOption,
 } from "./schema";
 import { persistContractLines } from "./lines";
+import { getContractExecution } from "./execution";
 
 const ENTITY = "Contract";
 const PATH = "/contracts";
@@ -116,6 +118,40 @@ export async function getContract(id: number): Promise<ContractDetail | null> {
       volume_tons: l.volume_tons.toString(),
       price_per_kg: l.price_per_kg.toString(),
     })),
+  };
+}
+
+// Карточка контракта с живым выполнением/стоимостью (C3d). Детали (getContract) +
+// расчёт C3a (getContractExecution, гейт чтения admin/operator/user внутри) мёржим по
+// line.id ↔ exec.lineId. Строки без принятого веса getContractExecution всё равно
+// возвращает (мапит по ВСЕМ строкам) → нули, paid=false.
+export async function getContractView(
+  id: number,
+): Promise<ContractDetailView | null> {
+  const detail = await getContract(id);
+  if (!detail) return null;
+
+  const exec = await getContractExecution({
+    contractId: id,
+    season: detail.season_year,
+  });
+  const byLine = new Map(exec.lines.map((e) => [e.lineId, e]));
+
+  return {
+    ...detail,
+    hasMissingLine: exec.hasMissingLine,
+    lines: detail.lines.map((l) => {
+      const e = byLine.get(l.id);
+      return {
+        ...l,
+        acceptedKg: e?.acceptedKg ?? 0,
+        targetKg: e?.targetKg ?? 0,
+        pct: e?.pct ?? 0,
+        remainingKg: e?.remainingKg ?? 0,
+        costRub: e?.cost ?? 0,
+        paid: e?.paid ?? false,
+      };
+    }),
   };
 }
 

@@ -79,6 +79,22 @@ export type ContractDetail = {
   lines: ContractLineRow[];
 };
 
+// Строка с живым выполнением/стоимостью (C3d). Поля 1-в-1 из LineExecutionRow.
+// Расчёт — getContractExecution (C3a), ничего не хранится.
+export type ContractLineView = ContractLineRow & {
+  acceptedKg: number; // принято на строку (живой)
+  targetKg: number; // volume_tons × 1000
+  pct: number; // выполнение, без округления (округлять на показе)
+  remainingKg: number; // может быть < 0 (перевыполнение)
+  costRub: number; // accepted × price
+  paid: boolean; // в строку попал принятый вес
+};
+
+export type ContractDetailView = Omit<ContractDetail, "lines"> & {
+  lines: ContractLineView[];
+  hasMissingLine: boolean; // есть принятый вес без привязанной строки
+};
+
 // Опции для Select'ов формы и фильтров.
 export type FarmerOption = { id: number; name: string };
 export type SeasonOption = { season_year: number };
