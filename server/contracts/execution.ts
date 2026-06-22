@@ -60,14 +60,17 @@ export function itemCost(
     return { cost: acceptedKg.mul(price), missingLine: false };
   }
 
-  // calibre: Σ по принятым категориям (actual × percent/100) × цена строки категории.
-  // Нестандарт (is_accepted=false) — не платим. acceptedKg тут не используем.
+  // calibre: Σ по категориям-СО-СТРОКОЙ (actual × percent/100) × цена их строки.
+  // Гейт оплаты — contract_line_id != null, НЕ is_accepted (C3d-2, §5): принятая категория
+  // падает на строку позиции (fallback), нестандарт — ТОЛЬКО на свою явную строку
+  // (объёмы стандарта/нестандарта не смешиваются). acceptedKg тут не используем.
   let cost = ZERO;
   let missingLine = false;
   const actual = item.actualKg ?? ZERO;
   for (const c of item.calibres) {
-    if (!c.isAccepted) continue;
-    const lineId = c.contractLineId ?? item.contractLineId;
+    const lineId = c.isAccepted ? c.contractLineId ?? item.contractLineId : c.contractLineId;
+    // Нестандарт без строки — статистика, не оплата (и не missingLine).
+    if (!c.isAccepted && lineId == null) continue;
     const catKg = actual.mul(new Prisma.Decimal(c.percent).div(HUNDRED));
     if (catKg.isZero()) continue;
     const price = lineId != null ? lineMap.get(lineId) : undefined;
@@ -80,9 +83,11 @@ export function itemCost(
   return { cost, missingLine };
 }
 
-// --- (б) Разнос принятого веса по строкам (для выполнения) ---
+// --- (б) Разнос ОПЛАЧИВАЕМОГО веса по строкам (для выполнения) ---
 
-// Возврат: line_id → Σ accepted_kg. Привязка к null-строке в карту НЕ попадает.
+// Возврат: line_id → Σ kg, идущих в выполнение строки. Гейт — наличие строки
+// (contract_line_id != null), не is_accepted (C3d-2, §5): нестандарт-со-строкой тоже
+// идёт в выполнение СВОЕЙ строки. Привязка к null-строке в карту НЕ попадает.
 export function attributeAcceptedToLines(
   items: ExecItem[],
 ): Map<number, Prisma.Decimal> {
@@ -99,12 +104,13 @@ export function attributeAcceptedToLines(
       if (acceptedKg != null) add(item.contractLineId, acceptedKg);
       continue;
     }
-    // calibre → каждая принятая категория на свою строку.
+    // calibre → каждая категория-со-строкой на свою строку. Принятая → fallback на
+    // строку позиции; нестандарт → только своя явная строка (объёмы не смешиваются).
     const actual = item.actualKg ?? ZERO;
     for (const c of item.calibres) {
-      if (!c.isAccepted) continue;
+      const lineId = c.isAccepted ? c.contractLineId ?? item.contractLineId : c.contractLineId;
       const catKg = actual.mul(new Prisma.Decimal(c.percent).div(HUNDRED));
-      add(c.contractLineId ?? item.contractLineId, catKg);
+      add(lineId, catKg);
     }
   }
   return map;

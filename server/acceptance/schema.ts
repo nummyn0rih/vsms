@@ -138,11 +138,13 @@ export type AcceptedCalibreChip = {
 };
 
 // Нестандарт со своей строкой контракта (is_accepted=false, contract_line_id != null):
-// информационная подстрока, в принятый вес и стоимость НЕ идёт (решение по C3c).
+// в принятый вес (headline «к оплате») НЕ идёт, но ОПЛАЧИВАЕТСЯ по своей строке (C3d-2, §5).
 export type AcceptedNonStandard = {
   label: string; // «Нестандарт {диапазон}»
   kg: number;
   lineLabel: string | null;
+  pricePerKg: number | null; // цена своей строки
+  costRub: number; // kg × price
 };
 
 export type AcceptedPosition = {

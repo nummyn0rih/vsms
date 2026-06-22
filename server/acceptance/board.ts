@@ -198,17 +198,23 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
         } as (typeof calibres)[number]);
       }
 
-      // Нестандарт со своей строкой контракта — информационно (в стоимость не идёт).
+      // Нестандарт со своей строкой контракта — оплачивается по ней (C3d-2, §5).
+      // В headline «к оплате» (acceptedKg) НЕ входит, но ₽ идут в costRub/сумму машины.
       const nonStandard = results
         .filter((cr) => !cr.calibreRange.is_accepted && cr.contract_line_id != null)
         .map((cr) => {
           const minCm = cr.calibreRange.min_cm?.toNumber() ?? null;
           const maxCm = cr.calibreRange.max_cm?.toNumber() ?? null;
           const range = calibreRangeLabel(minCm, maxCm, cr.calibreRange.label);
+          const info = lineInfo.get(cr.contract_line_id!);
+          const nsKg = (actualKg * cr.percent.toNumber()) / 100;
+          const price = info?.price ?? null;
           return {
             label: `Нестандарт ${range}`,
-            kg: (actualKg * cr.percent.toNumber()) / 100,
-            lineLabel: lineInfo.get(cr.contract_line_id!)?.label ?? null,
+            kg: nsKg,
+            lineLabel: info?.label ?? null,
+            pricePerKg: price,
+            costRub: price != null ? nsKg * price : 0,
           };
         });
 

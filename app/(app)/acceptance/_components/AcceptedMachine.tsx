@@ -224,7 +224,7 @@ function Position({
         </RoleGate>
       </div>
 
-      {/* Нестандарт со своей строкой — информационно (в стоимость не идёт). */}
+      {/* Нестандарт со своей строкой — оплачивается отдельно (в headline «к оплате» не входит). */}
       {pos.nonStandard.map((ns, i) => (
         <div
           key={i}
@@ -235,10 +235,26 @@ function Position({
             style={{ backgroundColor: pos.color }}
           />
           <span className="font-medium text-[#4d4d4d]">{ns.label}</span>
-          <span className="tabular-nums text-muted-foreground">{kg(ns.kg)} кг</span>
-          <span className="text-[11.5px] text-muted-foreground">
-            своя строка контракта · не в зачёт принятого
-          </span>
+          {ns.lineLabel && (
+            <span className="truncate text-[11.5px] text-muted-foreground">
+              {ns.lineLabel}
+            </span>
+          )}
+          {ns.pricePerKg != null ? (
+            <span className="ml-auto whitespace-nowrap text-right">
+              <span className="mr-2 tabular-nums text-[11.5px] text-muted-foreground">
+                {kg(ns.kg)} кг × {ns.pricePerKg} ₽
+              </span>
+              <span className="font-semibold tabular-nums text-[#171717]">
+                {rub(ns.costRub)}
+                <span className="ml-0.5 text-[11px] font-normal text-[#4d4d4d]">₽</span>
+              </span>
+            </span>
+          ) : (
+            <span className="ml-auto tabular-nums text-muted-foreground">
+              {kg(ns.kg)} кг
+            </span>
+          )}
         </div>
       ))}
     </div>
