@@ -12,6 +12,7 @@ import {
   markArrivedSchema,
   type SetActualWeightInput,
 } from "./schema";
+import { applyInboundArrivedTareLeg } from "@/server/shipments/packaging";
 
 const SHIPMENT = "Shipment";
 const ITEM = "ShipmentItem";
@@ -89,12 +90,21 @@ export async function setActualWeight(
           where: { id: item.shipment.id },
           data: { status: "arrived" },
         });
+        // BR-3: плечо прибытия тары (в пути -1 → завод 0). Идемпотентно.
+        const created = await applyInboundArrivedTareLeg(tx, item.shipment.id);
         entries.push({
           entity: SHIPMENT,
           entityId: item.shipment.id,
           field: "status",
           oldValue: "sent",
           newValue: "arrived",
+        });
+        entries.push({
+          entity: SHIPMENT,
+          entityId: item.shipment.id,
+          field: "movements",
+          oldValue: null,
+          newValue: `плечо прибытия: ${created} движ.`,
         });
       }
 
@@ -138,14 +148,24 @@ export async function markArrived(input: {
         where: { id: shipmentId },
         data: { status: "arrived" },
       });
+      // BR-3: плечо прибытия тары (в пути -1 → завод 0). Идемпотентно.
+      const created = await applyInboundArrivedTareLeg(tx, shipmentId);
       await logChange(
-        {
-          entity: SHIPMENT,
-          entityId: shipmentId,
-          field: "status",
-          oldValue: "sent",
-          newValue: "arrived",
-        },
+        [
+          {
+            entity: SHIPMENT,
+            entityId: shipmentId,
+            field: "status",
+            oldValue: "sent",
+            newValue: "arrived",
+          },
+          {
+            entity: SHIPMENT,
+            entityId: shipmentId,
+            field: "movements",
+            newValue: `плечо прибытия: ${created} движ.`,
+          },
+        ],
         Number(user.id),
         tx,
       );

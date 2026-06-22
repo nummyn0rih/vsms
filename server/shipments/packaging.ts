@@ -117,3 +117,71 @@ export async function loadPackagingContext(
 
   return { normByTriple, nameByType };
 }
+
+// Плечо ПРИБЫТИЯ (sent → arrived, BR-3): тара переходит из транзита «в пути на
+// завод» (-1) на завод (0). Чистый помощник, зовётся из acceptance при переходе.
+// Идемпотентен: повторный вызов (повтор markArrived) НЕ дублирует движения.
+// Возвращает число созданных движений (для ChangeLog).
+export async function applyInboundArrivedTareLeg(
+  tx: Tx,
+  shipmentId: number,
+): Promise<number> {
+  // Уже есть хоть одно движение плеча прибытия (-1 → 0) по этой отгрузке → выходим.
+  const existing = await tx.stockMovement.findFirst({
+    where: {
+      source_doc_type: "shipment",
+      source_doc_id: shipmentId,
+      kind: "packaging",
+      from_location_id: TRANSIT_TO_FACTORY,
+      to_location_id: FACTORY_LOCATION_ID,
+    },
+    select: { id: true },
+  });
+  if (existing) return 0;
+
+  // Движения плеча ОТПРАВКИ (фермер → -1) и его сторно (-1 → фермер при откате).
+  const movements = await tx.stockMovement.findMany({
+    where: {
+      source_doc_type: "shipment",
+      source_doc_id: shipmentId,
+      kind: "packaging",
+      movement_type: "return",
+    },
+  });
+
+  // Нетто в транзите -1 по типу тары: оригиналы (to=-1) плюс, сторно (from=-1) минус.
+  // Фермер на заводской стороне не важен — на завод приходит тара по типам.
+  const net = new Map<number, Prisma.Decimal>();
+  for (const m of movements) {
+    if (m.packaging_type_id == null) continue;
+    let delta: Prisma.Decimal | null = null;
+    if (m.to_location_id === TRANSIT_TO_FACTORY) delta = m.quantity; // оригинал отправки
+    else if (m.from_location_id === TRANSIT_TO_FACTORY) delta = m.quantity.neg(); // сторно
+    if (delta == null) continue;
+    net.set(
+      m.packaging_type_id,
+      (net.get(m.packaging_type_id) ?? new Prisma.Decimal(0)).plus(delta),
+    );
+  }
+
+  const toCreate = [...net.entries()].filter(([, qty]) => qty.gt(0));
+  if (toCreate.length === 0) return 0;
+
+  await tx.stockMovement.createMany({
+    data: toCreate.map(([packagingTypeId, qty]) => ({
+      date: new Date(),
+      kind: "packaging" as const,
+      packaging_type_id: packagingTypeId,
+      quantity: qty,
+      from_location_id: TRANSIT_TO_FACTORY,
+      to_location_id: FACTORY_LOCATION_ID,
+      from_state: "good" as const,
+      to_state: "good" as const,
+      movement_type: "return" as const,
+      source_doc_type: "shipment" as const,
+      source_doc_id: shipmentId,
+    })),
+  });
+
+  return toCreate.length;
+}

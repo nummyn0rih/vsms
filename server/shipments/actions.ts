@@ -21,6 +21,7 @@ import {
   loadPackagingContext,
   tripleKey,
   FACTORY_LOCATION_ID,
+  TRANSIT_TO_FACTORY,
 } from "./packaging";
 import {
   isFactoryWorkday,
@@ -365,7 +366,7 @@ class ShipmentSendError extends Error {
   }
 }
 
-// planned → sent: создаёт движения тары (фермер→завод) и переводит статус.
+// planned → sent: плечо отправки тары (фермер → в пути на завод -1) и статус (BR-3).
 export async function sendShipment(id: number): Promise<ActionResult> {
   try {
     const user = await requireRole("admin");
@@ -401,7 +402,7 @@ export async function sendShipment(id: number): Promise<ActionResult> {
             packaging_type_id: l.packagingTypeId,
             quantity: l.units,
             from_location_id: l.farmerId,
-            to_location_id: FACTORY_LOCATION_ID,
+            to_location_id: TRANSIT_TO_FACTORY,
             from_state: "good" as const,
             to_state: "good" as const,
             movement_type: "return" as const,
@@ -470,11 +471,19 @@ export async function revertShipmentToPlanned(id: number): Promise<ActionResult>
         },
       });
 
-      // Нетто по (тип тары × фермер): оригиналы (→завод) минус уже созданные сторно
-      // (→фермер). Ключ группы — `${packagingTypeId}:${farmerId}`.
+      // Нетто по (тип тары × фермер): оригиналы плеча отправки (→ транзит -1) минус
+      // уже созданные сторно (→фермер). Ключ группы — `${packagingTypeId}:${farmerId}`.
+      // Откат только из sent → плечо прибытия (-1→завод) ещё не создано; на всякий
+      // случай движения с завод-локацией (0) пропускаем — в нетто отправки не входят.
       const net = new Map<string, { packagingTypeId: number; farmerId: number; qty: Prisma.Decimal }>();
       for (const m of movements) {
-        const isOriginal = m.to_location_id === FACTORY_LOCATION_ID;
+        if (
+          m.to_location_id === FACTORY_LOCATION_ID ||
+          m.from_location_id === FACTORY_LOCATION_ID
+        ) {
+          continue;
+        }
+        const isOriginal = m.to_location_id === TRANSIT_TO_FACTORY;
         const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
         if (m.packaging_type_id == null || farmerId == null) continue;
         const key = `${m.packaging_type_id}:${farmerId}`;
@@ -495,7 +504,7 @@ export async function revertShipmentToPlanned(id: number): Promise<ActionResult>
             kind: "packaging" as const,
             packaging_type_id: g.packagingTypeId,
             quantity: g.qty,
-            from_location_id: FACTORY_LOCATION_ID,
+            from_location_id: TRANSIT_TO_FACTORY,
             to_location_id: g.farmerId,
             from_state: "good" as const,
             to_state: "good" as const,
