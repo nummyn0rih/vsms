@@ -60,6 +60,17 @@ function TripDates({
   );
 }
 
+// Уникальные культуры машины (по названию) — чипы в шапке.
+function cultureChips(
+  positions: Machine["positions"],
+): { name: string; color: string }[] {
+  const seen = new Map<string, string>();
+  for (const p of positions) {
+    if (!seen.has(p.cultureName)) seen.set(p.cultureName, p.color);
+  }
+  return [...seen].map(([name, color]) => ({ name, color }));
+}
+
 function kg(n: number): string {
   return formatWeight(Math.round(n));
 }
@@ -297,8 +308,22 @@ export function AcceptedMachine({ machine }: { machine: Machine }) {
           )}
         </div>
 
-        {/* Правая зона: «принято M/M» · сумма машины · шеврон. */}
+        {/* Правая зона: чипы культур · «принято M/M» · сумма машины · шеврон. */}
         <div className="flex min-w-0 flex-1 items-center gap-4 px-4 py-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3.5 gap-y-1 overflow-hidden">
+            {cultureChips(machine.positions).map((c) => (
+              <span
+                key={c.name}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap text-[12.5px] tracking-tight text-[#4d4d4d]"
+              >
+                <span
+                  className="inline-block size-[9px] shrink-0 rounded-[2px]"
+                  style={{ backgroundColor: c.color }}
+                />
+                {c.name}
+              </span>
+            ))}
+          </div>
           <div className="ml-auto flex items-center gap-5">
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] tracking-tight text-[#4d4d4d]">
               <Check className="size-3.5 text-[#1d8e75]" strokeWidth={2.4} />
