@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Логистика материалов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --error: #ee0000;
+
+    /* status zone / badge fills — tara has no `accepted` */
+    --st-planned-zone: #f5f5f5; --st-planned-badge: #ededed; --st-planned-dot: #b3b3b3; --st-planned-fg: #888888;
+    --st-sent-zone:    #eaf2ff; --st-sent-badge:    #d3e5ff; --st-sent-dot:    #0070f3; --st-sent-fg:    #0761d1;
+    --st-arrived-zone: #fff6e3; --st-arrived-badge: #ffefcf; --st-arrived-dot: #f5a623; --st-arrived-fg: #ab570a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0; background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    padding: 18px 20px 14px; font-size: 18px; font-weight: 600; letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none; letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot {
+    border-top: 1px solid var(--hairline); padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--mute);
+  }
+  .nav-foot button {
+    border: 0; background: transparent; color: var(--mute); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center;
+  }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head { padding: 22px 28px 0; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 4px 0 0; color: var(--mute); font-size: 13px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--canvas) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 28px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px;
+  }
+  .spacer { flex: 1; }
+  .btn {
+    height: 40px; padding: 0 14px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 0 1px 2px #0000001f; }
+  .btn-primary:hover { background: #000; }
+  .btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--body); }
+  .btn-ghost:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
+
+  .weeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); box-shadow: 0 1px 1px #0000000a; overflow: hidden; }
+  .weeknav button { height: 100%; width: 36px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; }
+  .weeknav button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .weeknav .wlabel { padding: 0 12px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 7px; }
+  .wlabel .wsub { color: var(--mute); font-weight: 400; }
+
+  .search { position: relative; flex: 0 1 300px; min-width: 200px; }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--mute); }
+  .search input {
+    width: 100%; height: 40px; padding: 0 12px 0 34px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; letter-spacing: -0.02em; box-shadow: 0 1px 1px #0000000a;
+  }
+  .search input::placeholder { color: var(--mute); }
+  .search input:focus { outline: none; border-color: var(--hairline-strong); }
+
+  .filter {
+    height: 40px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline);
+    background: var(--canvas); color: var(--body); font-size: 14px; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 1px #0000000a;
+  }
+  .filter:hover { background: var(--canvas-soft); }
+  .filter .fv { color: var(--ink); font-weight: 500; }
+  .filter svg { width: 14px; height: 14px; color: var(--mute); }
+
+  /* ---------- feed ---------- */
+  .feed { padding: 8px 32px 56px; max-width: 1480px; margin-inline: auto; width: 100%; }
+  .week { margin-top: 18px; }
+  .week-head {
+    display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 8px; cursor: pointer; user-select: none;
+  }
+  .week-head:hover { background: var(--canvas-soft); }
+  .week-head.collapsed { background: var(--canvas-soft); border: 1px solid var(--hairline); }
+  .week-head .chev { color: var(--mute); display: grid; place-items: center; width: 18px; height: 18px; flex-shrink: 0; }
+  .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+  .week-title .wmeta { color: var(--mute); font-weight: 400; }
+  .week-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; letter-spacing: 0; }
+  .week-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  .week-tot { font-size: 13px; color: var(--mute); white-space: nowrap; }
+  .week-tot b { color: var(--ink); font-weight: 600; }
+
+  .tara-chips { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .tchip {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--body); letter-spacing: -0.01em;
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 3px 8px 3px 7px; white-space: nowrap;
+  }
+  .tchip svg { width: 12px; height: 12px; color: var(--mute); }
+  .tchip b { font-weight: 600; color: var(--ink); }
+
+  .trips { padding: 6px 0 4px 30px; display: flex; flex-direction: column; gap: 10px; }
+  .week.collapsed-body .trips { display: none; }
+
+  /* ---------- trip card ---------- */
+  .trip {
+    display: flex; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden;
+    background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+  }
+  .tz-left {
+    width: 272px; flex-shrink: 0; padding: 12px 13px; display: flex; flex-direction: column; gap: 9px;
+    border-right: 1px solid var(--hairline);
+  }
+  .tz-left.s-planned { background: var(--st-planned-zone); }
+  .tz-left.s-sent    { background: var(--st-sent-zone); }
+  .tz-left.s-arrived { background: var(--st-arrived-zone); }
+
+  .tz-top { display: flex; align-items: center; gap: 8px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; height: 22px; padding: 0 9px;
+    border-radius: 6px; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge.s-planned { background: var(--st-planned-badge); color: var(--st-planned-fg); }
+  .badge.s-planned .dot { background: var(--st-planned-dot); }
+  .badge.s-sent { background: var(--st-sent-badge); color: var(--st-sent-fg); }
+  .badge.s-sent .dot { background: var(--st-sent-dot); }
+  .badge.s-arrived { background: var(--st-arrived-badge); color: var(--st-arrived-fg); }
+  .badge.s-arrived .dot { background: var(--st-arrived-dot); }
+
+  .tz-actions-top { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+  .iconbtn { width: 26px; height: 26px; flex-shrink: 0; border: 0; background: transparent; border-radius: 6px; display: grid; place-items: center; cursor: pointer; color: var(--mute); }
+  .iconbtn svg { width: 15px; height: 15px; }
+  .iconbtn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+  .iconbtn.danger:hover { background: #ffe3e3; color: var(--error); }
+
+  .tz-dates { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; letter-spacing: -0.02em; white-space: nowrap; }
+  .tz-dates .dep { color: var(--mute); }
+  .tz-dates .arrow { color: var(--hairline-strong); }
+  .tz-dates .arr { color: var(--ink); font-weight: 600; }
+
+  .driver-btn {
+    text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 500; color: var(--ink); letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .driver-btn:hover, .driver-btn:hover .tk { color: var(--link); }
+  .driver-btn .tk { color: var(--mute); font-weight: 400; }
+  .driver-btn svg { width: 12px; height: 12px; color: var(--mute); margin-left: 1px; }
+
+
+  /* right zone */
+  .tz-right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .poslist-r { flex: 1; }
+  .pos {
+    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.4fr) 104px;
+    align-items: center; gap: 12px; padding: 10px 16px; min-height: 46px;
+  }
+  .pos + .pos { border-top: 1px solid var(--hairline); }
+  .pos > * { min-width: 0; }
+  .pos .farmer { font-size: 14px; font-weight: 500; letter-spacing: -0.02em; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pos .tara { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--body); letter-spacing: -0.02em; min-width: 0; }
+  .pos .tara svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+  .pos .tara span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pos .tara .cap { color: var(--mute); }
+  .pos .qty { text-align: right; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .pos .qty .u { color: var(--mute); font-weight: 400; font-size: 12px; margin-left: 3px; }
+
+  .tz-foot {
+    display: flex; align-items: center; gap: 10px; padding: 9px 16px;
+    border-top: 1px solid var(--hairline); background: var(--canvas-soft);
+  }
+  .tz-foot .fcount { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; }
+  .tz-foot .fcount b { color: var(--body); font-weight: 600; }
+  .tz-foot .fspacer { flex: 1; }
+  .actbtn {
+    height: 30px; padding: 0 11px; border-radius: 6px; border: 1px solid var(--hairline);
+    background: var(--canvas); color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500;
+    letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .actbtn svg { width: 14px; height: 14px; }
+  .actbtn:hover { background: var(--canvas-soft); }
+  .actbtn.fwd { border-color: var(--hairline-strong); }
+  .actbtn.fwd:hover { background: #fff; border-color: var(--ink); }
+  .actbtn.undo { border-color: transparent; background: transparent; box-shadow: none; color: var(--mute); }
+  .actbtn.undo:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--body); }
+
+  /* ---------- specimens ---------- */
+  .specimens { background: var(--canvas-soft); border-top: 1px solid var(--hairline); padding: 32px 28px 56px; }
+  .spec-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin: 0 0 4px; }
+  .spec-title { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 22px; }
+  .spec-grid { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .spec-stage { background: color-mix(in srgb, var(--ink) 8%, var(--canvas-soft)); border: 1px solid var(--hairline); border-radius: 12px; padding: 26px; }
+  .spec-cap { font-size: 12px; color: var(--mute); margin: 0 0 12px; letter-spacing: -0.01em; }
+
+  /* modal */
+  .modal {
+    width: 360px; background: var(--canvas); border-radius: 8px; border: 1px solid var(--hairline);
+    box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #00000014; overflow: hidden;
+  }
+  .modal-wide { width: 560px; max-width: calc(100vw - 48px); }
+  .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 18px 0; }
+  .modal-title { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .modal-x { width: 28px; height: 28px; border: 0; background: transparent; border-radius: 6px; color: var(--mute); cursor: pointer; display: grid; place-items: center; }
+  .modal-x:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .modal-x svg { width: 16px; height: 16px; }
+  .modal-body { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  .drv-name { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; }
+  .tk-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 6px; background: var(--canvas-soft-2); border: 1px solid var(--hairline); font-size: 12px; color: var(--body); font-weight: 500; margin-top: 6px; }
+  .tk-badge svg { width: 13px; height: 13px; color: var(--mute); }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field .k { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); }
+  .req { color: var(--error); margin-left: 3px; }
+  .phone-link { font-size: 16px; color: var(--link); text-decoration: none; font-weight: 500; letter-spacing: -0.02em; }
+  .phone-link:hover { text-decoration: underline; }
+  .infobox { background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--body); letter-spacing: -0.02em; line-height: 19px; }
+
+  .modal-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 18px; }
+  .modal-foot .btn { flex: 1 1 160px; justify-content: center; }
+
+  .frow { display: flex; gap: 12px; }
+  .frow .field { flex: 1; }
+  .form-sec { display: flex; flex-direction: column; gap: 6px; }
+  .hint { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 16px; margin: 0; }
+  .input, .selectbox {
+    height: 40px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline);
+    background: var(--canvas); font-family: inherit; font-size: 14px; color: var(--ink); letter-spacing: -0.02em; width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .selectbox svg { width: 14px; height: 14px; color: var(--mute); flex-shrink: 0; }
+  .input input { border: 0; outline: 0; font: inherit; width: 100%; background: transparent; color: inherit; }
+  .input .suf { color: var(--mute); font-size: 13px; flex-shrink: 0; }
+  .input svg { flex-shrink: 0; }
+
+  /* combobox (open) */
+  .combo { display: flex; flex-direction: column; border: 1px solid var(--hairline-strong); border-radius: 6px; overflow: hidden; background: var(--canvas); box-shadow: 0 4px 12px -4px #00000014; }
+  .combo-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--hairline); }
+  .combo-search svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+  .combo-search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); width: 100%; letter-spacing: -0.02em; }
+  .combo-list { max-height: 152px; overflow-y: auto; padding: 4px; display: flex; flex-direction: column; gap: 1px; }
+  .combo-opt { display: flex; align-items: center; gap: 6px; padding: 8px 9px; border-radius: 5px; font-size: 14px; color: var(--ink); letter-spacing: -0.02em; cursor: pointer; }
+  .combo-opt .tk { color: var(--mute); font-size: 13px; }
+  .combo-opt:hover { background: var(--canvas-soft); }
+  .combo-opt.sel { background: var(--link-bg-soft); color: var(--st-sent-fg); }
+  .combo-opt.sel .tk { color: var(--st-sent-fg); }
+  .combo-opt .chk { margin-left: auto; width: 15px; height: 15px; }
+
+  /* position editor */
+  .poslist { display: flex; flex-direction: column; gap: 10px; }
+  .posedit { position: relative; border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft); padding: 12px; }
+  .posedit-grid { display: grid; grid-template-columns: 1.5fr 1.4fr 0.9fr; gap: 10px; padding-right: 26px; }
+  .posedit-x { position: absolute; top: 10px; right: 8px; width: 24px; height: 24px; border: 0; background: transparent; border-radius: 5px; color: var(--mute); cursor: pointer; display: grid; place-items: center; }
+  .posedit-x:hover { background: #ffe3e3; color: var(--error); }
+  .posedit-x svg { width: 14px; height: 14px; }
+  .addpos {
+    height: 40px; border: 1px dashed var(--hairline-strong); border-radius: 6px; background: transparent;
+    font-family: inherit; font-size: 14px; font-weight: 500; color: var(--body); letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  }
+  .addpos:hover { background: var(--canvas-soft); border-color: var(--ink); color: var(--ink); }
+  .addpos svg { width: 15px; height: 15px; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="120" y="170" width="200" height="140" rx="10" fill="#fff6e3"/>
+    <rect x="340" y="170" width="740" height="140" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="120" y="340" width="200" height="140" rx="10" fill="#eaf2ff"/>
+    <rect x="340" y="340" width="740" height="140" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="120" y="510" width="200" height="140" rx="10" fill="#f5f5f5"/>
+    <rect x="340" y="510" width="740" height="140" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="150" y="200" width="60" height="22" rx="5" fill="#ffefcf"/>
+    <rect x="150" y="370" width="60" height="22" rx="5" fill="#d3e5ff"/>
+    <rect x="150" y="540" width="60" height="22" rx="5" fill="#ededed"/>
+    <path d="M600 70 L640 140 H560 Z" fill="#171717"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Логистика материалов">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Логистика материалов
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Справочники
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span>snabzhenec</span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <h1 class="page-title">Логистика материалов</h1>
+      <p class="page-sub">Рейсы тары завод → фермер · возврат пустой тары под отгрузку · сезон 2026</p>
+    </div>
+
+    <!-- ===================== TOOLBAR ===================== -->
+    <div class="toolbar">
+      <button class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Рейс тары
+      </button>
+
+      <div class="weeknav">
+        <button title="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <div class="wlabel">Неделя 26 <span class="wsub">22–27 июня</span></div>
+        <button title="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+      </div>
+      <button class="btn btn-sm btn-ghost">Сегодня</button>
+
+      <div class="spacer"></div>
+
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Поиск: фермер, водитель…" />
+      </div>
+      <button class="filter">Фермер<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="filter">Статус: <span class="fv">все</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+    </div>
+
+    <!-- ===================== FEED ===================== -->
+    <div class="feed">
+
+      <!-- ---------- CURRENT WEEK 26 (expanded) ---------- -->
+      <section class="week">
+        <div class="week-head" data-screen-label="Неделя 26 (текущая)">
+          <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+          <span class="week-num">W26</span>
+          <span class="week-title">Неделя 26 <span class="wmeta">· 22–27 июня 2026 (Пн–Сб)</span></span>
+          <div class="week-right">
+            <div class="tara-chips">
+              <span class="tchip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>Ящик <b class="tnum">650 шт</b></span>
+              <span class="tchip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-1.1 4-2 9-2s9 .9 9 2-4 2-9 2-9-.9-9-2z"/><path d="M3 6v12c0 1.1 4 2 9 2s9-.9 9-2V6"/></svg>Бочка <b class="tnum">42 шт</b></span>
+            </div>
+            <span class="week-tot"><b class="tnum">3</b> рейса</span>
+          </div>
+        </div>
+
+        <div class="trips">
+
+          <!-- Trip 1 — ARRIVED -->
+          <article class="trip" data-screen-label="Рейс · прибыл">
+            <div class="tz-left s-arrived">
+              <div class="tz-top">
+                <span class="badge s-arrived"><span class="dot"></span>Прибыл</span>
+                <span class="tz-dates"><span class="dep tnum">19</span><span class="arrow">→</span><span class="arr tnum">22 июня</span></span>
+                <div class="tz-actions-top">
+                  <button class="iconbtn" title="Редактировать рейс"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                </div>
+              </div>
+              <button class="driver-btn">Петренко А. В. <span class="tk">· Юг-Логистик</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="tz-right">
+              <div class="poslist-r">
+                <div class="pos">
+                  <div class="farmer">ИП Ковальчук</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><span>Ящик овощной</span></div>
+                  <div class="qty tnum">200<span class="u">шт</span></div>
+                </div>
+                <div class="pos">
+                  <div class="farmer">Мельник И. Д.</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-1.1 4-2 9-2s9 .9 9 2-4 2-9 2-9-.9-9-2z"/><path d="M3 6v12c0 1.1 4 2 9 2s9-.9 9-2V6"/></svg><span>Бочка пластиковая <span class="cap">· 250 кг</span></span></div>
+                  <div class="qty tnum">16<span class="u">шт</span></div>
+                </div>
+              </div>
+              <div class="tz-foot">
+                <span class="fcount"><b>2</b> позиции · <b class="tnum">200</b> ящиков · <b class="tnum">16</b> бочек</span>
+                <span class="fspacer"></span>
+                <button class="actbtn undo" title="Вернуть рейс в статус «Отправлен»"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить в путь</button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Trip 2 — SENT -->
+          <article class="trip" data-screen-label="Рейс · отправлен">
+            <div class="tz-left s-sent">
+              <div class="tz-top">
+                <span class="badge s-sent"><span class="dot"></span>Отправлен</span>
+                <span class="tz-dates"><span class="dep tnum">22</span><span class="arrow">→</span><span class="arr tnum">24 июня</span></span>
+                <div class="tz-actions-top">
+                  <button class="iconbtn" title="Редактировать рейс"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                </div>
+              </div>
+              <button class="driver-btn">Гнатюк В. П. <span class="tk">· Магистраль</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="tz-right">
+              <div class="poslist-r">
+                <div class="pos">
+                  <div class="farmer">Ткаченко Л. Н.</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><span>Ящик овощной</span></div>
+                  <div class="qty tnum">180<span class="u">шт</span></div>
+                </div>
+                <div class="pos">
+                  <div class="farmer">Гаспарян В. С.</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><span>Ящик овощной</span></div>
+                  <div class="qty tnum">120<span class="u">шт</span></div>
+                </div>
+                <div class="pos">
+                  <div class="farmer">Гаспарян В. С.</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-1.1 4-2 9-2s9 .9 9 2-4 2-9 2-9-.9-9-2z"/><path d="M3 6v12c0 1.1 4 2 9 2s9-.9 9-2V6"/></svg><span>Бочка пластиковая <span class="cap">· 250 кг</span></span></div>
+                  <div class="qty tnum">14<span class="u">шт</span></div>
+                </div>
+              </div>
+              <div class="tz-foot">
+                <span class="fcount"><b>3</b> позиции · <b class="tnum">300</b> ящиков · <b class="tnum">14</b> бочек</span>
+                <span class="fspacer"></span>
+                <button class="actbtn undo" title="Вернуть рейс в план"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Откатить в план</button>
+                <button class="actbtn fwd" title="Отметить прибытие"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Прибыл</button>
+              </div>
+            </div>
+          </article>
+
+          <!-- Trip 3 — PLANNED -->
+          <article class="trip" data-screen-label="Рейс · плановый">
+            <div class="tz-left s-planned">
+              <div class="tz-top">
+                <span class="badge s-planned"><span class="dot"></span>Плановый</span>
+                <span class="tz-dates"><span class="dep tnum">24</span><span class="arrow">→</span><span class="arr tnum">26 июня</span></span>
+                <div class="tz-actions-top">
+                  <button class="iconbtn" title="Редактировать рейс"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                  <button class="iconbtn danger" title="Удалить рейс"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </div>
+              <button class="driver-btn">Коваль Р. С. <span class="tk">· Юг-Логистик</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              </button>
+            </div>
+            <div class="tz-right">
+              <div class="poslist-r">
+                <div class="pos">
+                  <div class="farmer">ООО «Зелёный Дол»</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><span>Ящик овощной</span></div>
+                  <div class="qty tnum">150<span class="u">шт</span></div>
+                </div>
+                <div class="pos">
+                  <div class="farmer">ООО «Юг-Агро»</div>
+                  <div class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-1.1 4-2 9-2s9 .9 9 2-4 2-9 2-9-.9-9-2z"/><path d="M3 6v12c0 1.1 4 2 9 2s9-.9 9-2V6"/></svg><span>Бочка пластиковая <span class="cap">· 250 кг</span></span></div>
+                  <div class="qty tnum">12<span class="u">шт</span></div>
+                </div>
+              </div>
+              <div class="tz-foot">
+                <span class="fcount"><b>2</b> позиции · <b class="tnum">150</b> ящиков · <b class="tnum">12</b> бочек</span>
+                <span class="fspacer"></span>
+                <button class="actbtn fwd" title="Отправить рейс"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Отправить</button>
+              </div>
+            </div>
+          </article>
+
+        </div>
+      </section>
+
+      <!-- ---------- PAST WEEK 25 (collapsed) ---------- -->
+      <section class="week collapsed-body">
+        <div class="week-head collapsed" data-screen-label="Неделя 25 (свёрнута)">
+          <span class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+          <span class="week-num">W25</span>
+          <span class="week-title">Неделя 25 <span class="wmeta">· 15–20 июня 2026 (Пн–Сб)</span></span>
+          <div class="week-right">
+            <div class="tara-chips">
+              <span class="tchip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>Ящик <b class="tnum">1 040 шт</b></span>
+              <span class="tchip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-1.1 4-2 9-2s9 .9 9 2-4 2-9 2-9-.9-9-2z"/><path d="M3 6v12c0 1.1 4 2 9 2s9-.9 9-2V6"/></svg>Бочка <b class="tnum">78 шт</b></span>
+            </div>
+            <span class="week-tot"><b class="tnum">5</b> рейсов</span>
+          </div>
+        </div>
+        <div class="trips"></div>
+      </section>
+    </div>
+
+    <!-- ===================== STATIC SPECIMENS ===================== -->
+    <section class="specimens">
+      <p class="spec-eyebrow">Состояния · статичные</p>
+      <h2 class="spec-title">Диалоги</h2>
+      <div class="spec-grid">
+
+        <!-- Create / edit dialog -->
+        <div class="spec-stage">
+          <p class="spec-cap">«+ Рейс тары» / карандаш на рейсе → форма рейса (создание = редактирование)</p>
+          <div class="modal modal-wide" data-screen-label="Диалог «Рейс тары»">
+            <div class="modal-head">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <h3 class="modal-title">Рейс тары</h3>
+                <span class="badge s-planned"><span class="dot"></span>Плановый</span>
+              </div>
+              <button class="modal-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="modal-body">
+
+              <!-- dates -->
+              <div class="form-sec">
+                <div class="frow">
+                  <div class="field">
+                    <span class="k">Отправление</span>
+                    <div class="input"><input type="text" value="24 июня" /><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--mute)"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                  </div>
+                  <div class="field">
+                    <span class="k">Прибытие</span>
+                    <div class="input"><input type="text" value="26 июня" /><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--mute)"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+                  </div>
+                </div>
+                <p class="hint">Введите одну дату — вторая подставится (±2 дня), обе можно править.</p>
+              </div>
+
+              <!-- driver combobox (open, required) -->
+              <div class="form-sec">
+                <span class="k">Водитель<span class="req">*</span></span>
+                <div class="combo">
+                  <div class="combo-search">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" value="Кова" placeholder="Поиск по фамилии…" />
+                  </div>
+                  <div class="combo-list">
+                    <div class="combo-opt sel">Коваль Р. С. <span class="tk">· Юг-Логистик</span>
+                      <svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div class="combo-opt">Петренко А. В. <span class="tk">· Юг-Логистик</span></div>
+                    <div class="combo-opt">Гнатюк В. П. <span class="tk">· Магистраль</span></div>
+                    <div class="combo-opt">Сидоров И. Н. <span class="tk">· АвтоТранс</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- positions -->
+              <div class="form-sec">
+                <span class="k">Позиции <span style="text-transform:none; letter-spacing:-0.01em; color:var(--mute)">· 2</span></span>
+                <div class="poslist">
+
+                  <div class="posedit">
+                    <button class="posedit-x" title="Удалить позицию"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                    <div class="posedit-grid">
+                      <div class="field">
+                        <span class="k">Фермер</span>
+                        <div class="selectbox">ООО «Зелёный Дол» <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+                      </div>
+                      <div class="field">
+                        <span class="k">Тип тары</span>
+                        <div class="selectbox">Ящик овощной <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+                      </div>
+                      <div class="field">
+                        <span class="k">Кол-во</span>
+                        <div class="input"><input type="text" class="tnum" value="150" /><span class="suf">шт</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="posedit">
+                    <button class="posedit-x" title="Удалить позицию"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                    <div class="posedit-grid">
+                      <div class="field">
+                        <span class="k">Фермер</span>
+                        <div class="selectbox">ООО «Юг-Агро» <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+                      </div>
+                      <div class="field">
+                        <span class="k">Тип тары</span>
+                        <div class="selectbox">Бочка пластиковая · 250 кг <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+                      </div>
+                      <div class="field">
+                        <span class="k">Кол-во</span>
+                        <div class="input"><input type="text" class="tnum" value="12" /><span class="suf">шт</span></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button class="addpos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Добавить позицию</button>
+                </div>
+              </div>
+
+            </div>
+            <div class="modal-foot">
+              <button class="btn">Отмена</button>
+              <button class="btn btn-primary">Сохранить</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Driver modal -->
+        <div class="spec-stage">
+          <p class="spec-cap">Клик по «водитель · ТК» → карточка водителя</p>
+          <div class="modal" data-screen-label="Модалка водителя">
+            <div class="modal-head">
+              <div>
+                <div class="drv-name">Коваль Роман Сергеевич</div>
+                <span class="tk-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                  ТК «Юг-Логистик»
+                </span>
+              </div>
+              <button class="modal-x" title="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            <div class="modal-body">
+              <div class="field">
+                <span class="k">Телефон</span>
+                <a class="phone-link" href="tel:+79181234567">+7 918 123-45-67</a>
+              </div>
+              <div class="field">
+                <span class="k">Машина</span>
+                <div class="infobox">ГАЗ-3309 «Валдай», бортовой тент. Госномер К 218 ТР 123. Возит пустую тару под обратную загрузку.</div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button class="btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                Скопировать телефон
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>
