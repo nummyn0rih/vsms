@@ -8,6 +8,11 @@ import type { PrismaClient } from "@/lib/generated/prisma/client";
 // Завод — фиксированная локация id=0 (DOMAIN §3, правило 1). Не FK, литерал.
 export const FACTORY_LOCATION_ID = 0;
 
+// Транзит-сентинелы (DOMAIN §3, правило 1): двухфазное движение тары идёт через
+// «в пути». Не FK, литералы. Как локации для opening/ручного ввода — запрещены.
+export const TRANSIT_TO_FACTORY = -1; // в пути НА завод (продукция фермер→завод)
+export const TRANSIT_TO_FARMER = -2; // в пути С завода (тара завод→фермер)
+
 type Tx = Omit<
   PrismaClient,
   "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"

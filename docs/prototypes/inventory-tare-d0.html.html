@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Тара</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    /* outflow tone for negative (farmer) figures — muted amber, sign carries the meaning */
+    --outflow: #9a5a12;
+    --outflow-soft: #fbf3e6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    padding: 18px 20px 14px;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none;
+    letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--mute);
+  }
+  .nav-foot button {
+    border: 0; background: transparent; color: var(--mute); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center;
+  }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head {
+    padding: 22px 28px 18px;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap; border-bottom: 1px solid var(--hairline);
+  }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 5px 0 0; color: var(--mute); font-size: 13px; max-width: 620px; line-height: 18px; }
+
+  /* factory summary card (right of head) */
+  .factory-sum {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas);
+    padding: 11px 16px; min-width: 240px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+  }
+  .factory-sum .fs-label {
+    font-size: 11px; color: var(--mute); letter-spacing: 0; text-transform: none;
+    display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+  }
+  .factory-sum .fs-label svg { width: 14px; height: 14px; opacity: .8; }
+  .factory-sum .fs-figs { display: flex; align-items: baseline; gap: 16px; }
+  .factory-sum .fig { display: flex; align-items: baseline; gap: 6px; }
+  .factory-sum .fig .n { font-size: 21px; font-weight: 600; letter-spacing: -0.03em; }
+  .factory-sum .fig .u { font-size: 13px; color: var(--body); }
+  .factory-sum .fs-state { font-size: 11px; color: var(--mute); margin-top: 6px; }
+
+  .content { padding: 22px 28px 64px; max-width: 1120px; }
+
+  /* ---------- state segmented control ---------- */
+  .bar { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; flex-wrap: wrap; }
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button {
+    border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500;
+    letter-spacing: -0.02em; color: var(--mute); padding: 7px 16px; border-radius: 6px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+  .seg .cnt { font-size: 11px; color: var(--mute); }
+  .seg button.active .cnt { color: var(--body); }
+
+  .seg-note { font-size: 12px; color: var(--mute); display: inline-flex; align-items: center; gap: 7px; line-height: 16px; }
+  .seg-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* show-all toggle */
+  .toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--body); cursor: pointer; user-select: none; }
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .toggle .track {
+    width: 34px; height: 20px; border-radius: 999px; background: var(--canvas-soft-2);
+    border: 1px solid var(--hairline); position: relative; transition: background .14s, border-color .14s;
+  }
+  .toggle .track::after {
+    content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 999px;
+    background: var(--canvas); box-shadow: 0 1px 2px #0000001f; transition: transform .14s;
+  }
+  .toggle input:checked + .track { background: var(--ink); border-color: var(--ink); }
+  .toggle input:checked + .track::after { transform: translateX(14px); }
+
+  /* ---------- table-meta ---------- */
+  .table-meta { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 12px; flex-wrap: wrap; }
+  .table-meta h2 { font-size: 15px; font-weight: 500; margin: 0; letter-spacing: -0.02em; }
+  .table-meta .count { font-size: 13px; color: var(--mute); }
+
+  /* ---------- matrix ---------- */
+  .tablewrap { border: 1px solid var(--hairline); border-radius: 8px; overflow: auto; max-height: 600px; background: var(--canvas); }
+  table.matrix { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 14px; }
+  table.matrix th, table.matrix td { border-bottom: 1px solid var(--hairline); }
+
+  table.matrix thead th {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--canvas-soft); text-align: right; vertical-align: bottom;
+    padding: 11px 18px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+  }
+  table.matrix thead th.loc-col { left: 0; z-index: 30; border-right: 1px solid var(--hairline); text-align: left; }
+  .col-head { display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+  .col-name { font-size: 14px; color: var(--ink); font-weight: 500; }
+  .col-kind { font-size: 11px; color: var(--mute); font-weight: 400; }
+
+  table.matrix tbody th.loc-col {
+    position: sticky; left: 0; z-index: 10;
+    background: var(--canvas); border-right: 1px solid var(--hairline);
+    text-align: left; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+    padding: 0 18px; color: var(--ink); min-width: 230px; height: 52px;
+  }
+  table.matrix tbody td { padding: 0; height: 52px; }
+
+  table.matrix tbody tr:hover th.loc-col,
+  table.matrix tbody tr:hover td { background: var(--canvas-soft); }
+
+  /* factory (Завод) row — emphasised */
+  tr.factory th.loc-col { background: var(--canvas-soft-2); font-weight: 600; }
+  tr.factory:hover th.loc-col { background: #efefef; }
+  tr.factory td { background: #fcfcfc; }
+  tr.factory:hover td { background: var(--canvas-soft); }
+  .loc-main {
+    display: inline-flex; align-items: center; gap: 9px;
+  }
+  .loc-main .pin {
+    font-size: 10px; letter-spacing: 0; color: var(--body);
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 4px;
+    padding: 1px 6px; text-transform: none;
+  }
+  .loc-sub { display: block; font-size: 11px; color: var(--mute); font-weight: 400; margin-top: 1px; }
+
+  /* balance cell button */
+  .balcell {
+    width: 100%; height: 100%; min-width: 150px;
+    border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+    padding: 0 18px; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .balcell:hover { background: #f0f0f0; box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+  tr.factory .balcell:hover { background: #ededed; }
+  .balcell .num {
+    font-family: "Geist Mono", ui-monospace, monospace; letter-spacing: 0;
+    font-size: 15px; font-weight: 500;
+  }
+  .balcell .u { font-size: 12px; color: var(--mute); }
+  .balcell.pos .num { color: var(--ink); }
+  .balcell.neg .num { color: var(--outflow); }
+  .balcell.zero { cursor: default; }
+  .balcell.zero:hover { background: transparent; box-shadow: none; }
+  .balcell.zero .num { color: var(--hairline-strong); }
+  .balcell.zero .u { display: none; }
+
+  /* footer total row */
+  table.matrix tfoot th, table.matrix tfoot td {
+    background: var(--canvas-soft); border-top: 1px solid var(--hairline); border-bottom: 0;
+    padding: 0; height: 46px;
+  }
+  table.matrix tfoot th.loc-col {
+    position: sticky; left: 0; z-index: 10; text-align: left; padding: 0 18px;
+    border-right: 1px solid var(--hairline); font-weight: 500; font-size: 13px; color: var(--body);
+  }
+  .totcell {
+    display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 18px; height: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .totcell .num { font-family: "Geist Mono", ui-monospace, monospace; letter-spacing: 0; font-size: 14px; font-weight: 500; color: var(--body); }
+  .totcell .u { font-size: 12px; color: var(--mute); }
+
+  /* ---------- legend ---------- */
+  .legend {
+    margin-top: 18px; border: 1px solid var(--hairline); border-radius: 8px;
+    background: var(--canvas-soft); padding: 14px 16px;
+    font-size: 12.5px; color: var(--body); line-height: 18px; max-width: 760px;
+  }
+  .legend .lg-row { display: flex; gap: 10px; align-items: flex-start; }
+  .legend .lg-row + .lg-row { margin-top: 8px; }
+  .legend .sgn {
+    font-family: "Geist Mono", monospace; font-size: 12px; font-weight: 500;
+    width: 20px; flex-shrink: 0; text-align: center; padding-top: 1px;
+  }
+  .legend .sgn.plus { color: var(--ink); }
+  .legend .sgn.minus { color: var(--outflow); }
+  .legend .lg-foot {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--hairline);
+    color: var(--mute); display: flex; gap: 8px; align-items: flex-start;
+  }
+  .legend .lg-foot svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; opacity: .8; }
+
+  /* ---------- empty state (Лом) ---------- */
+  .empty {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft);
+    padding: 56px 24px; text-align: center; max-width: 1120px;
+  }
+  .empty .ic {
+    width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 10px;
+    display: grid; place-items: center; background: var(--canvas); border: 1px solid var(--hairline);
+    color: var(--mute);
+  }
+  .empty .ic svg { width: 22px; height: 22px; }
+  .empty h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+  .empty p { margin: 0 auto; font-size: 13px; color: var(--mute); max-width: 420px; line-height: 19px; }
+
+  .hide { display: none !important; }
+
+  /* ---------- drill-down panel ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: #17171726; opacity: 0; pointer-events: none;
+    transition: opacity .16s; z-index: 90;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 92vw;
+    background: var(--canvas); border-left: 1px solid var(--hairline);
+    box-shadow: -8px 0 24px -12px #00000026;
+    transform: translateX(100%); transition: transform .2s cubic-bezier(.4,0,.2,1);
+    z-index: 100; display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .dr-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--hairline); }
+  .dr-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .dr-loc { font-size: 12px; color: var(--mute); letter-spacing: 0; }
+  .dr-title { font-size: 17px; font-weight: 600; letter-spacing: -0.03em; margin: 3px 0 0; }
+  .dr-close {
+    border: 1px solid var(--hairline); background: var(--canvas); width: 30px; height: 30px;
+    border-radius: 6px; display: grid; place-items: center; cursor: pointer; color: var(--body); flex-shrink: 0;
+  }
+  .dr-close:hover { background: var(--canvas-soft); color: var(--ink); }
+  .dr-bal { display: flex; align-items: baseline; gap: 9px; margin-top: 16px; }
+  .dr-bal .b-num { font-family: "Geist Mono", monospace; letter-spacing: -0.01em; font-size: 30px; font-weight: 600; }
+  .dr-bal.pos .b-num { color: var(--ink); }
+  .dr-bal.neg .b-num { color: var(--outflow); }
+  .dr-bal .b-u { font-size: 14px; color: var(--body); }
+  .dr-meta { font-size: 12px; color: var(--mute); margin-top: 7px; line-height: 17px; }
+
+  .dr-body { flex: 1; overflow-y: auto; padding: 16px 22px 24px; }
+  .dr-body h4 {
+    font-size: 11px; color: var(--mute); font-weight: 500; letter-spacing: 0;
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .dr-count { font-size: 12px; color: var(--mute); margin: 0 0 12px; }
+
+  .mv { display: flex; flex-direction: column; }
+  .mv-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--hairline);
+  }
+  .mv-row:last-child { border-bottom: 0; }
+  .mv-l { min-width: 0; }
+  .mv-type { display: inline-flex; align-items: center; gap: 7px; }
+  .mv-chip {
+    font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: 0;
+    padding: 1px 7px; border-radius: 4px; background: var(--canvas-soft-2);
+    border: 1px solid var(--hairline); color: var(--body); text-transform: none;
+  }
+  .mv-date { font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .mv-flow { font-size: 13px; color: var(--ink); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+  .mv-flow svg { width: 13px; height: 13px; color: var(--mute); flex-shrink: 0; }
+  .mv-src { font-size: 11.5px; color: var(--mute); margin-top: 3px; }
+  .mv-qty {
+    font-family: "Geist Mono", monospace; letter-spacing: 0; font-size: 15px; font-weight: 500;
+    font-variant-numeric: tabular-nums; text-align: right; align-self: center;
+  }
+  .mv-qty.pos { color: var(--ink); }
+  .mv-qty.neg { color: var(--outflow); }
+
+  .dr-foot {
+    padding: 13px 22px; border-top: 1px solid var(--hairline); background: var(--canvas-soft);
+    font-size: 11.5px; color: var(--mute); display: flex; gap: 8px; align-items: flex-start;
+  }
+  .dr-foot svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; opacity: .8; }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="430" y="300" width="150" height="120" rx="12" fill="#ffffff" stroke="#171717" stroke-width="4"/>
+    <path d="M430 340 H580" stroke="#171717" stroke-width="4"/>
+    <rect x="640" y="300" width="130" height="120" rx="60" fill="#ffffff" stroke="#9a5a12" stroke-width="4"/>
+    <text x="600" y="520" font-family="monospace" font-size="46" fill="#171717" text-anchor="middle">+1200</text>
+  </svg>
+</template>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Тара">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Логистика материалов
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Справочники
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span>snabzhenec</span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Тара</h1>
+        <p class="page-sub">Остатки тары — баланс движений склада по тройке локация × тип тары × состояние. Read-only · сезон 2026.</p>
+      </div>
+      <div class="factory-sum">
+        <div class="fs-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+          На заводе · годная
+        </div>
+        <div class="fs-figs">
+          <span class="fig"><span class="n mono tnum">1200</span><span class="u">ящиков</span></span>
+          <span class="fig"><span class="n mono tnum">78</span><span class="u">бочек</span></span>
+        </div>
+        <div class="fs-state">Разные типы тары не суммируются — учёт раздельный.</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- ===================== STATE SEGMENTED ===================== -->
+      <div class="bar">
+        <div class="seg" role="tablist" aria-label="Состояние тары">
+          <button class="active" data-state="good" role="tab" aria-selected="true">
+            Годная <span class="cnt">остаток</span>
+          </button>
+          <button data-state="scrap" role="tab" aria-selected="false">
+            Лом <span class="cnt">нет данных</span>
+          </button>
+        </div>
+        <label class="toggle" id="show-all-wrap">
+          <input type="checkbox" id="show-all" />
+          <span class="track"></span>
+          показать всех фермеров
+        </label>
+      </div>
+      <p class="seg-note" id="seg-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        Фермеры с нулевым балансом скрыты. Клик по ячейке — история движений.
+      </p>
+
+      <!-- ===================== GOOD STATE — MATRIX ===================== -->
+      <section id="panel-good" data-screen-label="Тара · Годная">
+        <div class="table-meta">
+          <h2>Баланс тары · штук</h2>
+          <span class="count" id="meta-count">Завод + 4 фермера · 2 типа тары</span>
+        </div>
+
+        <div class="tablewrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th class="loc-col">Локация</th>
+                <th>
+                  <div class="col-head">
+                    <span class="col-name">Ящик овощной</span>
+                    <span class="col-kind mono">box</span>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-head">
+                    <span class="col-name">Бочка пластиковая</span>
+                    <span class="col-kind mono">barrel · 250 кг</span>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="matrix-body"><!-- rows injected --></tbody>
+            <tfoot>
+              <tr>
+                <th class="loc-col">Итого получено с фермеров</th>
+                <td><div class="totcell"><span class="num">+1200</span><span class="u">шт</span></div></td>
+                <td><div class="totcell"><span class="num">+78</span><span class="u">шт</span></div></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- ===================== HONEST LEGEND ===================== -->
+        <div class="legend">
+          <div class="lg-row">
+            <span class="sgn plus">+</span>
+            <span><strong>Завод:</strong> «+» — тара на складе (физический остаток годной тары).</span>
+          </div>
+          <div class="lg-row">
+            <span class="sgn minus">−</span>
+            <span><strong>Фермер:</strong> «−» — net отгружено на завод за период. Это <strong>поток</strong>, не остаток тары на руках у фермера.</span>
+          </div>
+          <div class="lg-foot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Полные остатки тары у фермеров появятся с доставками завод→фермер (этап «Логистика материалов»). «Итого получено с фермеров» по типу — зеркало заводского «+».</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SCRAP STATE — EMPTY ===================== -->
+      <section id="panel-scrap" class="hide" data-screen-label="Тара · Лом">
+        <div class="empty">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </div>
+          <h3>Списаний пока нет</h3>
+          <p>Лом — это состояние тары, не локация. Баланс лома появится с операциями списания (годная → лом) на этапе D2.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== DRILL-DOWN DRAWER ===================== -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dr-head">
+    <div class="dr-top">
+      <div>
+        <div class="dr-loc" id="dr-loc">Локация</div>
+        <h3 class="dr-title" id="dr-title">Тип тары</h3>
+      </div>
+      <button class="dr-close" id="dr-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dr-bal" id="dr-bal">
+      <span class="b-num" id="dr-balnum">0</span>
+      <span class="b-u">шт · <span id="dr-balstate">годная</span></span>
+    </div>
+    <div class="dr-meta" id="dr-meta"></div>
+  </div>
+  <div class="dr-body">
+    <h4>История движений</h4>
+    <p class="dr-count" id="dr-count">0 движений</p>
+    <div class="mv" id="dr-list"></div>
+  </div>
+  <div class="dr-foot">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span>Read-only. Движения создаются автоматически из отгрузок и операций склада.</span>
+  </div>
+</aside>
+
+<script>
+(function () {
+  /* ---------- model ---------- */
+  var TYPES = {
+    box:    { name: "Ящик овощной", sub: "box" },
+    barrel: { name: "Бочка пластиковая", sub: "barrel · 250 кг" }
+  };
+  var FACTORY = { id: "factory", name: "Завод", sub: "склад завода · главная" };
+
+  // farmer return events (farmer → завод). qty stored as positive magnitude.
+  // farmer balance = −Σ qty ; factory balance = +Σ qty over all farmers.
+  var FARMERS = [
+    { id: "kovalchuk", name: "Ковальчук А. П.", zero: false, ev: {
+        box:    [["19 июня",140,"2026-118"],["12 июня",120,"2026-109"],["5 июня",80,"2026-101"]],
+        barrel: [["19 июня",12,"2026-118"],["12 июня",12,"2026-109"]]
+    }},
+    { id: "melnik", name: "Мельник И. Д.", zero: false, ev: {
+        box:    [["18 июня",180,"2026-117"],["11 июня",140,"2026-108"],["4 июня",100,"2026-100"]],
+        barrel: [["11 июня",18,"2026-108"]]
+    }},
+    { id: "tkachenko", name: "Ткаченко Л. Н.", zero: false, ev: {
+        box:    [["17 июня",120,"2026-115"],["9 июня",140,"2026-106"]],
+        barrel: [["17 июня",18,"2026-115"],["9 июня",18,"2026-106"]]
+    }},
+    { id: "gasparyan", name: "Гаспарян В. С.", zero: false, ev: {
+        box:    [["15 июня",90,"2026-112"],["8 июня",90,"2026-105"]],
+        barrel: []
+    }},
+    { id: "bondarenko", name: "Бондаренко О. М.", zero: true, ev: { box: [], barrel: [] }},
+    { id: "sidorenko", name: "Сидоренко Р. В.", zero: true, ev: { box: [], barrel: [] }}
+  ];
+
+  var TYPE_KEYS = ["box", "barrel"];
+
+  function sum(arr) { return arr.reduce(function (a, e) { return a + e[1]; }, 0); }
+
+  // ---------- build matrix body ----------
+  var tbody = document.getElementById("matrix-body");
+
+  function balCellHTML(val, locId, typeKey) {
+    var cls = val === 0 ? "zero" : (val > 0 ? "pos" : "neg");
+    var label = val === 0 ? "—" : (val > 0 ? "+" + val : "−" + Math.abs(val));
+    var unit = val === 0 ? "" : '<span class="u">шт</span>';
+    var dis = val === 0 ? "" : 'data-loc="' + locId + '" data-type="' + typeKey + '"';
+    return '<td><button class="balcell ' + cls + '" ' + dis + '><span class="num">' + label + '</span>' + unit + '</button></td>';
+  }
+
+  function buildRows() {
+    var html = "";
+    // factory row
+    var fBox = 0, fBar = 0;
+    FARMERS.forEach(function (f) { fBox += sum(f.ev.box); fBar += sum(f.ev.barrel); });
+    html += '<tr class="factory">'
+      + '<th class="loc-col"><span class="loc-main"><span class="pin mono">завод</span>Завод</span>'
+      + '<span class="loc-sub">склад завода · главная локация</span></th>'
+      + balCellHTML(fBox, "factory", "box")
+      + balCellHTML(fBar, "factory", "barrel")
+      + '</tr>';
+    // farmer rows
+    FARMERS.forEach(function (f) {
+      var b = sum(f.ev.box), r = sum(f.ev.barrel);
+      var isZero = (b === 0 && r === 0);
+      html += '<tr class="farmer' + (isZero ? " zero-row" : "") + '"' + (isZero ? ' style="display:none"' : '') + '>'
+        + '<th class="loc-col">' + f.name + '</th>'
+        + balCellHTML(b === 0 ? 0 : -b, f.id, "box")
+        + balCellHTML(r === 0 ? 0 : -r, f.id, "barrel")
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+  buildRows();
+
+  // ---------- show-all toggle ----------
+  var showAll = document.getElementById("show-all");
+  var segNote = document.getElementById("seg-note");
+  var metaCount = document.getElementById("meta-count");
+  showAll.addEventListener("change", function () {
+    var zeroRows = tbody.querySelectorAll("tr.zero-row");
+    zeroRows.forEach(function (tr) { tr.style.display = showAll.checked ? "" : "none"; });
+    segNote.firstChild.nextSibling; // noop
+    if (showAll.checked) {
+      segNote.lastChild.textContent = " Показаны все фермеры, включая нулевой баланс. Клик по ячейке — история движений.";
+      metaCount.textContent = "Завод + 6 фермеров · 2 типа тары";
+    } else {
+      segNote.lastChild.textContent = " Фермеры с нулевым балансом скрыты. Клик по ячейке — история движений.";
+      metaCount.textContent = "Завод + 4 фермера · 2 типа тары";
+    }
+  });
+
+  // ---------- state segmented ----------
+  var seg = document.querySelector(".seg");
+  var panelGood = document.getElementById("panel-good");
+  var panelScrap = document.getElementById("panel-scrap");
+  var showAllWrap = document.getElementById("show-all-wrap");
+  seg.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-state]");
+    if (!btn) return;
+    seg.querySelectorAll("button").forEach(function (b) {
+      var on = b === btn;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var good = btn.dataset.state === "good";
+    panelGood.classList.toggle("hide", !good);
+    panelScrap.classList.toggle("hide", good);
+    segNote.style.display = good ? "" : "none";
+    showAllWrap.style.visibility = good ? "visible" : "hidden";
+  });
+
+  // ---------- drill-down ----------
+  var overlay = document.getElementById("overlay");
+  var drawer = document.getElementById("drawer");
+
+  var MTYPE = {
+    return:     "возврат",
+    delivery:   "доставка",
+    transfer:   "переброска",
+    scrap:      "в лом",
+    disposal:   "утиль",
+    adjustment: "правка"
+  };
+  var ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+
+  function rowsForLoc(locId, typeKey) {
+    // returns array of {date, mtype, from, to, qty, src}
+    var rows = [];
+    if (locId === "factory") {
+      // factory receives: +qty, from each farmer
+      FARMERS.forEach(function (f) {
+        (f.ev[typeKey] || []).forEach(function (ev) {
+          rows.push({ date: ev[0], mtype: "return", from: f.name, to: "Завод", qty: ev[1], src: "Отгрузка №" + ev[2] });
+        });
+      });
+    } else {
+      var f = FARMERS.filter(function (x) { return x.id === locId; })[0];
+      (f.ev[typeKey] || []).forEach(function (ev) {
+        rows.push({ date: ev[0], mtype: "return", from: f.name, to: "Завод", qty: -ev[1], src: "Отгрузка №" + ev[2] });
+      });
+    }
+    // sort by day number desc (parse leading int of "DD июня")
+    rows.sort(function (a, b) { return parseInt(b.date, 10) - parseInt(a.date, 10); });
+    return rows;
+  }
+
+  function openDrawer(locId, typeKey) {
+    var loc = locId === "factory" ? FACTORY : FARMERS.filter(function (x) { return x.id === locId; })[0];
+    var t = TYPES[typeKey];
+    var rows = rowsForLoc(locId, typeKey);
+    var bal = rows.reduce(function (a, r) { return a + r.qty; }, 0);
+
+    document.getElementById("dr-loc").textContent = loc.name + " · " + (locId === "factory" ? "склад завода" : "фермер");
+    document.getElementById("dr-title").textContent = t.name;
+
+    var balEl = document.getElementById("dr-bal");
+    var balNum = document.getElementById("dr-balnum");
+    balEl.classList.remove("pos", "neg");
+    balEl.classList.add(bal >= 0 ? "pos" : "neg");
+    balNum.textContent = bal > 0 ? "+" + bal : (bal < 0 ? "−" + Math.abs(bal) : "0");
+
+    document.getElementById("dr-meta").textContent = locId === "factory"
+      ? "Физический остаток годной тары на складе завода."
+      : "Net поток за сезон: тара, отгруженная на завод. Не остаток на руках у фермера.";
+
+    document.getElementById("dr-count").textContent = rows.length + " " + plural(rows.length, "движение", "движения", "движений");
+
+    var list = document.getElementById("dr-list");
+    list.innerHTML = rows.map(function (r) {
+      var q = r.qty > 0 ? "+" + r.qty : "−" + Math.abs(r.qty);
+      var qcls = r.qty >= 0 ? "pos" : "neg";
+      return '<div class="mv-row">'
+        + '<div class="mv-l">'
+        + '<div class="mv-type"><span class="mv-chip">' + MTYPE[r.mtype] + '</span><span class="mv-date">' + r.date + '</span></div>'
+        + '<div class="mv-flow">' + r.from + ' ' + ARROW + ' ' + r.to + '</div>'
+        + '<div class="mv-src">' + r.src + '</div>'
+        + '</div>'
+        + '<div class="mv-qty ' + qcls + '">' + q + '</div>'
+        + '</div>';
+    }).join("");
+
+    overlay.classList.add("open");
+    drawer.classList.add("open");
+    drawer.setAttribute("aria-hidden", "false");
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+
+  function closeDrawer() {
+    overlay.classList.remove("open");
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+
+  tbody.addEventListener("click", function (e) {
+    var btn = e.target.closest(".balcell:not(.zero)");
+    if (!btn) return;
+    openDrawer(btn.dataset.loc, btn.dataset.type);
+  });
+  overlay.addEventListener("click", closeDrawer);
+  document.getElementById("dr-close").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+})();
+</script>
+</body>
+</html>

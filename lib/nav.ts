@@ -57,6 +57,7 @@ export const NAV: NavItem[] = [
     children: [
       { href: "/settings/seasons", label: "Сезоны", enabled: true },
       { href: "/settings/norms", label: "Нормы", enabled: true },
+      { href: "/settings/opening-stock", label: "Начальные остатки", enabled: true },
       { href: "/settings/recipes", label: "Рецептуры", enabled: true },
       { href: "/settings/alert-rules", label: "Пороги алертов", enabled: true },
     ],

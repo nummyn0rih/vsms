@@ -62,6 +62,7 @@ enum MovementType {
   disposal // лом→out, утилизация
   adjustment // ручная правка
   consumption // расход ингредиента в производство, авто из AcceptanceAct
+  opening // начальный остаток: from=null→локация, source=manual; задаётся раз, правится заменой
 }
 
 // Состояние тары. Лом — это СОСТОЯНИЕ, не локация (DOMAIN.md разд. 3).
