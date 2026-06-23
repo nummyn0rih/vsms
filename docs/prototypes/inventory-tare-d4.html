@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Тара</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    /* muted amber for negative (gap) figures — sign carries meaning, no drama */
+    --outflow: #9a5a12;
+    --outflow-soft: #fbf3e6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    padding: 18px 20px 14px;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none;
+    letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--mute);
+  }
+  .nav-foot button {
+    border: 0; background: transparent; color: var(--mute); cursor: pointer;
+    width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center;
+  }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head {
+    padding: 22px 28px 18px;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;
+    flex-wrap: wrap; border-bottom: 1px solid var(--hairline);
+  }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 5px 0 0; color: var(--mute); font-size: 13px; max-width: 640px; line-height: 18px; }
+
+  /* factory summary card (right of head) */
+  .factory-sum {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas);
+    padding: 11px 16px; min-width: 240px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+  }
+  .factory-sum .fs-label {
+    font-size: 11px; color: var(--mute); letter-spacing: 0; text-transform: none;
+    display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+  }
+  .factory-sum .fs-label svg { width: 14px; height: 14px; opacity: .8; }
+  .factory-sum .fs-figs { display: flex; align-items: baseline; gap: 16px; }
+  .factory-sum .fig { display: flex; align-items: baseline; gap: 6px; }
+  .factory-sum .fig .n { font-size: 21px; font-weight: 600; letter-spacing: -0.03em; }
+  .factory-sum .fig .u { font-size: 13px; color: var(--body); }
+  .factory-sum .fs-state { font-size: 11px; color: var(--mute); margin-top: 6px; }
+
+  .content { padding: 22px 28px 64px; max-width: 1120px; }
+
+  /* ---------- state segmented control ---------- */
+  .bar { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; flex-wrap: wrap; }
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button {
+    border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500;
+    letter-spacing: -0.02em; color: var(--mute); padding: 7px 16px; border-radius: 6px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+  .seg .cnt { font-size: 11px; color: var(--mute); }
+  .seg button.active .cnt { color: var(--body); }
+
+  .seg-note { font-size: 12px; color: var(--mute); display: inline-flex; align-items: center; gap: 7px; line-height: 16px; }
+  .seg-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* show-all toggle */
+  .toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: var(--body); cursor: pointer; user-select: none; }
+  .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .toggle .track {
+    width: 34px; height: 20px; border-radius: 999px; background: var(--canvas-soft-2);
+    border: 1px solid var(--hairline); position: relative; transition: background .14s, border-color .14s;
+  }
+  .toggle .track::after {
+    content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 999px;
+    background: var(--canvas); box-shadow: 0 1px 2px #0000001f; transition: transform .14s;
+  }
+  .toggle input:checked + .track { background: var(--ink); border-color: var(--ink); }
+  .toggle input:checked + .track::after { transform: translateX(14px); }
+
+  /* ---------- table-meta ---------- */
+  .table-meta { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 12px; flex-wrap: wrap; }
+  .table-meta h2 { font-size: 15px; font-weight: 500; margin: 0; letter-spacing: -0.02em; }
+  .table-meta .count { font-size: 13px; color: var(--mute); }
+
+  /* ---------- matrix ---------- */
+  .tablewrap { border: 1px solid var(--hairline); border-radius: 8px; overflow: auto; max-height: 600px; background: var(--canvas); }
+  table.matrix { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 14px; }
+  table.matrix th, table.matrix td { border-bottom: 1px solid var(--hairline); }
+
+  table.matrix thead th {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--canvas-soft); text-align: right; vertical-align: bottom;
+    padding: 11px 18px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+  }
+  table.matrix thead th.loc-col { left: 0; z-index: 30; border-right: 1px solid var(--hairline); text-align: left; }
+  .col-head { display: flex; flex-direction: column; gap: 3px; align-items: flex-end; }
+  .col-name { font-size: 14px; color: var(--ink); font-weight: 500; }
+  .col-kind { font-size: 11px; color: var(--mute); font-weight: 400; }
+
+  table.matrix tbody th.loc-col {
+    position: sticky; left: 0; z-index: 10;
+    background: var(--canvas); border-right: 1px solid var(--hairline);
+    text-align: left; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap;
+    padding: 0 18px; color: var(--ink); min-width: 230px; height: 52px;
+  }
+  table.matrix tbody td { padding: 0; height: 52px; }
+
+  table.matrix tbody tr:hover th.loc-col,
+  table.matrix tbody tr:hover td { background: var(--canvas-soft); }
+
+  /* factory (Завод) row — emphasised */
+  tr.factory th.loc-col { background: var(--canvas-soft-2); font-weight: 600; }
+  tr.factory:hover th.loc-col { background: #efefef; }
+  tr.factory td { background: #fcfcfc; }
+  tr.factory:hover td { background: var(--canvas-soft); }
+  .loc-main { display: inline-flex; align-items: center; gap: 9px; }
+  .loc-main .pin {
+    font-size: 10px; letter-spacing: 0; color: var(--body);
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 4px;
+    padding: 1px 6px; text-transform: none;
+  }
+  .loc-sub { display: block; font-size: 11px; color: var(--mute); font-weight: 400; margin-top: 1px; }
+
+  /* transit rows — normal row, muted location label only (it's "the road") */
+  #matrix-transit tr:first-child th.loc-col,
+  #matrix-transit tr:first-child td { border-top: 1px solid var(--hairline-strong); }
+  tr.transit th.loc-col { background: var(--canvas); font-weight: 500; }
+  tr.transit:hover th.loc-col, tr.transit:hover td { background: var(--canvas-soft); }
+  tr.transit .loc-name { color: var(--mute); }
+  tr.transit .pin { color: var(--mute); border-style: dashed; display: inline-flex; align-items: center; gap: 4px; }
+  tr.transit .pin svg { width: 11px; height: 11px; }
+
+  /* balance cell button */
+  .balcell {
+    width: 100%; height: 100%; min-width: 150px;
+    border: 0; background: transparent; cursor: pointer; font-family: inherit;
+    display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+    padding: 0 18px; color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .balcell:hover { background: #f0f0f0; box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+  tr.factory .balcell:hover { background: #ededed; }
+  .balcell .num {
+    font-family: "Geist Mono", ui-monospace, monospace; letter-spacing: 0;
+    font-size: 15px; font-weight: 500;
+  }
+  .balcell .u { font-size: 12px; color: var(--mute); }
+  .balcell.pos .num { color: var(--ink); }
+  .balcell.neg .num { color: var(--outflow); }
+  .balcell.zero { cursor: default; }
+  .balcell.zero:hover { background: transparent; box-shadow: none; }
+  .balcell.zero .num { color: var(--hairline-strong); }
+  .balcell.zero .u { display: none; }
+
+  /* footer total row */
+  table.matrix tfoot th, table.matrix tfoot td {
+    background: var(--canvas-soft); border-top: 1px solid var(--hairline-strong); border-bottom: 0;
+    padding: 0; height: 50px;
+  }
+  table.matrix tfoot th.loc-col {
+    position: sticky; left: 0; z-index: 10; text-align: left; padding: 0 18px;
+    border-right: 1px solid var(--hairline); font-weight: 600; font-size: 13px; color: var(--ink);
+  }
+  .tot-label { display: flex; flex-direction: column; gap: 1px; }
+  .tot-label .ts { font-size: 11px; color: var(--mute); font-weight: 400; letter-spacing: -0.01em; }
+  .totcell {
+    display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 0 18px; height: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .totcell .num { font-family: "Geist Mono", ui-monospace, monospace; letter-spacing: 0; font-size: 15px; font-weight: 600; color: var(--ink); }
+  .totcell .u { font-size: 12px; color: var(--mute); }
+
+  /* ---------- legend ---------- */
+  .legend {
+    margin-top: 18px; border: 1px solid var(--hairline); border-radius: 8px;
+    background: var(--canvas-soft); padding: 14px 16px;
+    font-size: 12.5px; color: var(--body); line-height: 18px; max-width: 760px;
+  }
+  .legend .lg-row { display: flex; gap: 10px; align-items: flex-start; }
+  .legend .lg-row + .lg-row { margin-top: 8px; }
+  .legend .sgn {
+    width: 20px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    padding-top: 2px; color: var(--mute);
+  }
+  .legend .sgn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); }
+  .legend .sgn svg { width: 15px; height: 15px; }
+  .legend .lg-foot {
+    margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--hairline);
+    color: var(--mute); display: flex; gap: 8px; align-items: flex-start;
+  }
+  .legend .lg-foot svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; opacity: .8; }
+  .legend .lg-foot b { color: var(--body); font-weight: 600; }
+
+  /* ---------- empty state (Лом) ---------- */
+  .empty {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft);
+    padding: 56px 24px; text-align: center; max-width: 1120px;
+  }
+  .empty .ic {
+    width: 44px; height: 44px; margin: 0 auto 16px; border-radius: 10px;
+    display: grid; place-items: center; background: var(--canvas); border: 1px solid var(--hairline);
+    color: var(--mute);
+  }
+  .empty .ic svg { width: 22px; height: 22px; }
+  .empty h3 { margin: 0 0 6px; font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+  .empty p { margin: 0 auto; font-size: 13px; color: var(--mute); max-width: 440px; line-height: 19px; }
+
+  .hide { display: none !important; }
+
+  /* ---------- drill-down panel ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: #17171726; opacity: 0; pointer-events: none;
+    transition: opacity .16s; z-index: 90;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 92vw;
+    background: var(--canvas); border-left: 1px solid var(--hairline);
+    box-shadow: -8px 0 24px -12px #00000026;
+    transform: translateX(100%); transition: transform .2s cubic-bezier(.4,0,.2,1);
+    z-index: 100; display: flex; flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+  .dr-head { padding: 20px 22px 16px; border-bottom: 1px solid var(--hairline); }
+  .dr-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .dr-loc { font-size: 12px; color: var(--mute); letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; }
+  .dr-loc svg { width: 13px; height: 13px; }
+  .dr-title { font-size: 17px; font-weight: 600; letter-spacing: -0.03em; margin: 3px 0 0; }
+  .dr-close {
+    border: 1px solid var(--hairline); background: var(--canvas); width: 30px; height: 30px;
+    border-radius: 6px; display: grid; place-items: center; cursor: pointer; color: var(--body); flex-shrink: 0;
+  }
+  .dr-close:hover { background: var(--canvas-soft); color: var(--ink); }
+  .dr-bal { display: flex; align-items: baseline; gap: 9px; margin-top: 16px; }
+  .dr-bal .b-num { font-family: "Geist Mono", monospace; letter-spacing: -0.01em; font-size: 30px; font-weight: 600; }
+  .dr-bal.pos .b-num { color: var(--ink); }
+  .dr-bal.neg .b-num { color: var(--outflow); }
+  .dr-bal .b-u { font-size: 14px; color: var(--body); }
+  .dr-meta { font-size: 12px; color: var(--mute); margin-top: 7px; line-height: 17px; }
+  .dr-meta.warn { color: var(--outflow); }
+
+  .dr-body { flex: 1; overflow-y: auto; padding: 16px 22px 24px; }
+  .dr-body h4 {
+    font-size: 11px; color: var(--mute); font-weight: 500; letter-spacing: 0;
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .dr-count { font-size: 12px; color: var(--mute); margin: 0 0 12px; }
+
+  .mv { display: flex; flex-direction: column; }
+  .mv-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+    padding: 12px 0; border-bottom: 1px solid var(--hairline);
+  }
+  .mv-row:last-child { border-bottom: 0; }
+  .mv-l { min-width: 0; }
+  .mv-type { display: inline-flex; align-items: center; gap: 7px; }
+  .mv-chip {
+    font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: 0;
+    padding: 1px 7px; border-radius: 4px; background: var(--canvas-soft-2);
+    border: 1px solid var(--hairline); color: var(--body); text-transform: none;
+  }
+  .mv-chip.transit { background: var(--canvas); border-style: dashed; color: var(--mute); }
+  .mv-date { font-size: 12px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  .mv-flow { font-size: 13px; color: var(--ink); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+  .mv-flow svg { width: 13px; height: 13px; color: var(--mute); flex-shrink: 0; }
+  .mv-src { font-size: 11.5px; color: var(--mute); margin-top: 3px; display: inline-flex; align-items: center; gap: 5px; }
+  .mv-src svg { width: 11px; height: 11px; flex-shrink: 0; }
+  .mv-qty {
+    font-family: "Geist Mono", monospace; letter-spacing: 0; font-size: 15px; font-weight: 500;
+    font-variant-numeric: tabular-nums; text-align: right; align-self: center;
+  }
+  .mv-qty.pos { color: var(--ink); }
+  .mv-qty.neg { color: var(--outflow); }
+
+  .dr-foot {
+    padding: 13px 22px; border-top: 1px solid var(--hairline); background: var(--canvas-soft);
+    font-size: 11.5px; color: var(--mute); display: flex; gap: 8px; align-items: flex-start;
+  }
+  .dr-foot svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; opacity: .8; }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="420" y="290" width="150" height="120" rx="12" fill="#ffffff" stroke="#171717" stroke-width="4"/>
+    <path d="M420 330 H570" stroke="#171717" stroke-width="4"/>
+    <rect x="640" y="290" width="130" height="120" rx="60" fill="#ffffff" stroke="#9a5a12" stroke-width="4"/>
+    <text x="600" y="520" font-family="monospace" font-size="44" fill="#171717" text-anchor="middle">2000 шт</text>
+  </svg>
+</template>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Тара">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        Логистика материалов
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Справочники
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span>snabzhenec</span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <div>
+        <h1 class="page-title">Тара</h1>
+        <p class="page-sub">Реальные остатки тары по локациям и типам: начальный + доставлено − отгружено. Строки «в пути» — тара в дороге между заводом и фермерами. Read-only · сезон 2026.</p>
+      </div>
+      <div class="factory-sum">
+        <div class="fs-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>
+          На заводе · годная
+        </div>
+        <div class="fs-figs">
+          <span class="fig"><span class="n mono tnum" id="fs-box">—</span><span class="u">ящиков</span></span>
+          <span class="fig"><span class="n mono tnum" id="fs-barrel">—</span><span class="u">бочек</span></span>
+        </div>
+        <div class="fs-state">Разные типы тары не суммируются — учёт раздельный.</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- ===================== STATE SEGMENTED ===================== -->
+      <div class="bar">
+        <div class="seg" role="tablist" aria-label="Состояние тары">
+          <button class="active" data-state="good" role="tab" aria-selected="true">
+            Годная <span class="cnt">остаток</span>
+          </button>
+          <button data-state="scrap" role="tab" aria-selected="false">
+            Лом <span class="cnt">нет данных</span>
+          </button>
+        </div>
+        <label class="toggle" id="show-all-wrap">
+          <input type="checkbox" id="show-all" />
+          <span class="track"></span>
+          показать всех фермеров
+        </label>
+      </div>
+      <p class="seg-note" id="seg-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span id="seg-note-txt">Фермеры с нулевым остатком скрыты. Клик по ячейке — история движений.</span>
+      </p>
+
+      <!-- ===================== GOOD STATE — MATRIX ===================== -->
+      <section id="panel-good" data-screen-label="Тара · Годная">
+        <div class="table-meta">
+          <h2>Остаток тары · штук</h2>
+          <span class="count" id="meta-count"></span>
+        </div>
+
+        <div class="tablewrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th class="loc-col">Локация</th>
+                <th>
+                  <div class="col-head">
+                    <span class="col-name">Ящик овощной</span>
+                    <span class="col-kind mono">box</span>
+                  </div>
+                </th>
+                <th>
+                  <div class="col-head">
+                    <span class="col-name">Бочка пластиковая</span>
+                    <span class="col-kind mono">barrel · 250 кг</span>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="matrix-body"><!-- factory + farmers injected --></tbody>
+            <tbody id="matrix-transit"><!-- transit rows injected --></tbody>
+            <tfoot>
+              <tr>
+                <th class="loc-col">
+                  <span class="tot-label">Итого в системе<span class="ts">склад + фермеры + в пути</span></span>
+                </th>
+                <td><div class="totcell"><span class="num tnum" id="tot-box">—</span><span class="u">шт</span></div></td>
+                <td><div class="totcell"><span class="num tnum" id="tot-barrel">—</span><span class="u">шт</span></div></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- ===================== LEGEND ===================== -->
+        <div class="legend">
+          <div class="lg-row">
+            <span class="sgn"><span class="dot"></span></span>
+            <span><strong>Завод / Фермер</strong> — реальный остаток годной тары на руках (начальный + доставлено − отгружено).</span>
+          </div>
+          <div class="lg-row">
+            <span class="sgn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+            <span><strong>В пути</strong> — тара в дороге, ещё не у получателя (отгружена или отправлена, но не принята).</span>
+          </div>
+          <div class="lg-row">
+            <span class="sgn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+            <span><strong>Лом</strong> — состояние тары; баланс появится с операциями списания.</span>
+          </div>
+          <div class="lg-foot">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span>Отрицательный остаток у фермера — временный зазор учёта: тара отгружена, а доставка завод→фермер ещё не отмечена. <b>«Итого в системе»</b> по типу = склад + фермеры + в пути — сохраняемый физический объём тары.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SCRAP STATE — EMPTY ===================== -->
+      <section id="panel-scrap" class="hide" data-screen-label="Тара · Лом">
+        <div class="empty">
+          <div class="ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </div>
+          <h3>Списаний пока нет</h3>
+          <p>Лом — это состояние тары, не локация. Баланс лома появится с операциями списания (годная → лом).</p>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== DRILL-DOWN DRAWER ===================== -->
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dr-head">
+    <div class="dr-top">
+      <div>
+        <div class="dr-loc" id="dr-loc">Локация</div>
+        <h3 class="dr-title" id="dr-title">Тип тары</h3>
+      </div>
+      <button class="dr-close" id="dr-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="dr-bal" id="dr-bal">
+      <span class="b-num" id="dr-balnum">0</span>
+      <span class="b-u">шт · <span id="dr-balstate">годная</span></span>
+    </div>
+    <div class="dr-meta" id="dr-meta"></div>
+  </div>
+  <div class="dr-body">
+    <h4>История движений</h4>
+    <p class="dr-count" id="dr-count">0 движений</p>
+    <div class="mv" id="dr-list"></div>
+  </div>
+  <div class="dr-foot">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span>Read-only. Движения создаются автоматически из отгрузок и рейсов тары.</span>
+  </div>
+</aside>
+
+<script>
+(function () {
+  /* ============================================================
+     MODEL — physical tara ledger (double-entry, conserved)
+     Each cell stores its own movements; balance = Σ qty.
+     A movement: m(sortKey, dateLabel, chip, isTransit, from, to, qty, srcKind, srcRef)
+       qty signed for THIS cell · srcKind: 'ship' (Отгрузка/Shipment) | 'trip' (Рейс тары/MaterialShipment) | 'inv'
+     ============================================================ */
+  function m(k, d, chip, transit, from, to, qty, srcKind, srcRef) {
+    return { k: k, d: d, chip: chip, transit: !!transit, from: from, to: to, qty: qty, srcKind: srcKind, srcRef: srcRef };
+  }
+
+  var TYPES = {
+    box:    { name: "Ящик овощной", sub: "box", unit1: "ящиков" },
+    barrel: { name: "Бочка пластиковая", sub: "barrel · 250 кг", unit1: "бочек" }
+  };
+  var TYPE_KEYS = ["box", "barrel"];
+
+  var FACTORY = { id: "factory", name: "Завод", sub: "склад завода · главная локация" };
+
+  // -------- Factory ledger (opening + receipts from farmers − dispatches to farmers) --------
+  var FACTORY_MV = {
+    box: [
+      m("2026-05-01","1 мая","остаток на начало",false,"Инвентаризация","Завод", 1870,"inv","Инвентаризация"),
+      m("2026-05-16","16 мая","отправлено",false,"Завод","Ткаченко Л. Н.", -240,"trip","Рейс Т-2026-025"),
+      m("2026-05-18","18 мая","отправлено",false,"Завод","Мельник И. Д.", -300,"trip","Рейс Т-2026-028"),
+      m("2026-05-20","20 мая","отправлено",false,"Завод","Ковальчук А. П.", -200,"trip","Рейс Т-2026-031"),
+      m("2026-06-05","5 июня","принято",false,"Ковальчук А. П.","Завод", 80,"ship","Отгрузка №2026-101"),
+      m("2026-06-09","9 июня","принято",false,"Ткаченко Л. Н.","Завод", 60,"ship","Отгрузка №2026-106"),
+      m("2026-06-11","11 июня","принято",false,"Мельник И. Д.","Завод", 110,"ship","Отгрузка №2026-108"),
+      m("2026-06-18","18 июня","принято",false,"Гаспарян В. С.","Завод", 20,"ship","Отгрузка №2026-119"),
+      m("2026-06-22","22 июня","отправлено · в пути",true,"Завод","Ковальчук А. П.", -150,"trip","Рейс Т-2026-043"),
+      m("2026-06-23","23 июня","отправлено · в пути",true,"Завод","Гаспарян В. С.", -50,"trip","Рейс Т-2026-044")
+    ],
+    barrel: [
+      m("2026-05-01","1 мая","остаток на начало",false,"Инвентаризация","Завод", 132,"inv","Инвентаризация"),
+      m("2026-05-16","16 мая","отправлено",false,"Завод","Ткаченко Л. Н.", -18,"trip","Рейс Т-2026-025"),
+      m("2026-05-18","18 мая","отправлено",false,"Завод","Мельник И. Д.", -18,"trip","Рейс Т-2026-028"),
+      m("2026-05-20","20 мая","отправлено",false,"Завод","Ковальчук А. П.", -24,"trip","Рейс Т-2026-031"),
+      m("2026-06-14","14 июня","отправлено",false,"Завод","Гаспарян В. С.", -6,"trip","Рейс Т-2026-030"),
+      m("2026-06-05","5 июня","принято",false,"Ковальчук А. П.","Завод", 12,"ship","Отгрузка №2026-101"),
+      m("2026-06-09","9 июня","принято",false,"Ткаченко Л. Н.","Завод", 6,"ship","Отгрузка №2026-106"),
+      m("2026-06-11","11 июня","принято",false,"Мельник И. Д.","Завод", 6,"ship","Отгрузка №2026-108"),
+      m("2026-06-22","22 июня","отправлено · в пути",true,"Завод","Ковальчук А. П.", -12,"trip","Рейс Т-2026-043")
+    ]
+  };
+
+  // -------- Farmers (real on-hand balance: opening + deliveries − shipments) --------
+  var FARMERS = [
+    { id: "kovalchuk", name: "Ковальчук А. П.", mv: {
+      box: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Ковальчук А. П.", 60,"inv","Инвентаризация"),
+        m("2026-05-20","20 мая","доставка",false,"Завод","Ковальчук А. П.", 200,"trip","Рейс Т-2026-031"),
+        m("2026-06-05","5 июня","отгрузка · принято",false,"Ковальчук А. П.","Завод", -80,"ship","Отгрузка №2026-101")
+      ],
+      barrel: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Ковальчук А. П.", 12,"inv","Инвентаризация"),
+        m("2026-05-20","20 мая","доставка",false,"Завод","Ковальчук А. П.", 24,"trip","Рейс Т-2026-031"),
+        m("2026-06-05","5 июня","отгрузка · принято",false,"Ковальчук А. П.","Завод", -12,"ship","Отгрузка №2026-101")
+      ]
+    }},
+    { id: "melnik", name: "Мельник И. Д.", mv: {
+      box: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Мельник И. Д.", 40,"inv","Инвентаризация"),
+        m("2026-05-18","18 мая","доставка",false,"Завод","Мельник И. Д.", 300,"trip","Рейс Т-2026-028"),
+        m("2026-06-11","11 июня","отгрузка · принято",false,"Мельник И. Д.","Завод", -110,"ship","Отгрузка №2026-108"),
+        m("2026-06-21","21 июня","отгрузка · в пути",true,"Мельник И. Д.","Завод", -80,"ship","Отгрузка №2026-120")
+      ],
+      barrel: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Мельник И. Д.", 6,"inv","Инвентаризация"),
+        m("2026-05-18","18 мая","доставка",false,"Завод","Мельник И. Д.", 18,"trip","Рейс Т-2026-028"),
+        m("2026-06-11","11 июня","отгрузка · принято",false,"Мельник И. Д.","Завод", -6,"ship","Отгрузка №2026-108")
+      ]
+    }},
+    { id: "tkachenko", name: "Ткаченко Л. Н.", mv: {
+      box: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Ткаченко Л. Н.", 30,"inv","Инвентаризация"),
+        m("2026-05-16","16 мая","доставка",false,"Завод","Ткаченко Л. Н.", 240,"trip","Рейс Т-2026-025"),
+        m("2026-06-09","9 июня","отгрузка · принято",false,"Ткаченко Л. Н.","Завод", -60,"ship","Отгрузка №2026-106"),
+        m("2026-06-22","22 июня","отгрузка · в пути",true,"Ткаченко Л. Н.","Завод", -120,"ship","Отгрузка №2026-121")
+      ],
+      barrel: [
+        m("2026-05-01","1 мая","остаток на начало",false,"—","Ткаченко Л. Н.", 6,"inv","Инвентаризация"),
+        m("2026-05-16","16 мая","доставка",false,"Завод","Ткаченко Л. Н.", 18,"trip","Рейс Т-2026-025"),
+        m("2026-06-09","9 июня","отгрузка · принято",false,"Ткаченко Л. Н.","Завод", -6,"ship","Отгрузка №2026-106"),
+        m("2026-06-22","22 июня","отгрузка · в пути",true,"Ткаченко Л. Н.","Завод", -6,"ship","Отгрузка №2026-121")
+      ]
+    }},
+    { id: "gasparyan", name: "Гаспарян В. С.", neg: true, mv: {
+      box: [
+        m("2026-06-18","18 июня","отгрузка · принято",false,"Гаспарян В. С.","Завод", -20,"ship","Отгрузка №2026-119")
+      ],
+      barrel: [
+        m("2026-06-14","14 июня","доставка",false,"Завод","Гаспарян В. С.", 6,"trip","Рейс Т-2026-030")
+      ]
+    }},
+    { id: "bondarenko", name: "Бондаренко О. М.", mv: { box: [], barrel: [] } },
+    { id: "sidorenko",  name: "Сидоренко Р. В.",  mv: { box: [], barrel: [] } }
+  ];
+
+  // -------- Transit rows (legs on the road) — each leg references its trip/shipment --------
+  var TRANSIT = [
+    { id: "to_factory", name: "На завод", sub: "фермер → завод · тара в дороге", dir: "to", mv: {
+      box: [
+        m("2026-06-21","21 июня","в пути",true,"Мельник И. Д.","Завод", 80,"ship","Отгрузка №2026-120"),
+        m("2026-06-22","22 июня","в пути",true,"Ткаченко Л. Н.","Завод", 120,"ship","Отгрузка №2026-121")
+      ],
+      barrel: [
+        m("2026-06-22","22 июня","в пути",true,"Ткаченко Л. Н.","Завод", 6,"ship","Отгрузка №2026-121")
+      ]
+    }},
+    { id: "from_factory", name: "С завода", sub: "завод → фермер · тара в дороге", dir: "from", mv: {
+      box: [
+        m("2026-06-22","22 июня","в пути",true,"Завод","Ковальчук А. П.", 150,"trip","Рейс Т-2026-043"),
+        m("2026-06-23","23 июня","в пути",true,"Завод","Гаспарян В. С.", 50,"trip","Рейс Т-2026-044")
+      ],
+      barrel: [
+        m("2026-06-22","22 июня","в пути",true,"Завод","Ковальчук А. П.", 12,"trip","Рейс Т-2026-043")
+      ]
+    }}
+  ];
+
+  /* ============================================================ */
+  function sumMv(arr) { return (arr || []).reduce(function (a, e) { return a + e.qty; }, 0); }
+  function farmerBal(f, t) { return sumMv(f.mv[t]); }
+  function farmerZero(f) { return TYPE_KEYS.every(function (t) { return farmerBal(f, t) === 0; }); }
+
+  /* ---------- icons ---------- */
+  var IC_ARROW = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>';
+  var IC_TRUCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>';
+  var IC_SHIP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
+  var IC_INV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>';
+  function srcIcon(kind) { return kind === "trip" ? IC_TRUCK : (kind === "ship" ? IC_SHIP : IC_INV); }
+
+  /* ---------- matrix render ---------- */
+  var tbody = document.getElementById("matrix-body");
+  var tTransit = document.getElementById("matrix-transit");
+
+  function balCell(val, scope, id, t) {
+    var cls = val === 0 ? "zero" : (val > 0 ? "pos" : "neg");
+    var label = val === 0 ? "—" : (val > 0 ? "" + val : "−" + Math.abs(val));
+    var unit = val === 0 ? "" : '<span class="u">шт</span>';
+    var data = val === 0 ? "" : ' data-scope="' + scope + '" data-id="' + id + '" data-type="' + t + '"';
+    return '<td><button class="balcell ' + cls + '"' + data + '><span class="num tnum">' + label + '</span>' + unit + '</button></td>';
+  }
+
+  function buildFactoryAndFarmers() {
+    var html = "";
+    // factory
+    html += '<tr class="factory" data-screen-label="Тара · Завод">'
+      + '<th class="loc-col"><span class="loc-main"><span class="pin mono">завод</span>Завод</span>'
+      + '<span class="loc-sub">склад завода · главная локация</span></th>'
+      + balCell(sumMv(FACTORY_MV.box), "factory", "factory", "box")
+      + balCell(sumMv(FACTORY_MV.barrel), "factory", "factory", "barrel")
+      + '</tr>';
+    // farmers
+    FARMERS.forEach(function (f) {
+      var b = farmerBal(f, "box"), r = farmerBal(f, "barrel");
+      var isZero = farmerZero(f);
+      html += '<tr class="farmer' + (isZero ? " zero-row" : "") + '"' + (isZero ? ' style="display:none"' : '') + '>'
+        + '<th class="loc-col">' + f.name + '</th>'
+        + balCell(b, "farmer", f.id, "box")
+        + balCell(r, "farmer", f.id, "barrel")
+        + '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  function buildTransit() {
+    var html = "";
+    TRANSIT.forEach(function (tr) {
+      html += '<tr class="transit" data-screen-label="Тара · В пути ' + tr.name + '">'
+        + '<th class="loc-col"><span class="loc-main"><span class="pin mono">' + IC_TRUCK + 'в пути</span>'
+        + '<span class="loc-name">' + tr.name + '</span></span>'
+        + '<span class="loc-sub">' + tr.sub + '</span></th>'
+        + balCell(sumMv(tr.mv.box), "transit", tr.id, "box")
+        + balCell(sumMv(tr.mv.barrel), "transit", tr.id, "barrel")
+        + '</tr>';
+    });
+    tTransit.innerHTML = html;
+  }
+
+  function footerTotals() {
+    TYPE_KEYS.forEach(function (t) {
+      var tot = sumMv(FACTORY_MV[t]);
+      FARMERS.forEach(function (f) { tot += farmerBal(f, t); });
+      TRANSIT.forEach(function (tr) { tot += sumMv(tr.mv[t]); });
+      document.getElementById("tot-" + t).textContent = tot;
+    });
+    document.getElementById("fs-box").textContent = sumMv(FACTORY_MV.box);
+    document.getElementById("fs-barrel").textContent = sumMv(FACTORY_MV.barrel);
+  }
+
+  buildFactoryAndFarmers();
+  buildTransit();
+  footerTotals();
+
+  /* ---------- counts / meta ---------- */
+  var activeFarmers = FARMERS.filter(function (f) { return !farmerZero(f); }).length;
+  function setMeta(showAll) {
+    var n = showAll ? FARMERS.length : activeFarmers;
+    document.getElementById("meta-count").textContent =
+      "Завод + " + n + " " + plural(n, "фермер", "фермера", "фермеров") + " + 2 строки «в пути» · 2 типа тары";
+  }
+  setMeta(false);
+
+  /* ---------- show-all toggle ---------- */
+  var showAll = document.getElementById("show-all");
+  var segNoteTxt = document.getElementById("seg-note-txt");
+  showAll.addEventListener("change", function () {
+    tbody.querySelectorAll("tr.zero-row").forEach(function (tr) { tr.style.display = showAll.checked ? "" : "none"; });
+    segNoteTxt.textContent = showAll.checked
+      ? "Показаны все фермеры, включая нулевой остаток. Клик по ячейке — история движений."
+      : "Фермеры с нулевым остатком скрыты. Клик по ячейке — история движений.";
+    setMeta(showAll.checked);
+  });
+
+  /* ---------- state segmented ---------- */
+  var seg = document.querySelector(".seg");
+  var panelGood = document.getElementById("panel-good");
+  var panelScrap = document.getElementById("panel-scrap");
+  var showAllWrap = document.getElementById("show-all-wrap");
+  var segNote = document.getElementById("seg-note");
+  seg.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-state]");
+    if (!btn) return;
+    seg.querySelectorAll("button").forEach(function (b) {
+      var on = b === btn;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var good = btn.dataset.state === "good";
+    panelGood.classList.toggle("hide", !good);
+    panelScrap.classList.toggle("hide", good);
+    segNote.style.display = good ? "" : "none";
+    showAllWrap.style.visibility = good ? "visible" : "hidden";
+  });
+
+  /* ---------- drill-down ---------- */
+  var overlay = document.getElementById("overlay");
+  var drawer = document.getElementById("drawer");
+
+  function cellInfo(scope, id, t) {
+    if (scope === "factory") {
+      return { loc: "Завод · склад завода", locIcon: IC_INV, mv: FACTORY_MV[t],
+        meta: "Физический остаток годной тары на складе завода.", warn: false };
+    }
+    if (scope === "farmer") {
+      var f = FARMERS.filter(function (x) { return x.id === id; })[0];
+      var bal = farmerBal(f, t);
+      return { loc: f.name + " · фермер", locIcon: IC_TRUCK, mv: f.mv[t],
+        meta: bal < 0
+          ? "Отрицательный остаток — временный зазор учёта: тара отгружена, а доставка завод→фермер ещё не отмечена."
+          : "Реальный остаток годной тары у фермера: начальный + доставлено − отгружено.",
+        warn: bal < 0 };
+    }
+    // transit
+    var tr = TRANSIT.filter(function (x) { return x.id === id; })[0];
+    return { loc: "В пути · " + (tr.dir === "to" ? "фермер → завод" : "завод → фермер"), locIcon: IC_TRUCK, mv: tr.mv[t],
+      meta: tr.dir === "to"
+        ? "Тара в дороге на завод — отгружена фермером, ещё не принята. Источник — отгрузки (Shipment)."
+        : "Тара в дороге к фермеру — отправлена с завода, ещё не доставлена. Источник — рейсы тары (MaterialShipment).",
+      warn: false };
+  }
+
+  function openDrawer(scope, id, t) {
+    var info = cellInfo(scope, id, t);
+    var rows = (info.mv || []).slice().sort(function (a, b) { return a.k < b.k ? 1 : (a.k > b.k ? -1 : 0); });
+    var bal = sumMv(info.mv);
+
+    document.getElementById("dr-loc").innerHTML = info.locIcon + "<span>" + info.loc + "</span>";
+    document.getElementById("dr-title").textContent = TYPES[t].name;
+
+    var balEl = document.getElementById("dr-bal");
+    balEl.classList.remove("pos", "neg");
+    balEl.classList.add(bal < 0 ? "neg" : "pos");
+    document.getElementById("dr-balnum").textContent = bal < 0 ? "−" + Math.abs(bal) : "" + bal;
+
+    var metaEl = document.getElementById("dr-meta");
+    metaEl.textContent = info.meta;
+    metaEl.classList.toggle("warn", !!info.warn);
+
+    document.getElementById("dr-count").textContent =
+      rows.length + " " + plural(rows.length, "движение", "движения", "движений");
+
+    document.getElementById("dr-list").innerHTML = rows.map(function (r) {
+      var q = r.qty > 0 ? "+" + r.qty : "−" + Math.abs(r.qty);
+      var qcls = r.qty >= 0 ? "pos" : "neg";
+      var flow = (r.from === "—" || r.srcKind === "inv")
+        ? '<span>' + (r.from === "—" ? "учётный остаток" : "Инвентаризация склада") + '</span>'
+        : r.from + ' ' + IC_ARROW + ' ' + r.to;
+      return '<div class="mv-row">'
+        + '<div class="mv-l">'
+        + '<div class="mv-type"><span class="mv-chip' + (r.transit ? ' transit' : '') + '">' + r.chip + '</span><span class="mv-date">' + r.d + '</span></div>'
+        + '<div class="mv-flow">' + flow + '</div>'
+        + '<div class="mv-src">' + srcIcon(r.srcKind) + r.srcRef + '</div>'
+        + '</div>'
+        + '<div class="mv-qty ' + qcls + '">' + q + '</div>'
+        + '</div>';
+    }).join("");
+
+    overlay.classList.add("open");
+    drawer.classList.add("open");
+    drawer.setAttribute("aria-hidden", "false");
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+
+  function closeDrawer() {
+    overlay.classList.remove("open");
+    drawer.classList.remove("open");
+    drawer.setAttribute("aria-hidden", "true");
+  }
+
+  function onCellClick(e) {
+    var btn = e.target.closest(".balcell:not(.zero)");
+    if (!btn) return;
+    openDrawer(btn.dataset.scope, btn.dataset.id, btn.dataset.type);
+  }
+  tbody.addEventListener("click", onCellClick);
+  tTransit.addEventListener("click", onCellClick);
+  overlay.addEventListener("click", closeDrawer);
+  document.getElementById("dr-close").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+})();
+</script>
+</body>
+</html>
