@@ -81,6 +81,24 @@ export function TareBalanceMatrix({ data }: Props) {
 
   const closeDrawer = useCallback(() => setSelected(null), []);
 
+  // Высота липкой шапки страницы → CSS-переменная для офсета липкой шапки
+  // таблицы (калька с ShipmentsFeed/--toolbar-h). Шапка живёт в page.tsx.
+  useEffect(() => {
+    const head = document.getElementById("tare-page-head");
+    if (!head) return;
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty(
+        "--tare-head-h",
+        `${head.offsetHeight}px`,
+      );
+    });
+    ro.observe(head);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--tare-head-h");
+    };
+  }, []);
+
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
@@ -100,24 +118,25 @@ export function TareBalanceMatrix({ data }: Props) {
               key={s}
               type="button"
               onClick={() => setState(s)}
-              className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
                 state === s
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {s === "good" ? "Годная" : "Лом"}
+              {s === "good" ? "Целая" : "Лом"}
             </button>
           ))}
         </div>
         {state === "good" && (
-          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-sm text-foreground select-none">
+          <label className={`toggle ml-auto${showAll ? " on" : ""}`}>
             <input
               type="checkbox"
+              className="sr-only"
               checked={showAll}
               onChange={(e) => setShowAll(e.target.checked)}
-              className="size-4"
             />
+            <span className={`switch${showAll ? "" : " off"}`} />
             показать всех фермеров
             {hiddenCount > 0 && !showAll && (
               <span className="text-muted-foreground">({hiddenCount} скрыто)</span>
@@ -134,17 +153,21 @@ export function TareBalanceMatrix({ data }: Props) {
             Фермеры с нулевым остатком скрыты. Клик по ячейке — история движений.
           </p>
 
-          <div className="max-h-[600px] overflow-auto rounded-lg border">
+          <div className="rounded-lg border">
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="sticky top-0 left-0 z-30 border-b border-r bg-muted/60 px-4 py-3 text-left font-medium">
+                  <th
+                    className="sticky left-0 z-30 border-b border-r bg-muted px-4 py-3 text-left font-medium"
+                    style={{ top: "var(--tare-head-h, 0px)" }}
+                  >
                     Локация
                   </th>
                   {data.types.map((t) => (
                     <th
                       key={t.id}
-                      className="sticky top-0 z-20 border-b bg-muted/60 px-4 py-3 text-right font-medium whitespace-nowrap"
+                      className="sticky z-20 border-b bg-muted px-4 py-3 text-right font-medium whitespace-nowrap"
+                      style={{ top: "var(--tare-head-h, 0px)" }}
                     >
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="flex items-center gap-1.5">
@@ -267,9 +290,18 @@ function LocationRow({
       >
         <span className="flex items-center gap-2">
           {location.kind === "transit" && <TruckIcon className="size-3.5 text-muted-foreground" />}
-          <span className={muted ? "text-muted-foreground" : ""}>
-            {location.name}
-          </span>
+          {location.kind === "factory" ? (
+            <span className="flex items-center gap-2">
+              <span className="rounded border bg-background px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+                завод
+              </span>
+              МКЗ
+            </span>
+          ) : (
+            <span className={muted ? "text-muted-foreground" : ""}>
+              {location.name}
+            </span>
+          )}
           {location.inactive && (
             <span className="text-[10px] text-muted-foreground">(архив)</span>
           )}
@@ -322,7 +354,7 @@ function ScrapEmpty({ hasData }: { hasData: boolean }) {
       </h3>
       <p className="mx-auto max-w-[440px] text-sm text-muted-foreground">
         Лом — это состояние тары, не локация. Баланс лома появляется с операциями
-        списания (годная → лом).
+        списания (целая → лом).
       </p>
     </div>
   );
@@ -334,7 +366,7 @@ function Legend() {
     <div className="mt-4 max-w-[760px] rounded-lg border bg-muted/30 px-4 py-3.5 text-[13px] leading-5 text-muted-foreground">
       <p>
         <span className="font-semibold text-foreground">Завод / Фермер</span> —
-        реальный остаток годной тары на руках (начальный + доставлено − отгружено).
+        реальный остаток целой тары на руках (начальный + доставлено − отгружено).
       </p>
       <p className="mt-2">
         <span className="font-semibold text-foreground">В пути</span> — тара в
@@ -378,7 +410,7 @@ function Drawer({
       : neg
         ? "Отрицательный остаток — временный зазор учёта: тара отгружена, а доставка завод→фермер ещё не отмечена."
         : kind === "factory"
-          ? "Физический остаток годной тары на складе завода."
+          ? "Физический остаток целой тары на складе завода."
           : "Реальный остаток тары у фермера: начальный + доставлено − отгружено.";
 
   return (
@@ -428,7 +460,7 @@ function Drawer({
                   {neg ? `−${Math.abs(balance)}` : balance}
                 </span>
                 <span className="text-sm text-muted-foreground">
-                  шт · {state === "good" ? "годная" : "лом"}
+                  шт · {state === "good" ? "целая" : "лом"}
                 </span>
               </div>
               <p
