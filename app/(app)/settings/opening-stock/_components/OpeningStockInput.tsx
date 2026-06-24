@@ -10,21 +10,29 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import type { ItemKind } from "@/lib/generated/prisma/client";
 import { setOpeningBalance } from "@/server/inventory/opening";
 
 type CellStatus = "idle" | "saving" | "saved" | "error";
 
 // Ячейка начального остатка с автосейвом по blur (образец NormInput).
-// Значение — целое >= 0; пусто/0 = нет остатка (opening-движение удаляется).
+// mode "int": целое ≥ 0 (тара, шт). mode "decimal": число ≥ 0, step 0.001 (ингредиент, кг/л).
+// Пусто/0 = нет остатка (opening-движение удаляется).
 // Рендерить с key, привязанным к ячейке (значение читается из savedValue при монтировании).
 export function OpeningStockInput({
+  kind,
+  mode,
+  unit,
   locationId,
-  packagingTypeId,
+  itemId,
   savedValue,
   onSaved,
 }: {
+  kind: ItemKind;
+  mode: "int" | "decimal";
+  unit?: "kg" | "l";
   locationId: number;
-  packagingTypeId: number;
+  itemId: number;
   savedValue: number | undefined;
   onSaved: (value: number | null) => void;
 }) {
@@ -44,11 +52,16 @@ export function OpeningStockInput({
   async function commit() {
     const trimmed = value.trim();
     // Пусто = 0 (нет остатка).
-    const num = trimmed === "" ? 0 : Number(trimmed);
+    const num =
+      trimmed === "" ? 0 : mode === "decimal" ? parseFloat(trimmed) : Number(trimmed);
 
-    if (!Number.isInteger(num) || num < 0) {
+    const valid =
+      mode === "decimal"
+        ? Number.isFinite(num) && num >= 0
+        : Number.isInteger(num) && num >= 0;
+    if (!valid) {
       setStatus("error");
-      setErrorMsg("Целое число ≥ 0");
+      setErrorMsg(mode === "decimal" ? "Число ≥ 0" : "Целое число ≥ 0");
       return;
     }
     if ((savedRef.current ?? 0) === num) {
@@ -58,11 +71,7 @@ export function OpeningStockInput({
 
     const mySeq = ++seqRef.current;
     setStatus("saving");
-    const res = await setOpeningBalance({
-      locationId,
-      packagingTypeId,
-      quantity: num,
-    });
+    const res = await setOpeningBalance({ kind, locationId, itemId, quantity: num });
     if (mySeq !== seqRef.current) return;
     if (res.ok) {
       savedRef.current = num > 0 ? num : undefined;
@@ -75,30 +84,37 @@ export function OpeningStockInput({
   }
 
   const input = (
-    <div className="relative">
-      <Input
-        type="number"
-        inputMode="numeric"
-        step="1"
-        min="0"
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          if (status === "error") setStatus("idle");
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-        }}
-        className={cn(
-          "h-8 w-24 text-right tabular-nums transition-colors",
-          status === "saved" && "border-green-500 ring-1 ring-green-500",
-          status === "error" && "border-red-500 ring-1 ring-red-500",
-          status === "saving" && "opacity-70",
+    <div className="relative flex items-center gap-1.5">
+      <div className="relative">
+        <Input
+          type="number"
+          inputMode={mode === "decimal" ? "decimal" : "numeric"}
+          step={mode === "decimal" ? "0.001" : "1"}
+          min="0"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            if (status === "error") setStatus("idle");
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+          className={cn(
+            "h-8 w-24 text-right tabular-nums transition-colors",
+            status === "saved" && "border-green-500 ring-1 ring-green-500",
+            status === "error" && "border-red-500 ring-1 ring-red-500",
+            status === "saving" && "opacity-70",
+          )}
+        />
+        {status === "saving" && (
+          <Loader2 className="pointer-events-none absolute right-1.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
         )}
-      />
-      {status === "saving" && (
-        <Loader2 className="pointer-events-none absolute right-1.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+      </div>
+      {mode === "decimal" && (
+        <span className="text-xs text-muted-foreground">
+          {unit === "l" ? "л" : "кг"}
+        </span>
       )}
     </div>
   );

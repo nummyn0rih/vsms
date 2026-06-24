@@ -1,12 +1,14 @@
 import { getOpeningBalances } from "@/server/inventory/opening";
-import { OpeningStockMatrix } from "./_components/OpeningStockMatrix";
+import { OpeningStockTabs } from "./_components/OpeningStockTabs";
 
-// Настройки → «Начальные остатки тары»: setup-данные склада (DOMAIN §3, opening).
-// Матрица Завод+фермеры × типы тары; ячейка = текущий начальный остаток.
+// Настройки → «Начальные остатки»: setup-данные склада (DOMAIN §3, opening).
+// Две вкладки: Тара (целое, шт) и Ингредиенты (Decimal, кг/л). Матрица каждой —
+// Завод+фермеры × предметы; ячейка = текущий начальный остаток.
 export default async function OpeningStockPage() {
-  const { locations, types, values } = await getOpeningBalances();
+  const [packaging, ingredient] = await Promise.all([
+    getOpeningBalances("packaging"),
+    getOpeningBalances("ingredient"),
+  ]);
 
-  return (
-    <OpeningStockMatrix locations={locations} types={types} values={values} />
-  );
+  return <OpeningStockTabs packaging={packaging} ingredient={ingredient} />;
 }

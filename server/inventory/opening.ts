@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
+import type { ItemKind } from "@/lib/generated/prisma/client";
 import type { ActionResult } from "@/lib/action-result";
 import { requireRole, AuthError } from "@/server/auth/session";
 import { logChange } from "@/server/changelog";
@@ -30,29 +31,63 @@ function authFail(e: unknown): { ok: false; error: string } | null {
   return null;
 }
 
+// Обобщено под оба kind (E3): тара (целое, шт) и ингредиент (Decimal, кг/л).
+// columns у ингредиента несут unit (разные колонки для кг и л — не складывать).
 export type OpeningBalances = {
+  kind: ItemKind;
   locations: { id: number; name: string; isFactory: boolean }[];
-  types: { id: number; name: string }[];
-  values: { locationId: number; packagingTypeId: number; quantity: number }[];
+  columns: { id: number; name: string; unit?: "kg" | "l" }[];
+  values: { locationId: number; itemId: number; quantity: number }[];
 };
 
+// FK-поле движения по kind (полиморфизм StockMovement: ровно один FK заполнен).
+function refByKind(kind: ItemKind, itemId: number) {
+  return kind === "ingredient"
+    ? {
+        kind: "ingredient" as const,
+        packaging_type_id: null,
+        ingredient_id: itemId,
+        to_state: null,
+      }
+    : {
+        kind: "packaging" as const,
+        packaging_type_id: itemId,
+        ingredient_id: null,
+        to_state: "good" as const,
+      };
+}
+
 // Завод (id=0) первой строкой, затем активные фермеры по имени; колонки — активные
-// типы тары. values — текущие opening-движения (одно на тройку локация×тип).
-export async function getOpeningBalances(): Promise<OpeningBalances> {
-  const [farmers, types, movements] = await Promise.all([
+// типы тары ИЛИ активные ингредиенты (по kind). values — текущие opening-движения
+// (одно на тройку локация×предмет).
+export async function getOpeningBalances(
+  kind: ItemKind,
+): Promise<OpeningBalances> {
+  const [farmers, columns, movements] = await Promise.all([
     prisma.farmer.findMany({
       where: { active: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    prisma.packagingType.findMany({
-      where: { active: true },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    kind === "ingredient"
+      ? prisma.ingredient.findMany({
+          where: { active: true },
+          select: { id: true, name: true, unit: true },
+          orderBy: { name: "asc" },
+        })
+      : prisma.packagingType.findMany({
+          where: { active: true },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        }),
     prisma.stockMovement.findMany({
-      where: { kind: "packaging", movement_type: "opening" },
-      select: { to_location_id: true, packaging_type_id: true, quantity: true },
+      where: { kind, movement_type: "opening" },
+      select: {
+        to_location_id: true,
+        packaging_type_id: true,
+        ingredient_id: true,
+        quantity: true,
+      },
     }),
   ]);
 
@@ -62,14 +97,17 @@ export async function getOpeningBalances(): Promise<OpeningBalances> {
   ];
 
   const values = movements
-    .filter((m) => m.to_location_id != null && m.packaging_type_id != null)
     .map((m) => ({
-      locationId: m.to_location_id!,
-      packagingTypeId: m.packaging_type_id!,
+      locationId: m.to_location_id,
+      itemId: kind === "ingredient" ? m.ingredient_id : m.packaging_type_id,
       quantity: m.quantity.toNumber(),
-    }));
+    }))
+    .filter(
+      (v): v is { locationId: number; itemId: number; quantity: number } =>
+        v.locationId != null && v.itemId != null,
+    );
 
-  return { locations, types, values };
+  return { kind, locations, columns, values };
 }
 
 // Локация opening: завод (0) или активный фермер. Транзит/null — запрещены.
@@ -87,35 +125,54 @@ async function isValidLocation(locationId: number): Promise<boolean> {
 
 // Замена opening-движения тройки: удалить старое + создать новое (qty>0).
 // qty=0 → только удаление. requireRole(admin), ChangeLog в той же транзакции.
+// kind: тара — целое (шт); ингредиент — Decimal (кг/л, дробное разрешено).
 export async function setOpeningBalance(input: {
+  kind: ItemKind;
   locationId: number;
-  packagingTypeId: number;
+  itemId: number;
   quantity: number;
 }): Promise<ActionResult> {
   try {
     const user = await requireRole("admin");
 
-    const { locationId, packagingTypeId, quantity } = input;
+    const { kind, locationId, itemId, quantity } = input;
 
-    if (!Number.isInteger(quantity) || quantity < 0) {
+    if (kind === "ingredient") {
+      if (!Number.isFinite(quantity) || quantity < 0) {
+        return { ok: false, error: "Количество — число ≥ 0" };
+      }
+    } else if (!Number.isInteger(quantity) || quantity < 0) {
       return { ok: false, error: "Количество — целое число ≥ 0" };
     }
     if (!(await isValidLocation(locationId))) {
       return { ok: false, error: "Недопустимая локация" };
     }
-    const type = await prisma.packagingType.findFirst({
-      where: { id: packagingTypeId, active: true },
-      select: { id: true },
-    });
-    if (!type) return { ok: false, error: "Тип тары не найден" };
+    if (kind === "ingredient") {
+      const ing = await prisma.ingredient.findFirst({
+        where: { id: itemId, active: true },
+        select: { id: true },
+      });
+      if (!ing) return { ok: false, error: "Ингредиент не найден" };
+    } else {
+      const type = await prisma.packagingType.findFirst({
+        where: { id: itemId, active: true },
+        select: { id: true },
+      });
+      if (!type) return { ok: false, error: "Тип тары не найден" };
+    }
+
+    const fkWhere =
+      kind === "ingredient"
+        ? { ingredient_id: itemId }
+        : { packaging_type_id: itemId };
 
     await prisma.$transaction(async (tx) => {
       const existing = await tx.stockMovement.findFirst({
         where: {
-          kind: "packaging",
+          kind,
           movement_type: "opening",
           to_location_id: locationId,
-          packaging_type_id: packagingTypeId,
+          ...fkWhere,
         },
         select: { id: true, quantity: true },
       });
@@ -128,13 +185,11 @@ export async function setOpeningBalance(input: {
       if (quantity > 0) {
         const created = await tx.stockMovement.create({
           data: {
-            kind: "packaging",
-            packaging_type_id: packagingTypeId,
+            ...refByKind(kind, itemId),
             quantity,
             from_location_id: null,
             to_location_id: locationId,
             from_state: null,
-            to_state: "good",
             movement_type: "opening",
             source_doc_type: "manual",
             source_doc_id: null,
