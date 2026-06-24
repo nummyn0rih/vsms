@@ -92,11 +92,13 @@ export function MaterialFormDialog(props: Props) {
       if (!farmerOptions.some((f) => f.id === it.farmer_id)) {
         farmerOptions.push({ id: it.farmer_id, name: `${it.farmer_name} (неактивен)` });
       }
+      // E1-форма редактирует только тару; ингредиентные позиции (E2) здесь пропускаем.
+      if (it.item_kind !== "packaging" || it.packaging_type_id == null) continue;
       if (!packagingOptions.some((p) => p.id === it.packaging_type_id)) {
         packagingOptions.push({
           id: it.packaging_type_id,
-          name: `${it.packaging_type_name} (неактивен)`,
-          kind: it.packaging_kind,
+          name: `${it.packaging_type_name ?? "тара"} (неактивен)`,
+          kind: it.packaging_kind ?? "box",
           capacity_kg: it.capacity_kg,
         });
       }

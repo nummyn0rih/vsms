@@ -52,8 +52,9 @@ async function getNextMaterialCode(tx: Tx): Promise<string> {
   return String(Number(rows[0]?.max ?? 0) + 1);
 }
 
-// Полная замена позиций рейса: deleteMany + createMany. D3 — всегда packaging
-// (item_kind=packaging, ingredient_id=null). Возвращает summary для ChangeLog.
+// Полная замена позиций рейса: deleteMany + createMany. E1 — полиморфно по
+// item_kind: тара (packaging_type_id) ИЛИ ингредиент (ingredient_id), ровно один FK.
+// Возвращает summary для ChangeLog (с разбивкой тара/ингредиент).
 async function persistMaterialItems(
   tx: Tx,
   tripId: number,
@@ -63,17 +64,27 @@ async function persistMaterialItems(
     where: { material_shipment_id: tripId },
   });
 
-  const data: Prisma.MaterialShipmentItemCreateManyInput[] = items.map((i) => ({
-    material_shipment_id: tripId,
-    farmer_id: Number(i.farmer_id),
-    item_kind: "packaging",
-    packaging_type_id: Number(i.packaging_type_id),
-    ingredient_id: null,
-    quantity: i.quantity.trim().replace(",", "."),
-  }));
+  const data: Prisma.MaterialShipmentItemCreateManyInput[] = items.map((i) => {
+    // undefined → packaging (текущая E1-форма item_kind не шлёт).
+    const kind = i.item_kind ?? "packaging";
+    const isIngredient = kind === "ingredient";
+    return {
+      material_shipment_id: tripId,
+      farmer_id: Number(i.farmer_id),
+      item_kind: kind,
+      packaging_type_id: isIngredient ? null : Number(i.packaging_type_id),
+      ingredient_id: isIngredient ? Number(i.ingredient_id) : null,
+      quantity: i.quantity.trim().replace(",", "."),
+    };
+  });
   await tx.materialShipmentItem.createMany({ data });
 
-  return `${data.length} позиц.`;
+  const tare = data.filter((d) => d.item_kind === "packaging").length;
+  const ingr = data.length - tare;
+  const parts: string[] = [];
+  if (tare > 0) parts.push(`тара ${tare}`);
+  if (ingr > 0) parts.push(`ингр. ${ingr}`);
+  return `${data.length} позиц.${parts.length ? ` (${parts.join(" / ")})` : ""}`;
 }
 
 // --- CRUD (только planned) ---
@@ -398,24 +409,32 @@ export async function revertMaterialToPlanned(id: number): Promise<ActionResult>
 const itemInclude = {
   farmer: { select: { name: true } },
   packagingType: { select: { name: true, kind: true, capacity_kg: true } },
+  ingredient: { select: { name: true, unit: true } },
 } as const;
 
 function mapItem(item: {
   id: number;
   farmer_id: number;
+  item_kind: "packaging" | "ingredient";
   packaging_type_id: number | null;
+  ingredient_id: number | null;
   quantity: Prisma.Decimal;
   farmer: { name: string };
   packagingType: { name: string; kind: "box" | "barrel"; capacity_kg: Prisma.Decimal | null } | null;
+  ingredient: { name: string; unit: "kg" | "l" } | null;
 }): MaterialItemRow {
   return {
     id: item.id,
     farmer_id: item.farmer_id,
     farmer_name: item.farmer.name,
-    packaging_type_id: item.packaging_type_id ?? 0,
-    packaging_type_name: item.packagingType?.name ?? "тара",
-    packaging_kind: item.packagingType?.kind ?? "box",
+    item_kind: item.item_kind,
+    packaging_type_id: item.packaging_type_id,
+    packaging_type_name: item.packagingType?.name ?? null,
+    packaging_kind: item.packagingType?.kind ?? null,
     capacity_kg: item.packagingType?.capacity_kg?.toString() ?? null,
+    ingredient_id: item.ingredient_id,
+    ingredient_name: item.ingredient?.name ?? null,
+    ingredient_unit: item.ingredient?.unit ?? null,
     quantity: item.quantity.toString(),
   };
 }
