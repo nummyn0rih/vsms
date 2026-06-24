@@ -22,6 +22,7 @@ import {
   revertArrivedLeg,
   revertDeliveryLeg,
 } from "./movements";
+import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
 const ENTITY = "MaterialShipment";
 const PATH = "/materials";
@@ -284,7 +285,10 @@ export async function sendMaterialShipment(id: number): Promise<ActionResult> {
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось отправить рейс" };
@@ -327,7 +331,10 @@ export async function arriveMaterialShipment(id: number): Promise<ActionResult> 
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось отметить прибытие" };
@@ -362,7 +369,10 @@ export async function revertMaterialToSent(id: number): Promise<ActionResult> {
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось откатить рейс" };
@@ -397,7 +407,10 @@ export async function revertMaterialToPlanned(id: number): Promise<ActionResult>
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось откатить рейс" };

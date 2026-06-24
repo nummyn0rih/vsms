@@ -13,6 +13,7 @@ import {
   type SetActualWeightInput,
 } from "./schema";
 import { applyInboundArrivedTareLeg } from "@/server/shipments/packaging";
+import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
 const SHIPMENT = "Shipment";
 const ITEM = "ShipmentItem";
@@ -32,6 +33,7 @@ function authFail(e: unknown): { ok: false; error: string } | null {
 function revalidate() {
   revalidatePath(PATH);
   revalidatePath(FEED_PATH);
+  revalidateStockDashboards();
 }
 
 // Перевеска позиции (BR-24а). Сохранение/очистка фактического веса. Первый вес у

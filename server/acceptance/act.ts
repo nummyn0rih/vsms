@@ -10,6 +10,7 @@ import type { ActionResult } from "@/lib/action-result";
 import { seasonYearOf } from "@/server/shipments/workdays";
 import { withSeasonPrefix, stripSeasonPrefix } from "./accepted";
 import { calcIngredientConsumption } from "./ingredients";
+import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 import {
   saveActSchema,
   revertActSchema,
@@ -36,6 +37,7 @@ function authFail(e: unknown): { ok: false; error: string } | null {
 function revalidate() {
   revalidatePath(PATH);
   revalidatePath(FEED_PATH);
+  revalidateStockDashboards();
 }
 
 function toDateStr(d: Date | null): string | null {

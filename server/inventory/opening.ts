@@ -12,6 +12,7 @@ import {
   TRANSIT_TO_FACTORY,
   TRANSIT_TO_FARMER,
 } from "@/server/shipments/packaging";
+import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
 // D1: начальные остатки тары (movement_type=opening, DOMAIN §3).
 // opening — ЕДИНСТВЕННЫЙ тип движения, который можно править заменой (setup-данные);
@@ -213,6 +214,7 @@ export async function setOpeningBalance(input: {
     });
 
     revalidatePath(PATH);
+    revalidateStockDashboards();
     return { ok: true };
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };

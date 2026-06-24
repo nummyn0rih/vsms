@@ -38,7 +38,7 @@ export default async function PackagingPage() {
             {factory.map((f) => (
               <span key={f.name} className="flex items-baseline gap-1.5">
                 <span className="text-xl font-semibold tabular-nums">
-                  {f.qty}
+                  {f.qty.toLocaleString("ru-RU")}
                 </span>
                 <span className="text-xs text-muted-foreground">{f.name}</span>
               </span>

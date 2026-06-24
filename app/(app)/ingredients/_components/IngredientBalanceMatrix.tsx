@@ -23,6 +23,7 @@ import {
 // колонки несут единицу (кг/л), количества — Decimal (не округлять).
 
 const OUTFLOW = "#9a5a12"; // приглушённый amber для отрицательных (зазор учёта)
+const LOCATION_COL_W = 220; // ширина колонки «Локация»; остальные делят остаток поровну
 
 type Props = { data: IngredientBalances };
 
@@ -32,11 +33,11 @@ type SelectedCell = {
 };
 
 // Decimal-форматирование: дробные кг/л показываем как есть, без округления до
-// целого; trailing-нули убираем (100 а не 100.000000, 0.00005 как есть).
+// целого; trailing-нули убираем (100 а не 100.000000, 0.00005 как есть). Тысячи
+// разделяем неразрывным пробелом (50 000); микродозы (0,00005) это не затрагивает.
 function fmtQty(v: number): string {
   const s = Math.abs(v).toLocaleString("ru-RU", {
     maximumFractionDigits: 6,
-    useGrouping: false,
   });
   return v < 0 ? `−${s}` : s;
 }
@@ -159,7 +160,13 @@ export function IngredientBalanceMatrix({ data }: Props) {
       </p>
 
       <div className="rounded-lg border">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full table-fixed border-collapse text-sm">
+          <colgroup>
+            <col style={{ width: LOCATION_COL_W }} />
+            {data.columns.map((c) => (
+              <col key={c.id} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               <th

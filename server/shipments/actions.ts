@@ -16,6 +16,7 @@ import {
   type ShipmentOptions,
 } from "./schema";
 import { persistShipmentItems, ShipmentValidationError } from "./items";
+import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 import {
   calcPackagingUnits,
   loadPackagingContext,
@@ -440,7 +441,10 @@ export async function sendShipment(id: number): Promise<ActionResult> {
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     if (e instanceof ShipmentSendError) return { ok: false, error: e.message };
@@ -540,7 +544,10 @@ export async function revertShipmentToPlanned(id: number): Promise<ActionResult>
       return { ok: true as const };
     });
 
-    if (result.ok) revalidatePath(PATH);
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось откатить отгрузку" };

@@ -15,6 +15,12 @@ import {
 // фильтры и drill-down. Стиль — токены прототипа inventory-tare-d4 / NormsMatrix.
 
 const OUTFLOW = "#9a5a12"; // приглушённый amber для отрицательных (зазор учёта)
+const LOCATION_COL_W = 220; // ширина колонки «Локация»; остальные делят остаток поровну
+
+// Целые штуки с разделением тысяч: ru-RU даёт неразрывный пробел → «50 000».
+function fmtInt(n: number): string {
+  return n.toLocaleString("ru-RU");
+}
 
 type Props = { data: TareBalances };
 
@@ -154,7 +160,13 @@ export function TareBalanceMatrix({ data }: Props) {
           </p>
 
           <div className="rounded-lg border">
-            <table className="w-full border-collapse text-sm">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col style={{ width: LOCATION_COL_W }} />
+                {data.types.map((t) => (
+                  <col key={t.id} />
+                ))}
+              </colgroup>
               <thead>
                 <tr>
                   <th
@@ -232,7 +244,7 @@ export function TareBalanceMatrix({ data }: Props) {
                       key={t.id}
                       className="border-t-2 bg-muted/60 px-4 py-3 text-right font-mono text-[15px] font-semibold tabular-nums"
                     >
-                      {systemTotal(t.id)}
+                      {fmtInt(systemTotal(t.id))}
                       <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">
                         шт
                       </span>
@@ -329,7 +341,7 @@ function LocationRow({
                 className="text-[15px] font-medium"
                 style={v < 0 ? { color: OUTFLOW } : undefined}
               >
-                {zero ? "—" : v < 0 ? `−${Math.abs(v)}` : v}
+                {zero ? "—" : v < 0 ? `−${fmtInt(Math.abs(v))}` : fmtInt(v)}
               </span>
               {!zero && (
                 <span className="font-sans text-xs text-muted-foreground">шт</span>
@@ -457,7 +469,7 @@ function Drawer({
                   className="font-mono text-3xl font-semibold tabular-nums"
                   style={neg ? { color: OUTFLOW } : undefined}
                 >
-                  {neg ? `−${Math.abs(balance)}` : balance}
+                  {neg ? `−${fmtInt(Math.abs(balance))}` : fmtInt(balance)}
                 </span>
                 <span className="text-sm text-muted-foreground">
                   шт · {state === "good" ? "целая" : "лом"}
@@ -544,7 +556,7 @@ function MovementRow({ m }: { m: TareMovement }) {
         className="self-center text-right font-mono text-[15px] font-medium tabular-nums"
         style={pos ? undefined : { color: OUTFLOW }}
       >
-        {pos ? `+${m.qty}` : `−${Math.abs(m.qty)}`}
+        {pos ? `+${fmtInt(m.qty)}` : `−${fmtInt(Math.abs(m.qty))}`}
       </div>
     </div>
   );
