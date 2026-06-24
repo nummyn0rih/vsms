@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { PackageMinus, Trash2 } from "lucide-react";
 
 import {
   getTareMovements,
@@ -9,6 +11,8 @@ import {
   type TareState,
   type TareType,
 } from "@/server/inventory/balances";
+import { scrapTare, disposeTare } from "@/server/inventory/operations";
+import { RoleGate } from "@/components/auth/RoleGate";
 
 // D4b: матрица остатков тары локация × тип. Read-only. Баланс приходит плоским
 // списком cells (Σ движений считается на сервере); здесь — лукап-Map, тоталы,
@@ -30,6 +34,7 @@ type SelectedCell = {
 };
 
 export function TareBalanceMatrix({ data }: Props) {
+  const router = useRouter();
   const [state, setState] = useState<TareState>("good");
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
@@ -75,15 +80,29 @@ export function TareBalanceMatrix({ data }: Props) {
     [data.cells, state],
   );
 
+  const loadMovements = useCallback(
+    (loc: number, typeId: number, st: TareState) => {
+      setMovements(null);
+      setLoading(true);
+      getTareMovements(loc, typeId, st)
+        .then((rows) => setMovements(rows))
+        .finally(() => setLoading(false));
+    },
+    [],
+  );
+
   function openCell(location: SelectedCell["location"], type: TareType) {
     if (cellVal(location.id, type.id) === 0) return;
     setSelected({ location, type });
-    setMovements(null);
-    setLoading(true);
-    getTareMovements(location.id, type.id, state)
-      .then((rows) => setMovements(rows))
-      .finally(() => setLoading(false));
+    loadMovements(location.id, type.id, state);
   }
+
+  // После ручной операции: перезагрузить движения ячейки + обновить RSC-данные
+  // матрицы (баланс пересчитается из новых cells).
+  const onOperated = useCallback(() => {
+    if (selected) loadMovements(selected.location.id, selected.type.id, state);
+    router.refresh();
+  }, [selected, state, loadMovements, router]);
 
   const closeDrawer = useCallback(() => setSelected(null), []);
 
@@ -151,8 +170,8 @@ export function TareBalanceMatrix({ data }: Props) {
         )}
       </div>
 
-      {state === "scrap" ? (
-        <ScrapEmpty hasData={stateHasData} />
+      {state === "scrap" && !stateHasData ? (
+        <ScrapEmpty hasData={false} />
       ) : (
         <>
           <p className="mb-3 text-xs text-muted-foreground">
@@ -233,9 +252,11 @@ export function TareBalanceMatrix({ data }: Props) {
                 <tr>
                   <th className="sticky left-0 z-10 border-t-2 bg-muted/60 px-4 py-3 text-left text-[13px] font-semibold">
                     <span className="flex flex-col">
-                      Итого в системе
+                      {state === "scrap" ? "Лом в системе" : "Итого в системе"}
                       <span className="text-[11px] font-normal text-muted-foreground">
-                        склад + фермеры + в пути
+                        {state === "scrap"
+                          ? "к утилизации"
+                          : "склад + фермеры + в пути"}
                       </span>
                     </span>
                   </th>
@@ -255,7 +276,7 @@ export function TareBalanceMatrix({ data }: Props) {
             </table>
           </div>
 
-          <Legend />
+          {state === "good" && <Legend />}
         </>
       )}
 
@@ -269,6 +290,7 @@ export function TareBalanceMatrix({ data }: Props) {
         movements={movements}
         loading={loading}
         onClose={closeDrawer}
+        onOperated={onOperated}
       />
     </div>
   );
@@ -402,6 +424,7 @@ function Drawer({
   movements,
   loading,
   onClose,
+  onOperated,
 }: {
   selected: SelectedCell | null;
   balance: number;
@@ -409,6 +432,7 @@ function Drawer({
   movements: TareMovement[] | null;
   loading: boolean;
   onClose: () => void;
+  onOperated: () => void;
 }) {
   const open = selected != null;
   const neg = balance < 0;
@@ -505,11 +529,24 @@ function Drawer({
               )}
             </div>
 
+            {selected.location.kind !== "transit" && (
+              <RoleGate allow={["admin"]}>
+                <OperationsSection
+                  locationId={selected.location.id}
+                  packagingTypeId={selected.type.id}
+                  state={state}
+                  balance={balance}
+                  onOperated={onOperated}
+                />
+              </RoleGate>
+            )}
+
             <div className="flex items-start gap-2 border-t bg-muted/30 px-6 py-3 text-[11px] text-muted-foreground">
               <LockIcon className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                Read-only. Движения создаются автоматически из отгрузок и рейсов
-                тары.
+                История read-only. Ручные операции (списание / утилизация) — в
+                секции выше; остальное создаётся автоматически из отгрузок и
+                рейсов тары.
               </span>
             </div>
           </>
@@ -558,6 +595,136 @@ function MovementRow({ m }: { m: TareMovement }) {
       >
         {pos ? `+${fmtInt(m.qty)}` : `−${fmtInt(Math.abs(m.qty))}`}
       </div>
+    </div>
+  );
+}
+
+// ---------- секция ручных операций (admin, не-транзит) ----------
+function OperationsSection({
+  locationId,
+  packagingTypeId,
+  state,
+  balance,
+  onOperated,
+}: {
+  locationId: number;
+  packagingTypeId: number;
+  state: TareState;
+  balance: number;
+  onOperated: () => void;
+}) {
+  const isScrap = state === "good"; // good → списание в лом; scrap → утилизация
+  const [open, setOpen] = useState(false);
+  const [qtyStr, setQtyStr] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const qty = Number.parseInt(qtyStr, 10);
+  const validQty = Number.isInteger(qty) && qty > 0;
+  const overflow = validQty && qty > balance;
+
+  function reset() {
+    setOpen(false);
+    setQtyStr("");
+    setReason("");
+    setError(null);
+  }
+
+  async function submit() {
+    if (!validQty || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const input = {
+      locationId,
+      packagingTypeId,
+      quantity: qty,
+      reason: reason.trim() || null,
+    };
+    const res = isScrap ? await scrapTare(input) : await disposeTare(input);
+    setSubmitting(false);
+    if (res.ok) {
+      reset();
+      onOperated();
+    } else {
+      setError(res.error);
+    }
+  }
+
+  const title = isScrap ? "Списать в лом" : "Утилизировать";
+  const Icon = isScrap ? PackageMinus : Trash2;
+  const stateLabel = isScrap ? "целой" : "лома";
+
+  return (
+    <div className="border-t px-6 py-4">
+      <h4 className="mb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+        Операции
+      </h4>
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+        >
+          <Icon className="size-4" />
+          {title}
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <div className="text-xs text-muted-foreground">
+            Текущий остаток {stateLabel}:{" "}
+            <span className="font-mono font-medium text-foreground tabular-nums">
+              {fmtInt(balance)}
+            </span>{" "}
+            шт
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              step={1}
+              autoFocus
+              value={qtyStr}
+              onChange={(e) => setQtyStr(e.target.value)}
+              placeholder="Кол-во, шт"
+              className="h-10 w-32 rounded-md border px-3 font-mono text-sm tabular-nums outline-none focus:ring-2 focus:ring-ring"
+            />
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Причина (необязательно)"
+              className="h-10 flex-1 rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          {overflow && (
+            <p className="text-xs text-[#9a5a12]">
+              Больше текущего остатка ({fmtInt(balance)} шт) — баланс уйдёт в
+              минус.
+            </p>
+          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!validQty || submitting}
+              className="inline-flex items-center gap-2 rounded-md bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-50"
+            >
+              <Icon className="size-4" />
+              {submitting ? "Сохранение…" : title}
+            </button>
+            <button
+              type="button"
+              onClick={reset}
+              disabled={submitting}
+              className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
