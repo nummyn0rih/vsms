@@ -15,7 +15,7 @@ export default async function MaterialsPage() {
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">Логистика материалов</h1>
         <p className="text-sm text-muted-foreground">
-          Рейсы тары завод → фермер · возврат пустой тары под отгрузку · сезон {seasonYear}
+          Рейсы тары и ингредиентов завод → фермер · возврат пустой тары под отгрузку · сезон {seasonYear}
         </p>
       </div>
 

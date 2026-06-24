@@ -9,7 +9,7 @@ import { z } from "zod";
 
 // Лимиты позиций рейса (как у отгрузки: 1 рейс = 1..4 позиции).
 export const MIN_ITEMS = 1;
-export const MAX_ITEMS = 4;
+export const MAX_ITEMS = 10;
 
 const isPositiveInt = (v: string) => {
   const n = Number(v.replace(",", "."));
@@ -133,9 +133,15 @@ export type MaterialPackagingOption = {
   kind: "box" | "barrel";
   capacity_kg: string | null;
 };
+export type MaterialIngredientOption = {
+  id: number;
+  name: string;
+  unit: "kg" | "l";
+};
 
 export type MaterialOptions = {
   drivers: MaterialDriverOption[];
   farmers: MaterialFarmerOption[];
   packagingTypes: MaterialPackagingOption[];
+  ingredients: MaterialIngredientOption[];
 };

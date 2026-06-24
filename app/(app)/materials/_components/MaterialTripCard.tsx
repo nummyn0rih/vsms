@@ -1,8 +1,11 @@
 "use client";
 
+import { FlaskConical } from "lucide-react";
+
 import type { MaterialTrip } from "@/server/materials/feed";
-import { totalsByType } from "@/server/materials/feed";
+import { totalsByType, ingredientTotals } from "@/server/materials/feed";
 import type { MaterialOptions } from "@/server/materials/schema";
+import { INGREDIENT_UNIT_LABELS } from "@/server/ingredients/schema";
 import { positionsWord } from "@/server/shipments/format";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { DriverModal } from "@/app/(app)/shipments/_components/DriverModal";
@@ -18,6 +21,8 @@ import {
 } from "./material-actions";
 
 const nf = new Intl.NumberFormat("ru-RU");
+// Ингредиенты — Decimal (kg/l), нужны дробные знаки; тара — целое (nf).
+const nfDec = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 });
 
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -82,6 +87,7 @@ export function MaterialTripCard({
   const isSent = trip.status === "sent";
   const isArrived = trip.status === "arrived";
   const totals = totalsByType(trip.items);
+  const ingTotals = ingredientTotals(trip.items);
 
   return (
     <div className="flex overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
@@ -120,28 +126,42 @@ export function MaterialTripCard({
       {/* Правая зона: позиции + футер. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex-1">
-          {trip.items.map((it) => (
-            <div
-              key={it.id}
-              className="grid items-center gap-3 border-t border-[#ebebeb] px-4 py-2.5 first:border-t-0"
-              style={{ gridTemplateColumns: "minmax(140px,1.5fr) minmax(150px,1.4fr) 104px" }}
-            >
-              <span className="truncate text-sm font-medium">{it.farmerName}</span>
-              <span className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
-                <MaterialTareIcon kind={it.packagingKind} />
-                <span className="truncate">
-                  {lcFirst(it.packagingTypeName)}
-                  {it.capacityKg != null && (
-                    <span className="text-muted-foreground"> · {nf.format(it.capacityKg)} кг</span>
+          {trip.items.map((it) => {
+            const isIngredient = it.itemKind === "ingredient";
+            const unit = isIngredient
+              ? it.ingredientUnit
+                ? INGREDIENT_UNIT_LABELS[it.ingredientUnit]
+                : "ед."
+              : "шт";
+            return (
+              <div
+                key={it.id}
+                className="grid items-center gap-3 border-t border-[#ebebeb] px-4 py-2.5 first:border-t-0"
+                style={{ gridTemplateColumns: "minmax(140px,1.5fr) minmax(150px,1.4fr) 104px" }}
+              >
+                <span className="truncate text-sm font-medium">{it.farmerName}</span>
+                <span className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
+                  {isIngredient ? (
+                    <FlaskConical className="size-[15px] shrink-0 text-muted-foreground" aria-hidden />
+                  ) : (
+                    <MaterialTareIcon kind={it.packagingKind} />
                   )}
+                  <span className="truncate">
+                    {isIngredient
+                      ? lcFirst(it.ingredientName ?? "ингредиент")
+                      : lcFirst(it.packagingTypeName ?? "тара")}
+                    {!isIngredient && it.capacityKg != null && (
+                      <span className="text-muted-foreground"> · {nf.format(it.capacityKg)} кг</span>
+                    )}
+                  </span>
                 </span>
-              </span>
-              <span className="text-right text-sm font-semibold tabular-nums">
-                {nf.format(it.quantity)}
-                <span className="ml-0.5 text-xs font-normal text-muted-foreground">шт</span>
-              </span>
-            </div>
-          ))}
+                <span className="text-right text-sm font-semibold tabular-nums">
+                  {(isIngredient ? nfDec : nf).format(it.quantity)}
+                  <span className="ml-0.5 text-xs font-normal text-muted-foreground">{unit}</span>
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Футер: счётчик позиций + итоги по типам (динамически) + действия. */}
@@ -154,6 +174,13 @@ export function MaterialTripCard({
                 {" · "}
                 <b className="font-semibold tabular-nums text-[#4d4d4d]">{nf.format(t.qty)}</b>{" "}
                 {lcFirst(t.name)}
+              </span>
+            ))}
+            {ingTotals.map((g) => (
+              <span key={g.ingredientId}>
+                {" · "}
+                <b className="font-semibold tabular-nums text-[#4d4d4d]">{nfDec.format(g.qty)}</b>{" "}
+                {lcFirst(g.name)}
               </span>
             ))}
           </span>

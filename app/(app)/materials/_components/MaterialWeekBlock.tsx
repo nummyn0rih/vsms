@@ -1,14 +1,20 @@
 "use client";
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, FlaskConical } from "lucide-react";
 
-import { type MaterialWeek, weekTotalsByType } from "@/server/materials/feed";
+import {
+  type MaterialWeek,
+  weekTotalsByType,
+  weekIngredientTotals,
+} from "@/server/materials/feed";
 import type { MaterialOptions } from "@/server/materials/schema";
+import { INGREDIENT_UNIT_LABELS } from "@/server/ingredients/schema";
 import { pluralRu } from "@/server/shipments/format";
 import { MaterialTareIcon } from "./MaterialTareIcon";
 import { MaterialTripCard } from "./MaterialTripCard";
 
 const nf = new Intl.NumberFormat("ru-RU");
+const nfDec = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 });
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", timeZone: "UTC" });
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -39,6 +45,7 @@ export function MaterialWeekBlock({
   onToggle: () => void;
 }) {
   const totals = weekTotalsByType(week.trips);
+  const ingredientTotals = weekIngredientTotals(week.trips);
 
   return (
     <div className="mt-4">
@@ -75,6 +82,18 @@ export function MaterialWeekBlock({
               <MaterialTareIcon kind={t.kind} className="size-3 shrink-0 text-muted-foreground" />
               {t.name}{" "}
               <b className="font-semibold tabular-nums text-[#171717]">{nf.format(t.qty)} шт</b>
+            </span>
+          ))}
+          {ingredientTotals.map((g) => (
+            <span
+              key={g.ingredientId}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#ebebeb] bg-white px-2 py-0.5 text-xs tracking-tight text-[#4d4d4d]"
+            >
+              <FlaskConical className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+              {g.name}{" "}
+              <b className="font-semibold tabular-nums text-[#171717]">
+                {nfDec.format(g.qty)} {INGREDIENT_UNIT_LABELS[g.unit]}
+              </b>
             </span>
           ))}
         </div>

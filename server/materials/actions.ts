@@ -460,7 +460,7 @@ export async function getMaterialShipment(
 
 // Опции формы: активные водители (+ТК), активные фермеры, активные типы тары.
 export async function listMaterialOptions(): Promise<MaterialOptions> {
-  const [drivers, farmers, packagingTypes] = await Promise.all([
+  const [drivers, farmers, packagingTypes, ingredients] = await Promise.all([
     prisma.driver.findMany({
       where: { active: true },
       include: { transportCompany: { select: { name: true } } },
@@ -474,6 +474,11 @@ export async function listMaterialOptions(): Promise<MaterialOptions> {
     prisma.packagingType.findMany({
       where: { active: true },
       select: { id: true, name: true, kind: true, capacity_kg: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.ingredient.findMany({
+      where: { active: true },
+      select: { id: true, name: true, unit: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -491,5 +496,6 @@ export async function listMaterialOptions(): Promise<MaterialOptions> {
       kind: p.kind,
       capacity_kg: p.capacity_kg?.toString() ?? null,
     })),
+    ingredients,
   };
 }

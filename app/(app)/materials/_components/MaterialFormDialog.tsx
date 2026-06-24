@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray } from "react-hook-form";
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type Control,
+  type UseFormReturn,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
@@ -13,7 +19,11 @@ import {
   type MaterialShipmentInput,
   type MaterialDetail,
   type MaterialOptions,
+  type MaterialPackagingOption,
+  type MaterialIngredientOption,
+  type MaterialFarmerOption,
 } from "@/server/materials/schema";
+import { INGREDIENT_UNIT_LABELS } from "@/server/ingredients/schema";
 import {
   createMaterialShipment,
   updateMaterialShipment,
@@ -45,6 +55,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { cn } from "@/lib/utils";
 import { StatusBadge } from "./material-status";
 
 // Сдвиг даты YYYY-MM-DD на N дней (через UTC). BR-12: вторая дата ±2 дня.
@@ -67,7 +78,13 @@ type Props =
   | ({ mode: "create"; row?: undefined } & CommonProps)
   | ({ mode: "edit"; row: MaterialDetail } & CommonProps);
 
-const EMPTY_ITEM = { farmer_id: "", packaging_type_id: "", quantity: "" };
+const EMPTY_ITEM = {
+  farmer_id: "",
+  item_kind: "packaging" as const,
+  packaging_type_id: "",
+  ingredient_id: "",
+  quantity: "",
+};
 
 export function MaterialFormDialog(props: Props) {
   const { mode, options, showTrigger = true } = props;
@@ -83,24 +100,33 @@ export function MaterialFormDialog(props: Props) {
     else setInternalOpen(v);
   };
 
-  // FK-Select: подмешиваем выбранные в рейсе фермеров/типы тары, которых нет в
-  // активных опциях (деактивированы) — чтобы привязка не «потерялась» при правке.
+  // FK-Select: подмешиваем выбранные в рейсе фермеров/типы тары/ингредиенты, которых
+  // нет в активных опциях (деактивированы) — чтобы привязка не «потерялась» при правке.
   const farmerOptions = [...options.farmers];
   const packagingOptions = [...options.packagingTypes];
+  const ingredientOptions = [...options.ingredients];
   if (row) {
     for (const it of row.items) {
       if (!farmerOptions.some((f) => f.id === it.farmer_id)) {
         farmerOptions.push({ id: it.farmer_id, name: `${it.farmer_name} (неактивен)` });
       }
-      // E1-форма редактирует только тару; ингредиентные позиции (E2) здесь пропускаем.
-      if (it.item_kind !== "packaging" || it.packaging_type_id == null) continue;
-      if (!packagingOptions.some((p) => p.id === it.packaging_type_id)) {
-        packagingOptions.push({
-          id: it.packaging_type_id,
-          name: `${it.packaging_type_name ?? "тара"} (неактивен)`,
-          kind: it.packaging_kind ?? "box",
-          capacity_kg: it.capacity_kg,
-        });
+      if (it.item_kind === "ingredient" && it.ingredient_id != null) {
+        if (!ingredientOptions.some((g) => g.id === it.ingredient_id)) {
+          ingredientOptions.push({
+            id: it.ingredient_id,
+            name: `${it.ingredient_name ?? "ингредиент"} (неактивен)`,
+            unit: it.ingredient_unit ?? "kg",
+          });
+        }
+      } else if (it.item_kind === "packaging" && it.packaging_type_id != null) {
+        if (!packagingOptions.some((p) => p.id === it.packaging_type_id)) {
+          packagingOptions.push({
+            id: it.packaging_type_id,
+            name: `${it.packaging_type_name ?? "тара"} (неактивен)`,
+            kind: it.packaging_kind ?? "box",
+            capacity_kg: it.capacity_kg,
+          });
+        }
       }
     }
   }
@@ -114,7 +140,10 @@ export function MaterialFormDialog(props: Props) {
       items: row
         ? row.items.map((it) => ({
             farmer_id: String(it.farmer_id),
-            packaging_type_id: String(it.packaging_type_id),
+            item_kind: it.item_kind,
+            packaging_type_id:
+              it.packaging_type_id != null ? String(it.packaging_type_id) : "",
+            ingredient_id: it.ingredient_id != null ? String(it.ingredient_id) : "",
             quantity: it.quantity,
           }))
         : [{ ...EMPTY_ITEM }],
@@ -284,95 +313,17 @@ export function MaterialFormDialog(props: Props) {
                 </div>
 
                 {fields.map((f, i) => (
-                  <div key={f.id} className="flex items-start gap-2 rounded border p-2">
-                    <FormField
-                      control={form.control}
-                      name={`items.${i}.farmer_id`}
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel className="text-xs">Фермер</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            disabled={readOnly}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Фермер" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {farmerOptions.map((farmer) => (
-                                <SelectItem key={farmer.id} value={String(farmer.id)}>
-                                  {farmer.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`items.${i}.packaging_type_id`}
-                      render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel className="text-xs">Тип тары</FormLabel>
-                          <Select
-                            value={field.value}
-                            onValueChange={field.onChange}
-                            disabled={readOnly}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Тип тары" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {packagingOptions.map((p) => (
-                                <SelectItem key={p.id} value={String(p.id)}>
-                                  {p.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`items.${i}.quantity`}
-                      render={({ field }) => (
-                        <FormItem className="w-28">
-                          <FormLabel className="text-xs">Кол-во, шт</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              min={1}
-                              step={1}
-                              {...field}
-                              disabled={readOnly}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      title="Удалить позицию"
-                      className="mt-6"
-                      disabled={readOnly || fields.length <= 1}
-                      onClick={() => remove(i)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
+                  <ItemRow
+                    key={f.id}
+                    index={i}
+                    form={form}
+                    farmerOptions={farmerOptions}
+                    packagingOptions={packagingOptions}
+                    ingredientOptions={ingredientOptions}
+                    readOnly={readOnly}
+                    canRemove={fields.length > 1}
+                    onRemove={() => remove(i)}
+                  />
                 ))}
 
                 {form.formState.errors.items?.message && (
@@ -398,5 +349,217 @@ export function MaterialFormDialog(props: Props) {
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Сегмент-тоггл вида позиции (Тара | Ингредиент). Без toggle-group (нет в проекте) —
+// инлайн из двух кнопок, нейтральный hairline-хром.
+function KindToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: "packaging" | "ingredient";
+  onChange: (v: "packaging" | "ingredient") => void;
+  disabled?: boolean;
+}) {
+  const opts: { key: "packaging" | "ingredient"; label: string }[] = [
+    { key: "packaging", label: "Тара" },
+    { key: "ingredient", label: "Ингредиент" },
+  ];
+  return (
+    <div className="inline-flex h-10 items-center rounded-md border border-input p-0.5">
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(o.key)}
+          className={cn(
+            "h-full rounded-[5px] px-2.5 text-xs font-medium transition-colors disabled:opacity-50",
+            value === o.key
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Строка позиции рейса: фермер · вид (тара/ингредиент) · пикер по виду · кол-во.
+// Локальный watch держим тут, чтобы не ре-рендерить всю форму на каждый ввод.
+function ItemRow({
+  index,
+  form,
+  farmerOptions,
+  packagingOptions,
+  ingredientOptions,
+  readOnly,
+  canRemove,
+  onRemove,
+}: {
+  index: number;
+  form: UseFormReturn<MaterialShipmentInput>;
+  farmerOptions: MaterialFarmerOption[];
+  packagingOptions: MaterialPackagingOption[];
+  ingredientOptions: MaterialIngredientOption[];
+  readOnly: boolean;
+  canRemove: boolean;
+  onRemove: () => void;
+}) {
+  const control = form.control as Control<MaterialShipmentInput>;
+  const kind =
+    (useWatch({ control, name: `items.${index}.item_kind` }) as
+      | "packaging"
+      | "ingredient"
+      | undefined) ?? "packaging";
+  const ingredientId = useWatch({
+    control,
+    name: `items.${index}.ingredient_id`,
+  }) as string | undefined;
+
+  const isIngredient = kind === "ingredient";
+  const selectedIngredient = ingredientOptions.find(
+    (g) => String(g.id) === ingredientId,
+  );
+  const unitLabel = isIngredient
+    ? selectedIngredient
+      ? INGREDIENT_UNIT_LABELS[selectedIngredient.unit]
+      : "ед."
+    : "шт";
+
+  // Переключение вида: чистим противоположный FK, чтобы не «висел» лишний id.
+  function switchKind(next: "packaging" | "ingredient") {
+    if (next === kind) return;
+    form.setValue(`items.${index}.item_kind`, next, { shouldDirty: true });
+    if (next === "ingredient") {
+      form.setValue(`items.${index}.packaging_type_id`, "", { shouldDirty: true });
+    } else {
+      form.setValue(`items.${index}.ingredient_id`, "", { shouldDirty: true });
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-start gap-2 rounded border p-2">
+      <FormField
+        control={form.control}
+        name={`items.${index}.farmer_id`}
+        render={({ field }) => (
+          <FormItem className="min-w-[160px] flex-1">
+            <FormLabel className="text-xs">Фермер</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange} disabled={readOnly}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder="Фермер" />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {farmerOptions.map((farmer) => (
+                  <SelectItem key={farmer.id} value={String(farmer.id)}>
+                    {farmer.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormItem className="shrink-0">
+        <FormLabel className="text-xs">Вид</FormLabel>
+        <div>
+          <KindToggle value={kind} onChange={switchKind} disabled={readOnly} />
+        </div>
+      </FormItem>
+
+      {isIngredient ? (
+        <FormField
+          control={form.control}
+          name={`items.${index}.ingredient_id`}
+          render={({ field }) => (
+            <FormItem className="min-w-[160px] flex-1">
+              <FormLabel className="text-xs">Ингредиент</FormLabel>
+              <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={readOnly}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Ингредиент" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {ingredientOptions.map((g) => (
+                    <SelectItem key={g.id} value={String(g.id)}>
+                      {g.name} ({INGREDIENT_UNIT_LABELS[g.unit]})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      ) : (
+        <FormField
+          control={form.control}
+          name={`items.${index}.packaging_type_id`}
+          render={({ field }) => (
+            <FormItem className="min-w-[160px] flex-1">
+              <FormLabel className="text-xs">Тип тары</FormLabel>
+              <Select value={field.value ?? ""} onValueChange={field.onChange} disabled={readOnly}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Тип тары" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {packagingOptions.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
+      <FormField
+        control={form.control}
+        name={`items.${index}.quantity`}
+        render={({ field }) => (
+          <FormItem className="w-28">
+            <FormLabel className="text-xs">Кол-во, {unitLabel}</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                inputMode={isIngredient ? "decimal" : "numeric"}
+                min={isIngredient ? undefined : 1}
+                step={isIngredient ? 0.001 : 1}
+                {...field}
+                disabled={readOnly}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        title="Удалить позицию"
+        className="mt-6"
+        disabled={readOnly || !canRemove}
+        onClick={onRemove}
+      >
+        <Trash2 className="size-4" />
+      </Button>
+    </div>
   );
 }

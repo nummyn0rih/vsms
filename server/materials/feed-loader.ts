@@ -17,6 +17,7 @@ function toDateStr(d: Date | null): string | null {
 const itemInclude = {
   farmer: { select: { name: true } },
   packagingType: { select: { name: true, kind: true, capacity_kg: true } },
+  ingredient: { select: { name: true, unit: true } },
 } as const;
 
 export async function getMaterialShipments(
@@ -81,12 +82,16 @@ export async function getMaterialShipments(
         id: i.id,
         farmerId: i.farmer_id,
         farmerName: i.farmer.name,
-        packagingTypeId: i.packaging_type_id ?? 0,
-        packagingTypeName: i.packagingType?.name ?? "тара",
-        packagingKind: i.packagingType?.kind ?? "box",
+        itemKind: i.item_kind,
+        packagingTypeId: i.packaging_type_id,
+        packagingTypeName: i.packagingType?.name ?? null,
+        packagingKind: i.packagingType?.kind ?? null,
         capacityKg: i.packagingType?.capacity_kg
           ? Number(i.packagingType.capacity_kg)
           : null,
+        ingredientId: i.ingredient_id,
+        ingredientName: i.ingredient?.name ?? null,
+        ingredientUnit: i.ingredient?.unit ?? null,
         quantity: Number(i.quantity),
       })),
     };
