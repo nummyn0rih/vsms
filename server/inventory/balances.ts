@@ -7,6 +7,7 @@ import {
   FACTORY_LOCATION_ID,
   TRANSIT_TO_FACTORY,
   TRANSIT_TO_FARMER,
+  TRANSFER_TRANSIT,
 } from "@/server/shipments/packaging";
 
 // D4b: read-only витрина остатков тары (DOMAIN §3). Баланс НЕ хранится — это Σ
@@ -57,9 +58,14 @@ export type TareMovement = {
 const FACTORY_NAME = "Завод";
 const TRANSIT_TO_FACTORY_NAME = "В пути на завод";
 const TRANSIT_TO_FARMER_NAME = "В пути с завода";
+const TRANSFER_TRANSIT_NAME = "В пути между фермерами";
 
 function isTransit(loc: number | null): boolean {
-  return loc === TRANSIT_TO_FACTORY || loc === TRANSIT_TO_FARMER;
+  return (
+    loc === TRANSIT_TO_FACTORY ||
+    loc === TRANSIT_TO_FARMER ||
+    loc === TRANSFER_TRANSIT
+  );
 }
 
 const cellKey = (loc: number, type: number, state: TareState) =>
@@ -168,6 +174,12 @@ export async function getTareBalances(): Promise<TareBalances> {
         })
       : [];
 
+  // Транзит -3 показываем только при наличии переносов (иначе пустая строка в 95%
+  // доставочных кейсов). -1/-2 — всегда (как было).
+  const hasTransfer = [...balances].some(
+    ([k, v]) => Number(k.split(":")[0]) === TRANSFER_TRANSIT && !v.isZero(),
+  );
+
   const locations: TareLocation[] = [
     { id: FACTORY_LOCATION_ID, name: FACTORY_NAME, kind: "factory" },
     ...activeFarmers.map((f) => ({
@@ -185,6 +197,15 @@ export async function getTareBalances(): Promise<TareBalances> {
       .sort((a, b) => a.name.localeCompare(b.name, "ru")),
     { id: TRANSIT_TO_FACTORY, name: TRANSIT_TO_FACTORY_NAME, kind: "transit" },
     { id: TRANSIT_TO_FARMER, name: TRANSIT_TO_FARMER_NAME, kind: "transit" },
+    ...(hasTransfer
+      ? [
+          {
+            id: TRANSFER_TRANSIT,
+            name: TRANSFER_TRANSIT_NAME,
+            kind: "transit" as const,
+          },
+        ]
+      : []),
   ];
 
   const cells: TareCell[] = [];
@@ -203,10 +224,13 @@ export async function getTareBalances(): Promise<TareBalances> {
 }
 
 // Метка движения по типу + плечу. transit=true когда одна из сторон — сентинел.
+// originFarmer — источник переноса рейса (для -3): from/to сами не различают
+// «отправку» от «сторно прибытия» (оба фермер↔-3) — нужен якорь источника.
 function chipFor(
   movementType: string,
   from: number | null,
   to: number | null,
+  originFarmer: number | null = null,
 ): { chip: string; transit: boolean } {
   const transit = isTransit(from) || isTransit(to);
   switch (movementType) {
@@ -219,6 +243,16 @@ function chipFor(
       if (from === TRANSIT_TO_FACTORY) return { chip: "сторно отгрузки", transit: true };
       return { chip: "отгрузка", transit };
     case "delivery":
+      // Перенос фермер→фермер: плечо через -3 (movement_type=delivery, как у -2).
+      if (from === TRANSFER_TRANSIT || to === TRANSFER_TRANSIT) {
+        if (to === TRANSFER_TRANSIT)
+          return from === originFarmer
+            ? { chip: "перенос: отправка", transit: true }
+            : { chip: "перенос: сторно прибытия", transit: true };
+        return to === originFarmer
+          ? { chip: "перенос: сторно отправки", transit: true }
+          : { chip: "перенос: прибытие", transit: true };
+      }
       if (from === FACTORY_LOCATION_ID && to === TRANSIT_TO_FARMER)
         return { chip: "отправлено", transit: true };
       if (from === TRANSIT_TO_FARMER && to === FACTORY_LOCATION_ID)
@@ -312,27 +346,36 @@ export async function getTareMovements(
     materialIds.size > 0
       ? prisma.materialShipment.findMany({
           where: { id: { in: [...materialIds] } },
-          select: { id: true, code: true },
+          select: { id: true, code: true, source_farmer_id: true },
         })
       : Promise.resolve([]),
   ]);
   const farmerName = new Map(farmers.map((f) => [f.id, f.name]));
   const shipCode = new Map(shipments.map((s) => [s.id, s.code]));
   const tripCode = new Map(materials.map((s) => [s.id, s.code]));
+  const srcFarmerByTrip = new Map(
+    materials.map((s) => [s.id, s.source_farmer_id]),
+  );
 
   const locName = (loc: number | null): string | null => {
     if (loc == null) return null;
     if (loc === FACTORY_LOCATION_ID) return FACTORY_NAME;
     if (loc === TRANSIT_TO_FACTORY) return TRANSIT_TO_FACTORY_NAME;
     if (loc === TRANSIT_TO_FARMER) return TRANSIT_TO_FARMER_NAME;
+    if (loc === TRANSFER_TRANSIT) return TRANSFER_TRANSIT_NAME;
     return farmerName.get(loc) ?? `Фермер #${loc}`;
   };
 
   return touched.map((m) => {
+    const originFarmer =
+      m.source_doc_type === "material_shipment" && m.source_doc_id != null
+        ? srcFarmerByTrip.get(m.source_doc_id) ?? null
+        : null;
     const { chip, transit } = chipFor(
       m.movement_type,
       m.from_location_id,
       m.to_location_id,
+      originFarmer,
     );
     let srcKind: TareMovement["srcKind"] = "inv";
     let srcRef = "Инвентаризация склада";
@@ -486,6 +529,11 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
         })
       : [];
 
+  // Транзит -3 показываем только при наличии переносов (пустую строку прячем).
+  const hasTransfer = [...balances].some(
+    ([k, v]) => Number(k.split(":")[0]) === TRANSFER_TRANSIT && !v.isZero(),
+  );
+
   const locations: IngredientLocation[] = [
     { id: FACTORY_LOCATION_ID, name: FACTORY_NAME, kind: "factory" },
     ...activeFarmers.map((f) => ({
@@ -501,8 +549,18 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
         inactive: true,
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "ru")),
-    // Один транзит: -2 «В пути с завода». Для ингредиента -1 не используется.
+    // Транзит: -2 «В пути с завода» (доставка) + -3 «между фермерами» (перенос, по
+    // наличию). Для ингредиента -1 не используется.
     { id: TRANSIT_TO_FARMER, name: TRANSIT_TO_FARMER_NAME, kind: "transit" },
+    ...(hasTransfer
+      ? [
+          {
+            id: TRANSFER_TRANSIT,
+            name: TRANSFER_TRANSIT_NAME,
+            kind: "transit" as const,
+          },
+        ]
+      : []),
   ];
 
   const cells: IngredientCell[] = [];
@@ -519,16 +577,28 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
   return { columns, locations, cells };
 }
 
-// Метка движения ингредиента. transit=true когда сторона = -2.
+// Метка движения ингредиента. transit=true когда сторона = -2 или -3.
+// originFarmer — источник переноса рейса (для -3, см. chipFor выше).
 function chipForIngredient(
   movementType: string,
   from: number | null,
   to: number | null,
+  originFarmer: number | null = null,
 ): { chip: string; transit: boolean } {
   switch (movementType) {
     case "opening":
       return { chip: "остаток на начало", transit: false };
     case "delivery":
+      // Перенос фермер→фермер: плечо через -3 (movement_type=delivery, как у -2).
+      if (from === TRANSFER_TRANSIT || to === TRANSFER_TRANSIT) {
+        if (to === TRANSFER_TRANSIT)
+          return from === originFarmer
+            ? { chip: "перенос: отправка", transit: true }
+            : { chip: "перенос: сторно прибытия", transit: true };
+        return to === originFarmer
+          ? { chip: "перенос: сторно отправки", transit: true }
+          : { chip: "перенос: прибытие", transit: true };
+      }
       if (from === FACTORY_LOCATION_ID && to === TRANSIT_TO_FARMER)
         return { chip: "отправлено", transit: true };
       if (from === TRANSIT_TO_FARMER && to === FACTORY_LOCATION_ID)
@@ -604,7 +674,7 @@ export async function getIngredientMovements(
     tripIds.size > 0
       ? prisma.materialShipment.findMany({
           where: { id: { in: [...tripIds] } },
-          select: { id: true, code: true },
+          select: { id: true, code: true, source_farmer_id: true },
         })
       : Promise.resolve([]),
     actIds.size > 0
@@ -617,19 +687,28 @@ export async function getIngredientMovements(
   const farmerName = new Map(farmers.map((f) => [f.id, f.name]));
   const tripCode = new Map(trips.map((t) => [t.id, t.code]));
   const actCode = new Map(acts.map((a) => [a.id, a.act_number]));
+  const srcFarmerByTrip = new Map(
+    trips.map((t) => [t.id, t.source_farmer_id]),
+  );
 
   const locName = (loc: number | null): string | null => {
     if (loc == null) return null;
     if (loc === FACTORY_LOCATION_ID) return FACTORY_NAME;
     if (loc === TRANSIT_TO_FARMER) return TRANSIT_TO_FARMER_NAME;
+    if (loc === TRANSFER_TRANSIT) return TRANSFER_TRANSIT_NAME;
     return farmerName.get(loc) ?? `Фермер #${loc}`;
   };
 
   return touched.map((m) => {
+    const originFarmer =
+      m.source_doc_type === "material_shipment" && m.source_doc_id != null
+        ? srcFarmerByTrip.get(m.source_doc_id) ?? null
+        : null;
     const { chip, transit } = chipForIngredient(
       m.movement_type,
       m.from_location_id,
       m.to_location_id,
+      originFarmer,
     );
     let srcKind: IngredientMovement["srcKind"] = "inv";
     let srcRef = "Инвентаризация склада";

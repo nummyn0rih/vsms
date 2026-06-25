@@ -135,6 +135,8 @@ export function MaterialFormDialog(props: Props) {
     resolver: zodResolver(materialShipmentSchema),
     defaultValues: {
       driver_id: row?.driver_id != null ? String(row.driver_id) : "",
+      source_farmer_id:
+        row?.source_farmer_id != null ? String(row.source_farmer_id) : "",
       departure_date: row?.departure_date ?? "",
       arrival_date: row?.arrival_date ?? "",
       items: row
@@ -175,6 +177,29 @@ export function MaterialFormDialog(props: Props) {
       : d.full_name,
   }));
 
+  // Источник переноса: «Завод» (value "") + фермеры. При правке переноса от ныне
+  // неактивного фермера подмешиваем его id (имени в MaterialDetail нет — архивный лейбл).
+  const sourceFarmerList = [...options.farmers];
+  if (
+    row?.source_farmer_id != null &&
+    !sourceFarmerList.some((f) => f.id === row.source_farmer_id)
+  ) {
+    sourceFarmerList.push({
+      id: row.source_farmer_id,
+      name: `Фермер #${row.source_farmer_id} (неактивен)`,
+    });
+  }
+  const sourceOptions: ComboboxOption[] = [
+    { value: "", label: "Завод" },
+    ...sourceFarmerList.map((f) => ({ value: String(f.id), label: f.name })),
+  ];
+
+  // Источник для исключения self-transfer из получателей. "" = Завод (без исключения).
+  const sourceId =
+    (useWatch({ control: form.control, name: "source_farmer_id" }) as
+      | string
+      | undefined) ?? "";
+
   async function onSubmit(values: MaterialShipmentInput) {
     const res =
       mode === "edit"
@@ -187,6 +212,7 @@ export function MaterialFormDialog(props: Props) {
       if (mode === "create") {
         form.reset({
           driver_id: "",
+          source_farmer_id: "",
           departure_date: "",
           arrival_date: "",
           items: [{ ...EMPTY_ITEM }],
@@ -275,27 +301,52 @@ export function MaterialFormDialog(props: Props) {
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="driver_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Водитель</FormLabel>
-                    <FormControl>
-                      <Combobox
-                        options={driverOptions}
-                        value={field.value ?? ""}
-                        onChange={field.onChange}
-                        placeholder="Выберите водителя"
-                        searchPlaceholder="Поиск по фамилии…"
-                        emptyText="Водитель не найден"
-                        disabled={readOnly}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="driver_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Водитель</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={driverOptions}
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          placeholder="Выберите водителя"
+                          searchPlaceholder="Поиск по фамилии…"
+                          emptyText="Водитель не найден"
+                          disabled={readOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Источник: «Завод» (доставка, дефолт) или фермер (перенос -3). */}
+                <FormField
+                  control={form.control}
+                  name="source_farmer_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Источник</FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={sourceOptions}
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          placeholder="Завод"
+                          searchPlaceholder="Поиск по фермеру…"
+                          emptyText="Не найдено"
+                          disabled={readOnly}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               {/* Позиции (1–4): фермер · тип тары · кол-во. */}
               <div className="grid gap-2 rounded-md border p-3">
@@ -320,6 +371,7 @@ export function MaterialFormDialog(props: Props) {
                     farmerOptions={farmerOptions}
                     packagingOptions={packagingOptions}
                     ingredientOptions={ingredientOptions}
+                    excludeFarmerId={sourceId}
                     readOnly={readOnly}
                     canRemove={fields.length > 1}
                     onRemove={() => remove(i)}
@@ -397,6 +449,7 @@ function ItemRow({
   farmerOptions,
   packagingOptions,
   ingredientOptions,
+  excludeFarmerId,
   readOnly,
   canRemove,
   onRemove,
@@ -406,6 +459,9 @@ function ItemRow({
   farmerOptions: MaterialFarmerOption[];
   packagingOptions: MaterialPackagingOption[];
   ingredientOptions: MaterialIngredientOption[];
+  // Фермер-источник переноса ("" = Завод) — его опцию в получателях дизейблим
+  // (self-transfer запрещён; сервер тоже режет).
+  excludeFarmerId: string;
   readOnly: boolean;
   canRemove: boolean;
   onRemove: () => void;
@@ -458,7 +514,14 @@ function ItemRow({
               </FormControl>
               <SelectContent>
                 {farmerOptions.map((farmer) => (
-                  <SelectItem key={farmer.id} value={String(farmer.id)}>
+                  <SelectItem
+                    key={farmer.id}
+                    value={String(farmer.id)}
+                    disabled={
+                      excludeFarmerId !== "" &&
+                      String(farmer.id) === excludeFarmerId
+                    }
+                  >
                     {farmer.name}
                   </SelectItem>
                 ))}

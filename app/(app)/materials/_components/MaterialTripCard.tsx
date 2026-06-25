@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, ArrowRightLeft } from "lucide-react";
 
 import type { MaterialTrip } from "@/server/materials/feed";
 import { totalsByType, ingredientTotals } from "@/server/materials/feed";
@@ -114,6 +114,17 @@ export function MaterialTripCard({
             </div>
           </RoleGate>
         </div>
+
+        {/* Перенос фермер→фермер: источник + нейтральная метка. Доставка (Завод) —
+            строки нет, карточка как раньше. Получатели — в строках позиций. */}
+        {trip.sourceFarmerId != null && (
+          <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
+            <span className="truncate">{trip.sourceLabel} →</span>
+            <span className="inline-flex items-center gap-1 rounded-[5px] border border-[#ebebeb] bg-[#f5f5f5] px-1.5 py-0.5 text-[11px] font-medium text-[#666]">
+              <ArrowRightLeft className="size-3" aria-hidden /> Перенос
+            </span>
+          </div>
+        )}
 
         {trip.driverName ? (
           <DriverModal
