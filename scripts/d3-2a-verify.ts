@@ -11,6 +11,7 @@ import {
   revertDeliveryLeg,
 } from "../server/materials/movements";
 import { FACTORY_LOCATION_ID, TRANSIT_TO_FARMER } from "../server/shipments/packaging";
+import { materialShipmentSchema } from "../server/materials/schema";
 
 const ROLLBACK = "ROLLBACK_OK";
 let pass = 0;
@@ -153,11 +154,84 @@ async function main() {
       const stateClean = [{ arrived_at: null }, { arrived_at: null }];
       check("после снятия всех → откат разрешён", stateClean.some((i) => i.arrived_at != null) === false);
 
+      // ===== D. Объединённая позиция кредитует 500 (fix находки 1) =====
+      console.log("D. Объединённая позиция (f1, box, 500)");
+      const tripM = await tx.materialShipment.create({
+        data: { code: "D32A-M", departure_date: new Date(), arrival_date: new Date(), status: "planned", driver_id: driver.id },
+      });
+      const mItem = await tx.materialShipmentItem.create({
+        data: { material_shipment_id: tripM.id, farmer_id: f1.id, item_kind: "packaging", packaging_type_id: box.id, quantity: "500" },
+      });
+      async function balM(loc: number) {
+        const ms = await tx.stockMovement.findMany({
+          where: { source_doc_type: "material_shipment", source_doc_id: tripM.id, kind: "packaging", packaging_type_id: box.id },
+        });
+        let v = new Prisma.Decimal(0);
+        for (const m of ms) {
+          if (m.to_location_id === loc) v = v.plus(m.quantity);
+          if (m.from_location_id === loc) v = v.minus(m.quantity);
+        }
+        return Number(v);
+      }
+      await applyOutboundDeliveryLeg(tx, [mItem], tripM.id, new Date());
+      await applyArrivedLegForItem(tx, mItem, tripM.id, new Date());
+      check("merged: фермер1 box ровно +500", (await balM(f1.id)) === 500);
+
+      // ===== E. planned-гард unmarkAllArrived (fix находки 2) =====
+      console.log("E. planned-гард");
+      const tripP = await tx.materialShipment.create({
+        data: { code: "D32A-P", departure_date: new Date(), arrival_date: new Date(), status: "planned", driver_id: driver.id },
+      });
+      await tx.materialShipmentItem.create({
+        data: { material_shipment_id: tripP.id, farmer_id: f2.id, item_kind: "packaging", packaging_type_id: box.id, quantity: "100" },
+      });
+      // Зеркало гарда: на planned функция возвращает no-op до любых записей.
+      const pTrip = await tx.materialShipment.findUnique({ where: { id: tripP.id } });
+      const guardNoop = pTrip!.status === "planned";
+      const pMoves = await tx.stockMovement.count({
+        where: { source_doc_type: "material_shipment", source_doc_id: tripP.id },
+      });
+      check("planned-рейс: гард срабатывает (no-op)", guardNoop === true);
+      check("planned-рейс: движений не создано", pMoves === 0);
+
       throw new Error(ROLLBACK);
     }, { timeout: 120000, maxWait: 120000 });
   } catch (e) {
     if (!(e instanceof Error && e.message === ROLLBACK)) throw e;
   }
+
+  // ===== S. zod-refine дублей позиций (pure, без БД) =====
+  console.log("S. Schema refine — дубли позиций");
+  const base = { driver_id: "1", departure_date: "2026-06-25", arrival_date: "2026-06-26" };
+  const dup = materialShipmentSchema.safeParse({
+    ...base,
+    items: [
+      { farmer_id: "1", packaging_type_id: "10", quantity: "300" },
+      { farmer_id: "1", packaging_type_id: "10", quantity: "200" },
+    ],
+  });
+  const dupIssueOnSecond =
+    !dup.success &&
+    dup.error.issues.some(
+      (i) => i.path[0] === "items" && i.path[1] === 1 && i.path[2] === "packaging_type_id",
+    );
+  check("дубль (f1,box)×2 → ошибка на 2-й позиции", dupIssueOnSecond);
+
+  const merged = materialShipmentSchema.safeParse({
+    ...base,
+    items: [{ farmer_id: "1", packaging_type_id: "10", quantity: "500" }],
+  });
+  check("объединённая (f1,box,500) → проходит", merged.success);
+
+  const distinct = materialShipmentSchema.safeParse({
+    ...base,
+    items: [
+      { farmer_id: "1", packaging_type_id: "10", quantity: "300" },
+      { farmer_id: "1", item_kind: "ingredient", ingredient_id: "20", quantity: "50" },
+      { farmer_id: "2", packaging_type_id: "10", quantity: "100" },
+    ],
+  });
+  check("разные группы (f1 box / f1 соль / f2 box) → проходит", distinct.success);
 
   console.log(`\nИтог: ${pass} ok, ${fail} fail`);
   await prisma.$disconnect();

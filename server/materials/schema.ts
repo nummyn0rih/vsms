@@ -86,6 +86,28 @@ export const materialShipmentSchema = z
         message: "Отправление не может быть позже прибытия",
       });
     }
+
+    // Запрет дублей по группе (farmer × kind × FK). Леджер агрегирует движения по
+    // (kind, FK, farmer) без ссылки на строку → две строки одной группы ломают
+    // по-позиционное прибытие (markItem второй видит net>0 и пропускает плечо).
+    // Бизнес-дубль = одна строка с суммой. Неполные строки пропускаем (их ловит
+    // materialItemSchema), чтобы не дублировать ошибки.
+    const seen = new Set<string>();
+    val.items.forEach((it, i) => {
+      const kind = it.item_kind ?? "packaging";
+      const fk = kind === "ingredient" ? it.ingredient_id : it.packaging_type_id;
+      if (!it.farmer_id || !fk || fk.trim() === "") return;
+      const key = `${it.farmer_id}|${kind}|${fk}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["items", i, kind === "ingredient" ? "ingredient_id" : "packaging_type_id"],
+          message: "Для этого фермера и типа груза позиция уже есть — объедините количество",
+        });
+      } else {
+        seen.add(key);
+      }
+    });
   });
 
 export type MaterialShipmentInput = z.infer<typeof materialShipmentSchema>;

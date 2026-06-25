@@ -490,6 +490,8 @@ export async function unmarkAllArrived(tripId: number): Promise<ActionResult> {
         include: { items: true },
       });
       if (!trip) return { ok: false as const, error: "Рейс не найден" };
+      // Гард: на planned снимать нечего; не уводить planned→sent без плеча отправки.
+      if (trip.status === "planned") return { ok: true as const };
 
       const now = new Date();
       let reverted = 0;
