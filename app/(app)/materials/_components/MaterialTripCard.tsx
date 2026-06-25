@@ -18,6 +18,7 @@ import {
   ArriveMaterialButton,
   RevertToPlannedButton,
   RevertToSentButton,
+  ItemArrivedControl,
 } from "./material-actions";
 
 const nf = new Intl.NumberFormat("ru-RU");
@@ -82,10 +83,11 @@ export function MaterialTripCard({
   trip: MaterialTrip;
   options: MaterialOptions;
 }) {
-  const zoneBg = STATUS_STYLE[trip.status].zone;
+  const zoneBg = STATUS_STYLE[trip.derivedStatus].zone;
   const isPlanned = trip.status === "planned";
-  const isSent = trip.status === "sent";
-  const isArrived = trip.status === "arrived";
+  // Футер-действия — по производному статусу (sent и partial ведут себя одинаково).
+  const showArrive = trip.derivedStatus === "sent" || trip.derivedStatus === "partial";
+  const isArrived = trip.derivedStatus === "arrived";
   const totals = totalsByType(trip.items);
   const ingTotals = ingredientTotals(trip.items);
 
@@ -97,7 +99,11 @@ export function MaterialTripCard({
         style={{ backgroundColor: zoneBg }}
       >
         <div className="flex items-center gap-2">
-          <StatusBadge status={trip.status} />
+          <StatusBadge
+            status={trip.derivedStatus}
+            arrivedCount={trip.arrivedCount}
+            totalCount={trip.totalCount}
+          />
           <span className="text-[13px] tracking-tight">
             <TripDates departure={trip.departureDate} arrival={trip.arrivalDate} />
           </span>
@@ -137,7 +143,10 @@ export function MaterialTripCard({
               <div
                 key={it.id}
                 className="grid items-center gap-3 border-t border-[#ebebeb] px-4 py-2.5 first:border-t-0"
-                style={{ gridTemplateColumns: "minmax(140px,1.5fr) minmax(150px,1.4fr) 104px" }}
+                style={{
+                  gridTemplateColumns:
+                    "minmax(140px,1.5fr) minmax(150px,1.4fr) 104px minmax(130px,auto)",
+                }}
               >
                 <span className="truncate text-sm font-medium">{it.farmerName}</span>
                 <span className="flex min-w-0 items-center gap-2 text-[13px] text-muted-foreground">
@@ -158,6 +167,12 @@ export function MaterialTripCard({
                 <span className="text-right text-sm font-semibold tabular-nums">
                   {(isIngredient ? nfDec : nf).format(it.quantity)}
                   <span className="ml-0.5 text-xs font-normal text-muted-foreground">{unit}</span>
+                </span>
+                {/* Прибытие позиции — только после отправки рейса (на planned пусто). */}
+                <span className="flex justify-end">
+                  {!isPlanned && (
+                    <ItemArrivedControl itemId={it.id} arrivedAt={it.arrivedAt} />
+                  )}
                 </span>
               </div>
             );
@@ -190,11 +205,14 @@ export function MaterialTripCard({
               <SendMaterialButton id={trip.id} code={trip.code} />
             </RoleGate>
           )}
-          {isSent && (
+          {showArrive && (
             <>
-              <RoleGate allow={["admin"]}>
-                <RevertToPlannedButton id={trip.id} code={trip.code} />
-              </RoleGate>
+              {/* Откат в план — только пока ничего не прибыло (иначе сервер отклонит). */}
+              {trip.arrivedCount === 0 && (
+                <RoleGate allow={["admin"]}>
+                  <RevertToPlannedButton id={trip.id} code={trip.code} />
+                </RoleGate>
+              )}
               <RoleGate allow={["admin", "operator"]}>
                 <ArriveMaterialButton id={trip.id} code={trip.code} />
               </RoleGate>

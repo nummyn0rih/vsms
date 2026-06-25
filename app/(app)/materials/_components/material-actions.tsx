@@ -3,16 +3,19 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Pencil, Trash2, Send, Undo2, RotateCcw, Check } from "lucide-react";
+import { Pencil, Trash2, Send, Undo2, RotateCcw, Check, X } from "lucide-react";
 
 import {
   getMaterialShipment,
   deleteMaterialShipment,
   sendMaterialShipment,
+  markItemArrived,
+  unmarkItemArrived,
   markAllArrived,
   revertMaterialToPlanned,
   unmarkAllArrived,
 } from "@/server/materials/actions";
+import { RoleGate } from "@/components/auth/RoleGate";
 import type { MaterialDetail, MaterialOptions } from "@/server/materials/schema";
 import { Button } from "@/components/ui/button";
 import {
@@ -185,10 +188,73 @@ export function SendMaterialButton({ id, code }: { id: number; code: string }) {
   );
 }
 
+// Дата прибытия позиции (feed отдаёт YYYY-MM-DD — времени суток нет).
+const arrivedDateFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "numeric",
+  timeZone: "UTC",
+});
+
+// Per-item прибытие: отметить (admin|operator) / снять (admin). Состояние busy на
+// время запроса, ошибка из ActionResult — тостом. Обновление дерева — router.refresh().
+export function ItemArrivedControl({
+  itemId,
+  arrivedAt,
+}: {
+  itemId: number;
+  arrivedAt: string | null;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: () => Promise<{ ok: boolean; error?: string }>) {
+    setBusy(true);
+    const res = await action();
+    setBusy(false);
+    if (res.ok) router.refresh();
+    else toast.error(res.error ?? "Не удалось");
+  }
+
+  if (arrivedAt == null) {
+    return (
+      <RoleGate allow={["admin", "operator"]}>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => run(() => markItemArrived(itemId))}
+        >
+          Отметить прибытие
+        </Button>
+      </RoleGate>
+    );
+  }
+
+  return (
+    <span className="flex items-center justify-end gap-1.5">
+      <Check className="size-[15px] shrink-0 text-[#1d8e75]" aria-hidden />
+      <span className="font-mono text-xs tabular-nums text-muted-foreground">
+        {arrivedDateFmt.format(new Date(`${arrivedAt}T00:00:00Z`))}
+      </span>
+      <RoleGate allow={["admin"]}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Снять прибытие"
+          disabled={busy}
+          onClick={() => run(() => unmarkItemArrived(itemId))}
+        >
+          <X className="size-4" />
+        </Button>
+      </RoleGate>
+    </span>
+  );
+}
+
 export function ArriveMaterialButton({ id, code }: { id: number; code: string }) {
   return (
     <StatusActionButton
-      label="Прибыл"
+      label="Принять рейс"
       title="Отметить прибытие?"
       icon={<Check className="size-[15px]" />}
       description="Тара перейдёт из «в пути» на балансы фермеров (движение транзит → фермер)."

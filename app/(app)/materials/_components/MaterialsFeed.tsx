@@ -16,11 +16,12 @@ import {
 } from "@/components/ui/select";
 import { MaterialFormDialog } from "./MaterialFormDialog";
 import { MaterialWeekBlock } from "./MaterialWeekBlock";
-import type { MaterialStatus } from "./material-status";
+import type { DisplayStatus } from "./material-status";
 
-const STATUS_LABEL: Record<MaterialStatus, string> = {
+const STATUS_LABEL: Record<DisplayStatus, string> = {
   planned: "Плановый",
   sent: "Отправлен",
+  partial: "Частично",
   arrived: "Прибыл",
 };
 
@@ -36,7 +37,7 @@ export function MaterialsFeed({
   options: MaterialOptions;
 }) {
   const [search, setSearch] = useState("");
-  const [statusSel, setStatusSel] = useState<"all" | MaterialStatus>("all");
+  const [statusSel, setStatusSel] = useState<"all" | DisplayStatus>("all");
   const [farmerSel, setFarmerSel] = useState<"all" | string>("all");
 
   // Свёрнутость недель: прошлые свёрнуты по умолчанию (React-state, без localStorage).
@@ -66,7 +67,7 @@ export function MaterialsFeed({
       .map((w) => ({
         ...w,
         trips: w.trips.filter((t) => {
-          if (statusSel !== "all" && t.status !== statusSel) return false;
+          if (statusSel !== "all" && t.derivedStatus !== statusSel) return false;
           if (farmerId != null && !t.items.some((it) => it.farmerId === farmerId))
             return false;
           if (q) {
@@ -118,14 +119,14 @@ export function MaterialsFeed({
 
         <Select
           value={statusSel}
-          onValueChange={(v) => setStatusSel(v as "all" | MaterialStatus)}
+          onValueChange={(v) => setStatusSel(v as "all" | DisplayStatus)}
         >
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Статус" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Все статусы</SelectItem>
-            {(Object.keys(STATUS_LABEL) as MaterialStatus[]).map((s) => (
+            {(Object.keys(STATUS_LABEL) as DisplayStatus[]).map((s) => (
               <SelectItem key={s} value={s}>
                 {STATUS_LABEL[s]}
               </SelectItem>
