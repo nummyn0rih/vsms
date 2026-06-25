@@ -111,11 +111,38 @@ const baseMovement = (tripId: number, date: Date) =>
     source_doc_id: tripId,
   }) as const;
 
+// Нетто плеча ОТПРАВКИ всего рейса = Σ(origin→transit) − Σ(transit→origin). Отправка
+// атомарна на весь рейс (все позиции уходят/откатываются вместе), поэтому считаем по
+// рейсу, не по позиции. >0 — плечо открыто; 0 — откатано/не было. На этом нетто строится
+// идемпотентность applyOutboundDeliveryLeg (симметрично arrivedNetForItem/revertDeliveryLeg).
+// Фильтр origin↔transit исключает плечи прибытия (transit→фермер/фермер→transit).
+async function outboundNetForTrip(
+  tx: Tx,
+  tripId: number,
+  ctx: LegContext,
+): Promise<Prisma.Decimal> {
+  const movements = await tx.stockMovement.findMany({
+    where: {
+      source_doc_type: "material_shipment",
+      source_doc_id: tripId,
+      movement_type: "delivery",
+    },
+  });
+  let net = new Prisma.Decimal(0);
+  for (const m of movements) {
+    if (m.from_location_id === ctx.origin && m.to_location_id === ctx.transit)
+      net = net.plus(m.quantity);
+    else if (m.from_location_id === ctx.transit && m.to_location_id === ctx.origin)
+      net = net.minus(m.quantity);
+  }
+  return net;
+}
+
 // Плечо ОТПРАВКИ (planned → sent): материал уходит из origin рейса в транзит «в
 // пути» (ctx.transit). Доставка: 0 → -2; перенос: фермер A → -3. Движение на каждую
-// позицию (тара/ингредиент). Идемпотентно: guard по существующему плечу
-// origin → transit этого рейса БЕЗ привязки к kind (иначе при смешанном грузе второй
-// тип заблокируется). Возвращает число движений.
+// позицию (тара/ингредиент). Идемпотентно по НЕТТО рейса (origin↔transit): плечо уже
+// открыто (net>0) — не дублируем; после полного отката (net=0) — создаём заново.
+// Возвращает число движений.
 export async function applyOutboundDeliveryLeg(
   tx: Tx,
   items: ItemLite[],
@@ -123,16 +150,7 @@ export async function applyOutboundDeliveryLeg(
   date: Date,
   ctx: LegContext,
 ): Promise<number> {
-  const existing = await tx.stockMovement.findFirst({
-    where: {
-      source_doc_type: "material_shipment",
-      source_doc_id: tripId,
-      from_location_id: ctx.origin,
-      to_location_id: ctx.transit,
-    },
-    select: { id: true },
-  });
-  if (existing) return 0;
+  if ((await outboundNetForTrip(tx, tripId, ctx)).gt(0)) return 0;
 
   const data = items
     .filter((i) => itemId(i) != null)

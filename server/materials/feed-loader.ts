@@ -117,6 +117,25 @@ export async function getMaterialShipments(
     bucket.trips.push(trip);
   }
 
+  // Рейсы ВНУТРИ недели — по дате ПРИБЫТИЯ ASC (без прибытия — в конец), тай-брейк:
+  // отправление ASC → id ASC. ISO-строки YYYY-MM-DD сортируются лексикографически =
+  // хронологически. Группировка/порядок недель — без изменений.
+  for (const bucket of byWeek.values()) {
+    bucket.trips.sort((a, b) => {
+      if (a.arrivalDate !== b.arrivalDate) {
+        if (a.arrivalDate == null) return 1;
+        if (b.arrivalDate == null) return -1;
+        return a.arrivalDate < b.arrivalDate ? -1 : 1;
+      }
+      if (a.departureDate !== b.departureDate) {
+        if (a.departureDate == null) return 1;
+        if (b.departureDate == null) return -1;
+        return a.departureDate < b.departureDate ? -1 : 1;
+      }
+      return a.id - b.id;
+    });
+  }
+
   // Недели по возрастанию (прошлые → будущие), как лента отгрузок.
   const weeks = [...byWeek.values()].sort((a, b) =>
     compareIsoWeek(a, b),
