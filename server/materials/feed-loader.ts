@@ -67,10 +67,22 @@ export async function getMaterialShipments(
       byWeek.set(key, bucket);
     }
 
+    const status = t.status as MaterialTrip["status"];
+    const totalCount = t.items.length;
+    const arrivedCount = t.items.filter((i) => i.arrived_at != null).length;
+    // "partial" — производное только для UI: рейс отправлен, прибыла часть позиций.
+    const derivedStatus: MaterialTrip["derivedStatus"] =
+      status === "sent" && arrivedCount > 0 && arrivedCount < totalCount
+        ? "partial"
+        : status;
+
     const trip: MaterialTrip = {
       id: t.id,
       code: t.code,
-      status: t.status as MaterialTrip["status"],
+      status,
+      derivedStatus,
+      arrivedCount,
+      totalCount,
       departureDate: toDateStr(t.departure_date),
       arrivalDate: toDateStr(t.arrival_date),
       driverName: t.driver.full_name,
@@ -93,6 +105,7 @@ export async function getMaterialShipments(
         ingredientName: i.ingredient?.name ?? null,
         ingredientUnit: i.ingredient?.unit ?? null,
         quantity: Number(i.quantity),
+        arrivedAt: toDateStr(i.arrived_at),
       })),
     };
     bucket.trips.push(trip);

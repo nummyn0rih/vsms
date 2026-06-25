@@ -21,12 +21,18 @@ export type MaterialFeedItem = {
   ingredientName: string | null;
   ingredientUnit: "kg" | "l" | null;
   quantity: number; // тара — шт (целое); ингредиент — Decimal в kg/l
+  arrivedAt: string | null; // D3-2a: дата прибытия позиции (ISO) или null = в пути
 };
 
 export type MaterialTrip = {
   id: number;
   code: string;
+  // status — сырой статус из БД (enum общий с отгрузками). Для отображения брать
+  // derivedStatus: он добавляет "partial" (часть позиций прибыла) — в БД не хранится.
   status: "planned" | "sent" | "arrived";
+  derivedStatus: "planned" | "sent" | "partial" | "arrived";
+  arrivedCount: number; // позиций с arrived_at
+  totalCount: number; // всего позиций
   departureDate: string | null;
   arrivalDate: string | null;
   driverName: string | null;

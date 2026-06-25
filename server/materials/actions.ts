@@ -18,8 +18,8 @@ import {
 } from "./schema";
 import {
   applyOutboundDeliveryLeg,
-  applyOutboundArrivedLeg,
-  revertArrivedLeg,
+  applyArrivedLegForItem,
+  revertArrivedLegForItem,
   revertDeliveryLeg,
 } from "./movements";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
@@ -295,34 +295,171 @@ export async function sendMaterialShipment(id: number): Promise<ActionResult> {
   }
 }
 
-// sent → arrived (Admin|Operator): плечо прибытия тары (транзит -2 → фермер).
-export async function arriveMaterialShipment(id: number): Promise<ActionResult> {
+// --- Прибытие ПО ПОЗИЦИЯМ (D3-2a) ---
+//
+// arrived_at живёт на позиции; статус рейса (planned/sent/arrived) — производное.
+// "partial" в БД НЕ хранится (enum общий с отгрузками продукции) — это только UI
+// (см. feed-loader). Здесь рейс остаётся sent, пока прибыли не все позиции.
+
+type ItemArrival = { arrived_at: Date | null };
+
+// Статус рейса по набору позиций: arrived если у ВСЕХ есть arrived_at, иначе sent
+// (вызывается только для рейса, который уже прошёл planned). Пустой рейс → sent.
+function statusFromItems(items: ItemArrival[]): "sent" | "arrived" {
+  return items.length > 0 && items.every((i) => i.arrived_at != null)
+    ? "arrived"
+    : "sent";
+}
+
+// Отметить прибытие ОДНОЙ позиции (Admin|Operator): плечо -2 → фермер этой позиции,
+// arrived_at=now(), статус рейса пересчитывается. Идемпотентно (повтор — no-op).
+export async function markItemArrived(itemId: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin", "operator");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.materialShipmentItem.findUnique({
+        where: { id: itemId },
+        include: { materialShipment: { include: { items: true } } },
+      });
+      if (!item) return { ok: false as const, error: "Позиция не найдена" };
+      const trip = item.materialShipment;
+      if (trip.status === "planned") {
+        return { ok: false as const, error: "Сначала отправьте рейс" };
+      }
+      if (item.arrived_at != null) return { ok: true as const }; // no-op
+
+      await applyArrivedLegForItem(tx, item, trip.id, new Date());
+      await tx.materialShipmentItem.update({
+        where: { id: itemId },
+        data: { arrived_at: new Date() },
+      });
+
+      // Пересчёт статуса по актуальному набору (текущая позиция теперь прибыла).
+      const nextItems = trip.items.map((i) =>
+        i.id === itemId ? { arrived_at: new Date() } : { arrived_at: i.arrived_at },
+      );
+      const nextStatus = statusFromItems(nextItems);
+      if (nextStatus !== trip.status) {
+        await tx.materialShipment.update({
+          where: { id: trip.id },
+          data: { status: nextStatus },
+        });
+      }
+
+      await logChange(
+        [
+          { entity: ENTITY, entityId: trip.id, field: "item_arrived", newValue: `поз. ${itemId}` },
+          ...(nextStatus !== trip.status
+            ? [{ entity: ENTITY, entityId: trip.id, field: "status", oldValue: trip.status, newValue: nextStatus }]
+            : []),
+        ],
+        Number(user.id),
+        tx,
+      );
+
+      return { ok: true as const };
+    });
+
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
+    return result;
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось отметить прибытие позиции" };
+  }
+}
+
+// Снять прибытие ОДНОЙ позиции (Admin): сторно плеча прибытия позиции,
+// arrived_at=null, статус рейса → sent (раз хотя бы одна позиция не прибыла).
+export async function unmarkItemArrived(itemId: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const item = await tx.materialShipmentItem.findUnique({
+        where: { id: itemId },
+        include: { materialShipment: { include: { items: true } } },
+      });
+      if (!item) return { ok: false as const, error: "Позиция не найдена" };
+      const trip = item.materialShipment;
+      if (item.arrived_at == null) return { ok: true as const }; // no-op
+
+      await revertArrivedLegForItem(tx, item, trip.id, new Date());
+      await tx.materialShipmentItem.update({
+        where: { id: itemId },
+        data: { arrived_at: null },
+      });
+
+      const nextItems = trip.items.map((i) =>
+        i.id === itemId ? { arrived_at: null } : { arrived_at: i.arrived_at },
+      );
+      const nextStatus = statusFromItems(nextItems);
+      if (nextStatus !== trip.status) {
+        await tx.materialShipment.update({
+          where: { id: trip.id },
+          data: { status: nextStatus },
+        });
+      }
+
+      await logChange(
+        [
+          { entity: ENTITY, entityId: trip.id, field: "item_unarrived", newValue: `поз. ${itemId}` },
+          ...(nextStatus !== trip.status
+            ? [{ entity: ENTITY, entityId: trip.id, field: "status", oldValue: trip.status, newValue: nextStatus }]
+            : []),
+        ],
+        Number(user.id),
+        tx,
+      );
+
+      return { ok: true as const };
+    });
+
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidateStockDashboards();
+    }
+    return result;
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось снять прибытие позиции" };
+  }
+}
+
+// Принять ВЕСЬ рейс (Admin|Operator): отметить прибытие всех ещё не прибывших
+// позиций. Заменяет старый arriveMaterialShipment. Идемпотентно по позициям.
+export async function markAllArrived(tripId: number): Promise<ActionResult> {
   try {
     const user = await requireRole("admin", "operator");
 
     const result = await prisma.$transaction(async (tx) => {
       const trip = await tx.materialShipment.findUnique({
-        where: { id },
+        where: { id: tripId },
         include: { items: true },
       });
       if (!trip) return { ok: false as const, error: "Рейс не найден" };
-      if (trip.status !== "sent") {
-        return { ok: false as const, error: "Прибытие возможно только из статуса «Отправлен»" };
+      if (trip.status === "planned") {
+        return { ok: false as const, error: "Сначала отправьте рейс" };
       }
 
-      const count = await applyOutboundArrivedLeg(
-        tx,
-        trip.items,
-        id,
-        trip.arrival_date ?? new Date(),
-      );
-
-      await tx.materialShipment.update({ where: { id }, data: { status: "arrived" } });
+      const now = new Date();
+      let marked = 0;
+      for (const item of trip.items) {
+        if (item.arrived_at != null) continue;
+        await applyArrivedLegForItem(tx, item, tripId, now);
+        marked++;
+      }
+      await tx.materialShipmentItem.updateMany({
+        where: { material_shipment_id: tripId, arrived_at: null },
+        data: { arrived_at: now },
+      });
+      await tx.materialShipment.update({ where: { id: tripId }, data: { status: "arrived" } });
 
       await logChange(
         [
-          { entity: ENTITY, entityId: id, field: "status", oldValue: "sent", newValue: "arrived" },
-          { entity: ENTITY, entityId: id, field: "movements", newValue: `прибытие: ${count} движ.` },
+          { entity: ENTITY, entityId: tripId, field: "status", oldValue: trip.status, newValue: "arrived" },
+          { entity: ENTITY, entityId: tripId, field: "movements", newValue: `прибытие: ${marked} позиц.` },
         ],
         Number(user.id),
         tx,
@@ -341,26 +478,35 @@ export async function arriveMaterialShipment(id: number): Promise<ActionResult> 
   }
 }
 
-// arrived → sent (Admin): сторно плеча прибытия (фермер → транзит -2).
-export async function revertMaterialToSent(id: number): Promise<ActionResult> {
+// Снять прибытие со ВСЕХ позиций рейса (Admin): сторно плеч прибытия, статус → sent.
+// Заменяет старый revertMaterialToSent.
+export async function unmarkAllArrived(tripId: number): Promise<ActionResult> {
   try {
     const user = await requireRole("admin");
 
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.materialShipment.findUnique({ where: { id } });
+      const trip = await tx.materialShipment.findUnique({
+        where: { id: tripId },
+        include: { items: true },
+      });
       if (!trip) return { ok: false as const, error: "Рейс не найден" };
-      if (trip.status !== "arrived") {
-        return { ok: false as const, error: "Откат возможен только из статуса «Прибыл»" };
+
+      const now = new Date();
+      let reverted = 0;
+      for (const item of trip.items) {
+        if (item.arrived_at == null) continue;
+        reverted += await revertArrivedLegForItem(tx, item, tripId, now);
       }
-
-      const count = await revertArrivedLeg(tx, id, new Date());
-
-      await tx.materialShipment.update({ where: { id }, data: { status: "sent" } });
+      await tx.materialShipmentItem.updateMany({
+        where: { material_shipment_id: tripId },
+        data: { arrived_at: null },
+      });
+      await tx.materialShipment.update({ where: { id: tripId }, data: { status: "sent" } });
 
       await logChange(
         [
-          { entity: ENTITY, entityId: id, field: "status", oldValue: "arrived", newValue: "sent" },
-          { entity: ENTITY, entityId: id, field: "storno", newValue: `сторно прибытия: ${count} групп` },
+          { entity: ENTITY, entityId: tripId, field: "status", oldValue: trip.status, newValue: "sent" },
+          { entity: ENTITY, entityId: tripId, field: "storno", newValue: `сторно прибытия: ${reverted} позиц.` },
         ],
         Number(user.id),
         tx,
@@ -375,7 +521,7 @@ export async function revertMaterialToSent(id: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить рейс" };
+    return authFail(e) ?? { ok: false, error: "Не удалось снять прибытие" };
   }
 }
 
@@ -385,10 +531,18 @@ export async function revertMaterialToPlanned(id: number): Promise<ActionResult>
     const user = await requireRole("admin");
 
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.materialShipment.findUnique({ where: { id } });
+      const trip = await tx.materialShipment.findUnique({
+        where: { id },
+        include: { items: true },
+      });
       if (!trip) return { ok: false as const, error: "Рейс не найден" };
       if (trip.status !== "sent") {
         return { ok: false as const, error: "Откат возможен только из статуса «Отправлен»" };
+      }
+      // Гард: на planned откатываем только полностью «в пути» рейс. Если хоть одна
+      // позиция уже прибыла — сначала снять прибытие (плечо -2→фермер не сторнировано).
+      if (trip.items.some((i) => i.arrived_at != null)) {
+        return { ok: false as const, error: "Сначала снимите прибытие позиций" };
       }
 
       const count = await revertDeliveryLeg(tx, id, new Date());
@@ -432,6 +586,7 @@ function mapItem(item: {
   packaging_type_id: number | null;
   ingredient_id: number | null;
   quantity: Prisma.Decimal;
+  arrived_at: Date | null;
   farmer: { name: string };
   packagingType: { name: string; kind: "box" | "barrel"; capacity_kg: Prisma.Decimal | null } | null;
   ingredient: { name: string; unit: "kg" | "l" } | null;
@@ -449,6 +604,7 @@ function mapItem(item: {
     ingredient_name: item.ingredient?.name ?? null,
     ingredient_unit: item.ingredient?.unit ?? null,
     quantity: item.quantity.toString(),
+    arrived_at: toDateString(item.arrived_at),
   };
 }
 

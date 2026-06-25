@@ -9,9 +9,9 @@ import {
   getMaterialShipment,
   deleteMaterialShipment,
   sendMaterialShipment,
-  arriveMaterialShipment,
+  markAllArrived,
   revertMaterialToPlanned,
-  revertMaterialToSent,
+  unmarkAllArrived,
 } from "@/server/materials/actions";
 import type { MaterialDetail, MaterialOptions } from "@/server/materials/schema";
 import { Button } from "@/components/ui/button";
@@ -193,7 +193,7 @@ export function ArriveMaterialButton({ id, code }: { id: number; code: string })
       icon={<Check className="size-[15px]" />}
       description="Тара перейдёт из «в пути» на балансы фермеров (движение транзит → фермер)."
       confirmLabel="Прибыл"
-      action={() => arriveMaterialShipment(id)}
+      action={() => markAllArrived(id)}
       successText={`Рейс №${code} прибыл`}
     />
   );
@@ -222,7 +222,7 @@ export function RevertToSentButton({ id, code }: { id: number; code: string }) {
       icon={<RotateCcw className="size-[15px]" />}
       description="Рейс вернётся в «Отправлен». Тара уйдёт с балансов фермеров обратно «в путь» (сторно)."
       confirmLabel="Откатить"
-      action={() => revertMaterialToSent(id)}
+      action={() => unmarkAllArrived(id)}
       successText={`Рейс №${code} возвращён в путь`}
       variant="ghost"
     />

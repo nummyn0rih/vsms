@@ -107,6 +107,8 @@ export type MaterialItemRow = {
   ingredient_name: string | null;
   ingredient_unit: "kg" | "l" | null;
   quantity: string;
+  // D3-2a: дата прибытия позиции (ISO yyyy-mm-dd) или null = в пути.
+  arrived_at: string | null;
 };
 
 // Детализация для формы редактирования.

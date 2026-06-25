@@ -394,6 +394,9 @@ model MaterialShipmentItem {
   packaging_type_id    Int?
   ingredient_id        Int?
   quantity             Decimal  @db.Decimal(12, 3)
+  // D3-2a: по-позиционное прибытие. null = в пути; задано = позиция прибыла к фермеру.
+  // Статус рейса (planned/sent/arrived) — производное от набора arrived_at позиций.
+  arrived_at           DateTime?
 
   materialShipment MaterialShipment @relation(fields: [material_shipment_id], references: [id], onDelete: Cascade)
   farmer           Farmer           @relation(fields: [farmer_id], references: [id], onDelete: Restrict)
