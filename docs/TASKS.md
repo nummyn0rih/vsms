@@ -4,7 +4,11 @@
 > Детализируй следующий этап ПЕРЕД его началом, не раньше (избегаем преждевременной детализации).
 > При работе с AI прикладывай: DOMAIN.md (всегда для логики) + нужный раздел PRD.md + этот файл.
 
-**Текущий фокус:** Этапы A, B, C, D, E — закрыты. **D2-ops — ЗАКРЫТ** (лом+утиль+корректировка, без миграции). **Следующий: D3-2** (позиционное прибытие рейса — требует миграции `MaterialShipmentItem += arrived_at`, обсуждается перед кодом). Далее в очереди: farmer→farmer transfer · B5 · широкий V1.1. Промпты — `docs/PROMPTS-D2OPS-*.md`.
+**Текущий фокус:** Этапы A, B, C, D (вкл. D2-ops и D3-2) и E — закрыты. Контуры поставки, тары и
+ингредиентов замкнуты; прибытие доставки — по-позиционное. **Следующий выбор:** farmer→farmer transfer
+(требует миграции — источник-локация у MaterialShipment, обсудить) · B5 (доска dnd планировщика) · широкий
+V1.1 (потребность ингредиентов + AlertRule-алерты, heatmap, карточка поставщика, фильтры). Промпты —
+`docs/PROMPTS-D3-2*.md`.
 
 ---
 
@@ -136,7 +140,7 @@
 - [x] **D3** — доставка тары завод→фермер: `server/materials/` (CRUD + статус-флоу + плечи `завод→-2→фермер` + оба отката нетто, обратимо) + экран «Логистика материалов» (`materials/page.tsx`, недели ISO, иконки по `kind`). Только packaging; ингредиенты — E. _Принято._
 - [x] **D4** — дашборд «Тара»: `server/inventory/balances.ts` (`getTareBalances`) + `packaging/page.tsx` (матрица локация×тип + строки транзита, сегмент good/scrap, drill-down, «Итого в системе»). Реальные остатки. _Принято._
 - [x] **D2-ops** — ручные операции тары: лом (`scrap`), корректировка (`adjustment`), утиль (`disposal`). Без миграции (enum есть). _Закрыт._
-- [ ] **D3-2** (опц.) — позиционное прибытие рейса (`MaterialShipmentItem += arrived_at`, производный статус машины). Требует миграции; обсуждается.
+- [x] **D3-2** — позиционное прибытие рейса (`MaterialShipmentItem += arrived_at`, производный статус «частично»). Миграция `d3_2_item_arrived_at`. _Закрыт (D3-2a/a-fix/b — см. ниже)._
 
 Блоки (исходный план):
 - Статусы arrived, accepted; приёмка оператором
@@ -157,6 +161,13 @@
 - [x] **D2-ops-1** — лом (scrap: loc/good→loc/scrap) + утиль (disposal: loc/scrap→null) из drill-down; `server/inventory/operations.ts`. _Принято._
 - [x] **D2-ops-1-fix** — scrap-вид матрицы сделан кликабельным (был D4b-заглушкой) → disposal достижим; футер scrap-вида «Лом в системе». _Принято._
 - [x] **D2-ops-2** — корректировка как инвентаризация (ввод факта → движение adjustment на разницу), оба состояния. _Принято._
+
+## D3-2 — позиционное прибытие рейса (ЗАКРЫТ)
+Миграция `MaterialShipmentItem += arrived_at` (d3_2_item_arrived_at). Статус «частично» — производный
+(enum ShipmentStatus не тронут). Отправка whole-trip; прибытие по-позиционно. Смешанный груз — сам собой.
+- [x] **D3-2a** — миграция + сервер: per-item плечи `applyArrivedLegForItem`/`revertArrivedLegForItem`; actions `markItemArrived`/`unmarkItemArrived`/`markAllArrived`/`unmarkAllArrived`; `statusFromItems`; гард отката `sent→planned` (нет прибывших); feed-loader `arrivedAt`+`derivedStatus`+`arrivedCount/totalCount`. Старые arrive/revertToSent удалены. _Регресс 26/26._
+- [x] **D3-2a-fix** — zod-запрет дублей `(farmer, kind, fk)` в рейсе (чинит недокредит по-позиционного прибытия) + planned-гард в `unmarkAllArrived`. _32/32._
+- [x] **D3-2b** — UI: per-item отметка прибытия (время + снять), бейдж «Частично N/M» (заливка sent), отображение по `derivedStatus`; кнопка рейса «Принять» (markAllArrived) сохранена; «Откатить в план» скрыта при прибывших. _Принято._
 
 ---
 
