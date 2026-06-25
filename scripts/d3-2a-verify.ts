@@ -10,6 +10,7 @@ import {
   revertArrivedLegForItem,
   revertDeliveryLeg,
 } from "../server/materials/movements";
+const DELIVERY = { origin: 0, transit: -2 } as const; // transfer-1: доставка с завода
 import { FACTORY_LOCATION_ID, TRANSIT_TO_FARMER } from "../server/shipments/packaging";
 import { materialShipmentSchema } from "../server/materials/schema";
 
@@ -91,38 +92,38 @@ async function main() {
 
       // ===== A. РЕГРЕСС (whole-trip) =====
       console.log("A. Регресс полного цикла");
-      await applyOutboundDeliveryLeg(tx, its, trip.id, new Date());
+      await applyOutboundDeliveryLeg(tx, its, trip.id, new Date(), DELIVERY);
       check("send: завод box −300", (await bal(FACT, "packaging", box.id)) === -300);
       check("send: завод salt −200", (await bal(FACT, "ingredient", salt.id)) === -200);
       check("send: транзит box +300", (await bal(T, "packaging", box.id)) === 300);
       check("send: транзит salt +200", (await bal(T, "ingredient", salt.id)) === 200);
 
       // markAll = цикл applyArrivedLegForItem
-      for (const it of its) await applyArrivedLegForItem(tx, it, trip.id, new Date());
+      for (const it of its) await applyArrivedLegForItem(tx, it, trip.id, new Date(), DELIVERY);
       check("markAll: фермер1 box +300", (await bal(f1.id, "packaging", box.id)) === 300);
       check("markAll: фермер2 salt +200", (await bal(f2.id, "ingredient", salt.id)) === 200);
       check("markAll: транзит box 0", (await bal(T, "packaging", box.id)) === 0);
       // повтор → нет дублей (идемпотентность per-item)
-      for (const it of its) await applyArrivedLegForItem(tx, it, trip.id, new Date());
+      for (const it of its) await applyArrivedLegForItem(tx, it, trip.id, new Date(), DELIVERY);
       check("markAll повтор: фермер1 box всё ещё +300", (await bal(f1.id, "packaging", box.id)) === 300);
       check("markAll повтор: фермер2 salt всё ещё +200", (await bal(f2.id, "ingredient", salt.id)) === 200);
 
       // unmarkAll = цикл revertArrivedLegForItem
-      for (const it of its) await revertArrivedLegForItem(tx, it, trip.id, new Date());
+      for (const it of its) await revertArrivedLegForItem(tx, it, trip.id, new Date(), DELIVERY);
       check("unmarkAll: фермер1 box 0", (await bal(f1.id, "packaging", box.id)) === 0);
       check("unmarkAll: фермер2 salt 0", (await bal(f2.id, "ingredient", salt.id)) === 0);
       check("unmarkAll: транзит box назад +300", (await bal(T, "packaging", box.id)) === 300);
 
       // revertToPlanned = сторно отправки
-      await revertDeliveryLeg(tx, trip.id, new Date());
+      await revertDeliveryLeg(tx, trip.id, new Date(), DELIVERY);
       check("revertToPlanned: завод box назад 0", (await bal(FACT, "packaging", box.id)) === 0);
       check("revertToPlanned: транзит box 0", (await bal(T, "packaging", box.id)) === 0);
 
       // ===== B. ПО-ПОЗИЦИОННО =====
       console.log("B. По-позиционное прибытие");
-      await applyOutboundDeliveryLeg(tx, its, trip.id, new Date());
+      await applyOutboundDeliveryLeg(tx, its, trip.id, new Date(), DELIVERY);
       // markItem(boxItem)
-      await applyArrivedLegForItem(tx, boxItem, trip.id, new Date());
+      await applyArrivedLegForItem(tx, boxItem, trip.id, new Date(), DELIVERY);
       const stateB1 = [{ arrived_at: new Date() }, { arrived_at: null }];
       const arrivedB1 = stateB1.filter((i) => i.arrived_at != null).length;
       check("markItem(box): фермер1 box +300", (await bal(f1.id, "packaging", box.id)) === 300);
@@ -131,13 +132,13 @@ async function main() {
       check("markItem(box): derived partial (1/2)", derivedStatus("sent", arrivedB1, 2) === "partial");
 
       // markItem(saltItem) → arrived
-      await applyArrivedLegForItem(tx, saltItem, trip.id, new Date());
+      await applyArrivedLegForItem(tx, saltItem, trip.id, new Date(), DELIVERY);
       const stateB2 = [{ arrived_at: new Date() }, { arrived_at: new Date() }];
       check("markItem(salt): фермер2 salt +200", (await bal(f2.id, "ingredient", salt.id)) === 200);
       check("markItem(salt): статус arrived", statusFromItems(stateB2) === "arrived");
 
       // unmarkItem(saltItem) → только его плечо
-      await revertArrivedLegForItem(tx, saltItem, trip.id, new Date());
+      await revertArrivedLegForItem(tx, saltItem, trip.id, new Date(), DELIVERY);
       const stateB3 = [{ arrived_at: new Date() }, { arrived_at: null }];
       const arrivedB3 = stateB3.filter((i) => i.arrived_at != null).length;
       check("unmarkItem(salt): фермер2 salt 0", (await bal(f2.id, "ingredient", salt.id)) === 0);
@@ -150,7 +151,7 @@ async function main() {
       const guardWhenPartial = stateB3.some((i) => i.arrived_at != null);
       check("≥1 прибывшая позиция → откат отклонён", guardWhenPartial === true);
       // снять оставшуюся
-      await revertArrivedLegForItem(tx, boxItem, trip.id, new Date());
+      await revertArrivedLegForItem(tx, boxItem, trip.id, new Date(), DELIVERY);
       const stateClean = [{ arrived_at: null }, { arrived_at: null }];
       check("после снятия всех → откат разрешён", stateClean.some((i) => i.arrived_at != null) === false);
 
@@ -173,8 +174,8 @@ async function main() {
         }
         return Number(v);
       }
-      await applyOutboundDeliveryLeg(tx, [mItem], tripM.id, new Date());
-      await applyArrivedLegForItem(tx, mItem, tripM.id, new Date());
+      await applyOutboundDeliveryLeg(tx, [mItem], tripM.id, new Date(), DELIVERY);
+      await applyArrivedLegForItem(tx, mItem, tripM.id, new Date(), DELIVERY);
       check("merged: фермер1 box ровно +500", (await balM(f1.id)) === 500);
 
       // ===== E. planned-гард unmarkAllArrived (fix находки 2) =====

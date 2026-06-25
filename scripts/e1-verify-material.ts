@@ -8,6 +8,7 @@ import {
   revertArrivedLeg,
   revertDeliveryLeg,
 } from "../server/materials/movements";
+const DELIVERY = { origin: 0, transit: -2 } as const; // transfer-1: доставка с завода
 
 // E1: проверка обобщённого движка доставки (тара + ингредиент + смешанный груз).
 // Всё в одной $transaction с финальным throw — БД не меняется (rolled-back).
@@ -98,15 +99,15 @@ async function main() {
       const locsA = [
         { label: "завод", id: FACTORY }, { label: "транз-2", id: TRANSIT }, { label: `ферм#${fX.id}`, id: fX.id },
       ];
-      await applyOutboundDeliveryLeg(tx, tA.items, tA.id, new Date());
+      await applyOutboundDeliveryLeg(tx, tA.items, tA.id, new Date(), DELIVERY);
       console.log("send:       ", fmt(await balances(tx, tA.id, box), locsA), "(ожид. завод=-4000 · транз=+4000 · ферм=0)");
-      await applyOutboundArrivedLeg(tx, tA.items, tA.id, new Date());
+      await applyOutboundArrivedLeg(tx, tA.items, tA.id, new Date(), DELIVERY);
       console.log("arrive:     ", fmt(await balances(tx, tA.id, box), locsA), "(ожид. завод=-4000 · транз=0 · ферм=+4000)");
-      const dupA = await applyOutboundArrivedLeg(tx, tA.items, tA.id, new Date()) + await applyOutboundDeliveryLeg(tx, tA.items, tA.id, new Date());
+      const dupA = await applyOutboundArrivedLeg(tx, tA.items, tA.id, new Date(), DELIVERY) + await applyOutboundDeliveryLeg(tx, tA.items, tA.id, new Date(), DELIVERY);
       console.log("повтор:     ", fmt(await balances(tx, tA.id, box), locsA), `(дублей нет: создано ${dupA} движ.)`);
-      await revertArrivedLeg(tx, tA.id, new Date());
+      await revertArrivedLeg(tx, tA.id, new Date(), DELIVERY);
       console.log("rev→sent:   ", fmt(await balances(tx, tA.id, box), locsA), "(ожид. завод=-4000 · транз=+4000 · ферм=0)");
-      await revertDeliveryLeg(tx, tA.id, new Date());
+      await revertDeliveryLeg(tx, tA.id, new Date(), DELIVERY);
       console.log("rev→plan:   ", fmt(await balances(tx, tA.id, box), locsA), "(ожид. всё 0)");
 
       // ===== B. ИНГРЕДИЕНТ =====
@@ -121,15 +122,15 @@ async function main() {
       const locsB = [
         { label: "завод", id: FACTORY }, { label: "транз-2", id: TRANSIT }, { label: `ферм#${fY.id}`, id: fY.id },
       ];
-      await applyOutboundDeliveryLeg(tx, tB.items, tB.id, new Date());
+      await applyOutboundDeliveryLeg(tx, tB.items, tB.id, new Date(), DELIVERY);
       console.log("send:       ", fmt(await balances(tx, tB.id, saltRef), locsB), "(ожид. завод=-500 · транз=+500 · ферм=0)");
-      await applyOutboundArrivedLeg(tx, tB.items, tB.id, new Date());
+      await applyOutboundArrivedLeg(tx, tB.items, tB.id, new Date(), DELIVERY);
       console.log("arrive:     ", fmt(await balances(tx, tB.id, saltRef), locsB), "(ожид. завод=-500 · транз=0 · ферм=+500)");
-      const dupB = await applyOutboundArrivedLeg(tx, tB.items, tB.id, new Date());
+      const dupB = await applyOutboundArrivedLeg(tx, tB.items, tB.id, new Date(), DELIVERY);
       console.log("повтор:     ", fmt(await balances(tx, tB.id, saltRef), locsB), `(дублей нет: создано ${dupB} движ.)`);
-      await revertArrivedLeg(tx, tB.id, new Date());
+      await revertArrivedLeg(tx, tB.id, new Date(), DELIVERY);
       console.log("rev→sent:   ", fmt(await balances(tx, tB.id, saltRef), locsB), "(ожид. завод=-500 · транз=+500 · ферм=0)");
-      await revertDeliveryLeg(tx, tB.id, new Date());
+      await revertDeliveryLeg(tx, tB.id, new Date(), DELIVERY);
       console.log("rev→plan:   ", fmt(await balances(tx, tB.id, saltRef), locsB), "(ожид. всё 0)");
       console.log("state null: ", (await stateCheck(tx, tB.id)) ? "OK (ингр. from/to_state=null)" : "FAIL");
 
@@ -150,18 +151,18 @@ async function main() {
       const locsC = [
         { label: "завод", id: FACTORY }, { label: "транз-2", id: TRANSIT }, { label: `ферм#${fZ.id}`, id: fZ.id },
       ];
-      const sendC = await applyOutboundDeliveryLeg(tx, tC.items, tC.id, new Date());
+      const sendC = await applyOutboundDeliveryLeg(tx, tC.items, tC.id, new Date(), DELIVERY);
       console.log(`send (${sendC} движ., guard не заблокировал 2-й kind):`);
       console.log("  ящики:    ", fmt(await balances(tx, tC.id, box), locsC), "(ожид. завод=-300 · транз=+300 · ферм=0)");
       console.log("  уксус:    ", fmt(await balances(tx, tC.id, vinRef), locsC), "(ожид. завод=-200 · транз=+200 · ферм=0)");
-      await applyOutboundArrivedLeg(tx, tC.items, tC.id, new Date());
+      await applyOutboundArrivedLeg(tx, tC.items, tC.id, new Date(), DELIVERY);
       console.log("arrive:");
       console.log("  ящики:    ", fmt(await balances(tx, tC.id, box), locsC), "(ожид. завод=-300 · транз=0 · ферм=+300)");
       console.log("  уксус:    ", fmt(await balances(tx, tC.id, vinRef), locsC), "(ожид. завод=-200 · транз=0 · ферм=+200)");
-      const dupC = await applyOutboundArrivedLeg(tx, tC.items, tC.id, new Date());
+      const dupC = await applyOutboundArrivedLeg(tx, tC.items, tC.id, new Date(), DELIVERY);
       console.log(`повтор:      дублей нет (создано ${dupC} движ.)`);
-      await revertArrivedLeg(tx, tC.id, new Date());
-      await revertDeliveryLeg(tx, tC.id, new Date());
+      await revertArrivedLeg(tx, tC.id, new Date(), DELIVERY);
+      await revertDeliveryLeg(tx, tC.id, new Date(), DELIVERY);
       console.log("после обоих откатов (нетто по kind раздельно):");
       console.log("  ящики:    ", fmt(await balances(tx, tC.id, box), locsC), "(ожид. всё 0)");
       console.log("  уксус:    ", fmt(await balances(tx, tC.id, vinRef), locsC), "(ожид. всё 0)");

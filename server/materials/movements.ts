@@ -4,6 +4,7 @@ import type { PrismaClient, ItemKind } from "@/lib/generated/prisma/client";
 import {
   FACTORY_LOCATION_ID,
   TRANSIT_TO_FARMER,
+  TRANSFER_TRANSIT,
 } from "@/server/shipments/packaging";
 
 // Движения рейса доставки завод→фермер (D3b/E1). Поток СИММЕТРИЧЕН входящему, но
@@ -31,6 +32,20 @@ type ItemLite = {
   ingredient_id: number | null;
   quantity: Prisma.Decimal;
 };
+
+// Плечи рейса (transfer-1): origin = откуда уезжает груз, transit = «в пути» сентинел.
+// Доставка завод→фермер: { origin: 0, transit: -2 } (поведение БЕЗ ИЗМЕНЕНИЙ).
+// Перенос фермер A→фермер B: { origin: A, transit: -3 }. Получатель плеча прибытия —
+// всегда item.farmer_id (>0). Источник плеч читается из рейса, не хардкодится.
+export type LegContext = { origin: number; transit: number };
+
+export function legContext(trip: { source_farmer_id: number | null }): LegContext {
+  const isTransfer = trip.source_farmer_id != null;
+  return {
+    origin: isTransfer ? trip.source_farmer_id! : FACTORY_LOCATION_ID,
+    transit: isTransfer ? TRANSFER_TRANSIT : TRANSIT_TO_FARMER,
+  };
+}
 
 // Дискриминатор + правильный FK + состояния по item_kind позиции. Тара — good/good,
 // ингредиент — null/null (у ингредиентов состояния нет).
@@ -96,22 +111,24 @@ const baseMovement = (tripId: number, date: Date) =>
     source_doc_id: tripId,
   }) as const;
 
-// Плечо ОТПРАВКИ (planned → sent): материал уходит с завода (0) в транзит «в пути
-// к фермеру» (-2). Движение на каждую позицию (тара/ингредиент). Идемпотентно:
-// guard по существующему плечу 0 → -2 этого рейса БЕЗ привязки к kind (иначе при
-// смешанном грузе второй тип заблокируется). Возвращает число движений.
+// Плечо ОТПРАВКИ (planned → sent): материал уходит из origin рейса в транзит «в
+// пути» (ctx.transit). Доставка: 0 → -2; перенос: фермер A → -3. Движение на каждую
+// позицию (тара/ингредиент). Идемпотентно: guard по существующему плечу
+// origin → transit этого рейса БЕЗ привязки к kind (иначе при смешанном грузе второй
+// тип заблокируется). Возвращает число движений.
 export async function applyOutboundDeliveryLeg(
   tx: Tx,
   items: ItemLite[],
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   const existing = await tx.stockMovement.findFirst({
     where: {
       source_doc_type: "material_shipment",
       source_doc_id: tripId,
-      from_location_id: FACTORY_LOCATION_ID,
-      to_location_id: TRANSIT_TO_FARMER,
+      from_location_id: ctx.origin,
+      to_location_id: ctx.transit,
     },
     select: { id: true },
   });
@@ -123,8 +140,8 @@ export async function applyOutboundDeliveryLeg(
       ...baseMovement(tripId, date),
       ...itemRef(i),
       quantity: i.quantity,
-      from_location_id: FACTORY_LOCATION_ID,
-      to_location_id: TRANSIT_TO_FARMER,
+      from_location_id: ctx.origin,
+      to_location_id: ctx.transit,
     }));
   if (data.length === 0) return 0;
 
@@ -132,14 +149,16 @@ export async function applyOutboundDeliveryLeg(
   return data.length;
 }
 
-// Нетто плеча прибытия позиции = Σ(-2→фермер) − Σ(фермер→-2) по kind+FK этой позиции.
-// >0 — позиция прибыла (плечо открыто); 0 — в пути/откатано. На этом нетто строятся
-// идемпотентность apply (skip при >0) и сторно revert (skip при ≤0), поэтому пара
-// mark/unmark полностью обратима (повторный mark после unmark снова открывает плечо).
+// Нетто плеча прибытия позиции = Σ(transit→фермер) − Σ(фермер→transit) по kind+FK этой
+// позиции. transit берётся из рейса (-2 доставка / -3 перенос). >0 — позиция прибыла
+// (плечо открыто); 0 — в пути/откатано. На этом нетто строятся идемпотентность apply
+// (skip при >0) и сторно revert (skip при ≤0), поэтому пара mark/unmark полностью
+// обратима (повторный mark после unmark снова открывает плечо).
 async function arrivedNetForItem(
   tx: Tx,
   item: ItemLite,
   tripId: number,
+  ctx: LegContext,
 ): Promise<Prisma.Decimal> {
   const ref = itemRef(item);
   const movements = await tx.stockMovement.findMany({
@@ -154,33 +173,34 @@ async function arrivedNetForItem(
   });
   let net = new Prisma.Decimal(0);
   for (const m of movements) {
-    if (m.from_location_id === TRANSIT_TO_FARMER && m.to_location_id === item.farmer_id)
+    if (m.from_location_id === ctx.transit && m.to_location_id === item.farmer_id)
       net = net.plus(m.quantity);
-    else if (m.from_location_id === item.farmer_id && m.to_location_id === TRANSIT_TO_FARMER)
+    else if (m.from_location_id === item.farmer_id && m.to_location_id === ctx.transit)
       net = net.minus(m.quantity);
   }
   return net;
 }
 
-// Плечо ПРИБЫТИЯ ОДНОЙ позиции (D3-2a): материал переходит из транзита (-2) к
-// фермеру этой позиции. kind+FK берутся из item_kind. Идемпотентно по НЕТТО: если
+// Плечо ПРИБЫТИЯ ОДНОЙ позиции (D3-2a): материал переходит из транзита (ctx.transit)
+// к фермеру этой позиции. kind+FK берутся из item_kind. Идемпотентно по НЕТТО: если
 // плечо уже открыто (net>0) — не дублируем. Возвращает 0 (уже прибыла/нет FK) или 1.
 export async function applyArrivedLegForItem(
   tx: Tx,
   item: ItemLite,
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   const id = itemId(item);
   if (id == null || item.farmer_id == null) return 0;
-  if ((await arrivedNetForItem(tx, item, tripId)).gt(0)) return 0;
+  if ((await arrivedNetForItem(tx, item, tripId, ctx)).gt(0)) return 0;
 
   await tx.stockMovement.create({
     data: {
       ...baseMovement(tripId, date),
       ...itemRef(item),
       quantity: item.quantity,
-      from_location_id: TRANSIT_TO_FARMER,
+      from_location_id: ctx.transit,
       to_location_id: item.farmer_id,
     },
   });
@@ -195,10 +215,11 @@ export async function applyOutboundArrivedLeg(
   items: ItemLite[],
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   let count = 0;
   for (const item of items) {
-    count += await applyArrivedLegForItem(tx, item, tripId, date);
+    count += await applyArrivedLegForItem(tx, item, tripId, date, ctx);
   }
   return count;
 }
@@ -213,11 +234,12 @@ export async function revertArrivedLegForItem(
   item: ItemLite,
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   const id = itemId(item);
   if (id == null || item.farmer_id == null) return 0;
 
-  const net = await arrivedNetForItem(tx, item, tripId);
+  const net = await arrivedNetForItem(tx, item, tripId, ctx);
   if (net.lte(0)) return 0; // плечо закрыто/не открывалось — сторнировать нечего
 
   await tx.stockMovement.create({
@@ -226,7 +248,7 @@ export async function revertArrivedLegForItem(
       ...itemRef(item),
       quantity: net,
       from_location_id: item.farmer_id,
-      to_location_id: TRANSIT_TO_FARMER,
+      to_location_id: ctx.transit,
     },
   });
   return 1;
@@ -238,25 +260,27 @@ export async function revertArrivedLeg(
   tx: Tx,
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   const items = await tx.materialShipmentItem.findMany({
     where: { material_shipment_id: tripId },
   });
   let count = 0;
   for (const item of items) {
-    count += await revertArrivedLegForItem(tx, item, tripId, date);
+    count += await revertArrivedLegForItem(tx, item, tripId, date, ctx);
   }
   return count;
 }
 
-// Сторно плеча ОТПРАВКИ (sent → planned): материал возвращается из транзита (-2) на
-// завод (0). Нетто по (kind × тип): оригинал отправки (to=-2) плюс, уже созданные
-// сторно (to=0) минус; для нетто>0 — обратное {from:-2, to:0}. Читаем ОБА kind.
-// Идемпотентно.
+// Сторно плеча ОТПРАВКИ (sent → planned): материал возвращается из транзита
+// (ctx.transit) в origin рейса (завод 0 / фермер-источник A). Нетто по (kind × тип):
+// оригинал отправки (to=transit) плюс, уже созданные сторно (to=origin) минус; для
+// нетто>0 — обратное {from:transit, to:origin}. Читаем ОБА kind. Идемпотентно.
 export async function revertDeliveryLeg(
   tx: Tx,
   tripId: number,
   date: Date,
+  ctx: LegContext,
 ): Promise<number> {
   const movements = await tx.stockMovement.findMany({
     where: {
@@ -275,11 +299,11 @@ export async function revertDeliveryLeg(
   >();
   for (const m of movements) {
     const isOriginal =
-      m.from_location_id === FACTORY_LOCATION_ID &&
-      m.to_location_id === TRANSIT_TO_FARMER;
+      m.from_location_id === ctx.origin &&
+      m.to_location_id === ctx.transit;
     const isStorno =
-      m.from_location_id === TRANSIT_TO_FARMER &&
-      m.to_location_id === FACTORY_LOCATION_ID;
+      m.from_location_id === ctx.transit &&
+      m.to_location_id === ctx.origin;
     if (!isOriginal && !isStorno) continue;
 
     const { kind, itemId } = movementRef(m);
@@ -299,8 +323,8 @@ export async function revertDeliveryLeg(
       ...baseMovement(tripId, date),
       ...refByKind(g.kind, g.itemId),
       quantity: g.qty,
-      from_location_id: TRANSIT_TO_FARMER,
-      to_location_id: FACTORY_LOCATION_ID,
+      from_location_id: ctx.transit,
+      to_location_id: ctx.origin,
     })),
   });
   return toCreate.length;

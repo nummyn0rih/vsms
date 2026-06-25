@@ -21,6 +21,7 @@ import {
   applyArrivedLegForItem,
   revertArrivedLegForItem,
   revertDeliveryLeg,
+  legContext,
 } from "./movements";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
@@ -88,6 +89,24 @@ async function persistMaterialItems(
   return `${data.length} позиц.${parts.length ? ` (${parts.join(" / ")})` : ""}`;
 }
 
+// transfer-1: разобрать source_farmer_id формы (строка-FK) → id | null. Если задан —
+// проверить, что фермер-источник существует. Архивный (active=false) РАЗРЕШЁН: перенос
+// остатков ОТ закрытого фермера — штатный кейс. Возвращает { ok, id } | { ok:false, error }.
+async function resolveTransferSource(
+  tx: Tx,
+  raw: string | undefined,
+): Promise<{ ok: true; id: number | null } | { ok: false; error: string }> {
+  const src = raw?.trim();
+  if (!src) return { ok: true, id: null };
+  const id = Number(src);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { ok: false, error: "Некорректный источник переноса" };
+  }
+  const farmer = await tx.farmer.findUnique({ where: { id }, select: { id: true } });
+  if (!farmer) return { ok: false, error: "Источник переноса не найден" };
+  return { ok: true, id };
+}
+
 // --- CRUD (только planned) ---
 
 export async function createMaterialShipment(
@@ -105,6 +124,9 @@ export async function createMaterialShipment(
       };
     }
 
+    const source = await resolveTransferSource(prisma, parsed.data.source_farmer_id);
+    if (!source.ok) return { ok: false, error: source.error };
+
     await prisma.$transaction(async (tx) => {
       const code = await getNextMaterialCode(tx);
       const created = await tx.materialShipment.create({
@@ -114,6 +136,7 @@ export async function createMaterialShipment(
           arrival_date: parseDateUTC(parsed.data.arrival_date),
           status: "planned",
           driver_id: Number(parsed.data.driver_id),
+          source_farmer_id: source.id,
         },
       });
 
@@ -165,6 +188,9 @@ export async function updateMaterialShipment(
       };
     }
 
+    const source = await resolveTransferSource(prisma, parsed.data.source_farmer_id);
+    if (!source.ok) return { ok: false, error: source.error };
+
     const nextDriverId = Number(parsed.data.driver_id);
     const nextDeparture = parseDateUTC(parsed.data.departure_date);
     const nextArrival = parseDateUTC(parsed.data.arrival_date);
@@ -174,6 +200,11 @@ export async function updateMaterialShipment(
         field: "driver_id",
         oldValue: String(existing.driver_id),
         newValue: String(nextDriverId),
+      },
+      {
+        field: "source_farmer_id",
+        oldValue: existing.source_farmer_id == null ? null : String(existing.source_farmer_id),
+        newValue: source.id == null ? null : String(source.id),
       },
       {
         field: "departure_date",
@@ -194,6 +225,7 @@ export async function updateMaterialShipment(
           driver_id: nextDriverId,
           departure_date: nextDeparture,
           arrival_date: nextArrival,
+          source_farmer_id: source.id,
         },
       });
 
@@ -269,6 +301,7 @@ export async function sendMaterialShipment(id: number): Promise<ActionResult> {
         trip.items,
         id,
         trip.departure_date ?? new Date(),
+        legContext(trip),
       );
 
       await tx.materialShipment.update({ where: { id }, data: { status: "sent" } });
@@ -329,7 +362,7 @@ export async function markItemArrived(itemId: number): Promise<ActionResult> {
       }
       if (item.arrived_at != null) return { ok: true as const }; // no-op
 
-      await applyArrivedLegForItem(tx, item, trip.id, new Date());
+      await applyArrivedLegForItem(tx, item, trip.id, new Date(), legContext(trip));
       await tx.materialShipmentItem.update({
         where: { id: itemId },
         data: { arrived_at: new Date() },
@@ -386,7 +419,7 @@ export async function unmarkItemArrived(itemId: number): Promise<ActionResult> {
       const trip = item.materialShipment;
       if (item.arrived_at == null) return { ok: true as const }; // no-op
 
-      await revertArrivedLegForItem(tx, item, trip.id, new Date());
+      await revertArrivedLegForItem(tx, item, trip.id, new Date(), legContext(trip));
       await tx.materialShipmentItem.update({
         where: { id: itemId },
         data: { arrived_at: null },
@@ -444,10 +477,11 @@ export async function markAllArrived(tripId: number): Promise<ActionResult> {
       }
 
       const now = new Date();
+      const ctx = legContext(trip);
       let marked = 0;
       for (const item of trip.items) {
         if (item.arrived_at != null) continue;
-        await applyArrivedLegForItem(tx, item, tripId, now);
+        await applyArrivedLegForItem(tx, item, tripId, now, ctx);
         marked++;
       }
       await tx.materialShipmentItem.updateMany({
@@ -494,10 +528,11 @@ export async function unmarkAllArrived(tripId: number): Promise<ActionResult> {
       if (trip.status === "planned") return { ok: true as const };
 
       const now = new Date();
+      const ctx = legContext(trip);
       let reverted = 0;
       for (const item of trip.items) {
         if (item.arrived_at == null) continue;
-        reverted += await revertArrivedLegForItem(tx, item, tripId, now);
+        reverted += await revertArrivedLegForItem(tx, item, tripId, now, ctx);
       }
       await tx.materialShipmentItem.updateMany({
         where: { material_shipment_id: tripId },
@@ -547,7 +582,7 @@ export async function revertMaterialToPlanned(id: number): Promise<ActionResult>
         return { ok: false as const, error: "Сначала снимите прибытие позиций" };
       }
 
-      const count = await revertDeliveryLeg(tx, id, new Date());
+      const count = await revertDeliveryLeg(tx, id, new Date(), legContext(trip));
 
       await tx.materialShipment.update({ where: { id }, data: { status: "planned" } });
 
@@ -623,6 +658,7 @@ export async function getMaterialShipment(
     id: t.id,
     status: t.status as MaterialDetail["status"],
     driver_id: t.driver_id,
+    source_farmer_id: t.source_farmer_id,
     departure_date: toDateString(t.departure_date),
     arrival_date: toDateString(t.arrival_date),
     items: t.items.map(mapItem),

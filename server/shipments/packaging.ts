@@ -12,6 +12,7 @@ export const FACTORY_LOCATION_ID = 0;
 // «в пути». Не FK, литералы. Как локации для opening/ручного ввода — запрещены.
 export const TRANSIT_TO_FACTORY = -1; // в пути НА завод (продукция фермер→завод)
 export const TRANSIT_TO_FARMER = -2; // в пути С завода (тара завод→фермер)
+export const TRANSFER_TRANSIT = -3; // в пути между фермерами (перенос фермер→фермер)
 
 type Tx = Omit<
   PrismaClient,

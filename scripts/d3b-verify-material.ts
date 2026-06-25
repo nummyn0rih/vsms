@@ -8,6 +8,7 @@ import {
   revertArrivedLeg,
   revertDeliveryLeg,
 } from "../server/materials/movements";
+const DELIVERY = { origin: 0, transit: -2 } as const; // transfer-1: доставка с завода
 
 // D3b: проверка движений рейса тары завод→фермер. Всё в одной $transaction с
 // финальным throw — БД не меняется (rolled-back). Запуск: npx tsx scripts/d3b-verify-material.ts
@@ -91,19 +92,19 @@ async function main() {
         include: { items: true },
       });
 
-      await applyOutboundDeliveryLeg(tx, trip.items, trip.id, new Date());
+      await applyOutboundDeliveryLeg(tx, trip.items, trip.id, new Date(), DELIVERY);
       console.log("отправка:   ", fmt(await balances(tx, trip.id, boxType.id), locsA), "(ожид. завод=-4000 · транзит=+4000 · фермер=0)");
 
-      await applyOutboundArrivedLeg(tx, trip.items, trip.id, new Date());
+      await applyOutboundArrivedLeg(tx, trip.items, trip.id, new Date(), DELIVERY);
       console.log("прибытие:   ", fmt(await balances(tx, trip.id, boxType.id), locsA), "(ожид. завод=-4000 · транзит=0 · фермер=+4000)");
 
-      const dup = await applyOutboundArrivedLeg(tx, trip.items, trip.id, new Date());
+      const dup = await applyOutboundArrivedLeg(tx, trip.items, trip.id, new Date(), DELIVERY);
       console.log("повтор приб:", fmt(await balances(tx, trip.id, boxType.id), locsA), `(дублей нет: создано ${dup} движ.)`);
 
-      await revertArrivedLeg(tx, trip.id, new Date());
+      await revertArrivedLeg(tx, trip.id, new Date(), DELIVERY);
       console.log("revert→sent:", fmt(await balances(tx, trip.id, boxType.id), locsA), "(ожид. завод=-4000 · транзит=+4000 · фермер=0)");
 
-      await revertDeliveryLeg(tx, trip.id, new Date());
+      await revertDeliveryLeg(tx, trip.id, new Date(), DELIVERY);
       console.log("revert→plan:", fmt(await balances(tx, trip.id, boxType.id), locsA), "(ожид. завод=0 · транзит=0 · фермер=0)");
 
       console.log("\n=== Сценарий 5: многопозиционный рейс (2 фермера) ===");
@@ -123,8 +124,8 @@ async function main() {
         },
         include: { items: true },
       });
-      await applyOutboundDeliveryLeg(tx, trip2.items, trip2.id, new Date());
-      await applyOutboundArrivedLeg(tx, trip2.items, trip2.id, new Date());
+      await applyOutboundDeliveryLeg(tx, trip2.items, trip2.id, new Date(), DELIVERY);
+      await applyOutboundArrivedLeg(tx, trip2.items, trip2.id, new Date(), DELIVERY);
       const net2 = await balances(tx, trip2.id, boxType.id);
       const locs2 = [
         { label: "завод", id: FACTORY },

@@ -39,6 +39,7 @@ export async function getMaterialShipments(
           transportCompany: { select: { name: true } },
         },
       },
+      transfer_source_farmer: { select: { name: true } },
     },
     orderBy: [{ created_at: "asc" }, { id: "asc" }],
   });
@@ -81,6 +82,11 @@ export async function getMaterialShipments(
       code: t.code,
       status,
       derivedStatus,
+      sourceFarmerId: t.source_farmer_id,
+      sourceLabel:
+        t.source_farmer_id == null
+          ? "Завод"
+          : (t.transfer_source_farmer?.name ?? "—"),
       arrivedCount,
       totalCount,
       departureDate: toDateStr(t.departure_date),

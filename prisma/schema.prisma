@@ -96,6 +96,7 @@ model Farmer {
   packagingNorms        PackagingNorm[]
   tripWeightNorms       TripWeightNorm[]
   materialShipmentItems MaterialShipmentItem[]
+  materialTransfersOut  MaterialShipment[]     @relation("MaterialTransferSource")
 }
 
 model Culture {
@@ -378,11 +379,14 @@ model MaterialShipment {
   arrival_date   DateTime?
   status         ShipmentStatus @default(planned)
   driver_id      Int
+  // transfer-1: null = доставка с завода; задано = перенос ОТ этого фермера (транзит -3).
+  source_farmer_id Int?
   created_at     DateTime       @default(now())
   updated_at     DateTime       @updatedAt
 
-  driver Driver                 @relation(fields: [driver_id], references: [id], onDelete: Restrict)
-  items  MaterialShipmentItem[]
+  driver                 Driver                 @relation(fields: [driver_id], references: [id], onDelete: Restrict)
+  transfer_source_farmer Farmer?                @relation("MaterialTransferSource", fields: [source_farmer_id], references: [id], onDelete: Restrict)
+  items                  MaterialShipmentItem[]
 }
 
 model MaterialShipmentItem {

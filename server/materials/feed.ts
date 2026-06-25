@@ -31,6 +31,10 @@ export type MaterialTrip = {
   // derivedStatus: он добавляет "partial" (часть позиций прибыла) — в БД не хранится.
   status: "planned" | "sent" | "arrived";
   derivedStatus: "planned" | "sent" | "partial" | "arrived";
+  // transfer-1: источник рейса. sourceFarmerId=null → доставка с завода; иначе перенос
+  // ОТ фермера. sourceLabel — готовая подпись для карточки/фильтра («Завод» | имя фермера).
+  sourceFarmerId: number | null;
+  sourceLabel: string;
   arrivedCount: number; // позиций с arrived_at
   totalCount: number; // всего позиций
   departureDate: string | null;

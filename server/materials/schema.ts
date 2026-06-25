@@ -65,6 +65,9 @@ export const materialShipmentSchema = z
     // Водитель ОБЯЗАТЕЛЕН всегда (в отличие от Shipment, где опционален на planned):
     // MaterialShipment.driver_id NOT NULL в схеме.
     driver_id: z.string().trim().min(1, "Назначьте водителя"),
+    // transfer-1: источник переноса (FK-строка, как farmer_id). Пусто/undefined =
+    // доставка с завода; задано = перенос ОТ этого фермера (транзит -3).
+    source_farmer_id: z.string().trim().optional(),
     departure_date: z.string().trim().min(1, "Укажите дату отправления"),
     arrival_date: z.string().trim().min(1, "Укажите дату прибытия"),
     items: z
@@ -108,6 +111,28 @@ export const materialShipmentSchema = z
         seen.add(key);
       }
     });
+
+    // transfer-1: если задан источник переноса — он должен быть валиден (>0), а каждый
+    // получатель (farmer_id позиции) НЕ может совпадать с источником (self-transfer запрещён).
+    const src = val.source_farmer_id?.trim();
+    if (src) {
+      if (!(Number(src) > 0)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["source_farmer_id"],
+          message: "Некорректный источник переноса",
+        });
+      }
+      val.items.forEach((it, i) => {
+        if (it.farmer_id && it.farmer_id.trim() === src) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["items", i, "farmer_id"],
+            message: "Получатель не может совпадать с источником переноса",
+          });
+        }
+      });
+    }
   });
 
 export type MaterialShipmentInput = z.infer<typeof materialShipmentSchema>;
@@ -138,6 +163,8 @@ export type MaterialDetail = {
   id: number;
   status: "planned" | "sent" | "arrived";
   driver_id: number;
+  // transfer-1: источник переноса (null = доставка с завода) — для round-trip формы.
+  source_farmer_id: number | null;
   departure_date: string | null;
   arrival_date: string | null;
   items: MaterialItemRow[];
