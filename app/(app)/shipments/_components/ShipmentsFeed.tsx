@@ -5,32 +5,38 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Feed, FeedShipment, FeedWeek } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
-import {
-  isoWeek as isoWeekOf,
-  isoWeekRange,
-  seasonYearOf,
-  currentSeasonWeek,
-  seasonWeekBounds,
-  compareIsoWeek,
-} from "@/server/shipments/workdays";
+import { isoWeekRange, formatWeekParam } from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
-import { PlanView } from "./PlanView";
-import { BoardView } from "./BoardView";
-import { ScopeCombo } from "./ScopeCombo";
-import { usePlanWeek } from "./usePlanWeek";
-import { useBoardWeek } from "./useBoardWeek";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
-import { FeedToolbar } from "./FeedToolbar";
+import { FeedToolbar } from "@/components/shell/FeedToolbar";
 import { FilterCombo } from "./FilterCombo";
 import { weekKey, formatWeekRange } from "./week-format";
 
-// Формат диапазона недели для метки тулбара в режиме «План» (ISO Пн–Вс).
+type Week = { seasonYear: number; isoYear: number; isoWeek: number };
+type View = "lenta" | "summary";
+
+// Виды /shipments (B5-nav): Лента (быв. Таблица) + Сводка (быв. Heatmap,
+// плейсхолдер). План/Доска переехали на /planner.
+const VIEWS = [
+  { key: "lenta", label: "Лента" },
+  { key: "summary", label: "Сводка" },
+];
+
+// Запись параметра в URL без ре-рендера сервера (B5-nav): неделя/вид делятся с
+// /planner и переживают перезагрузку. Остальные параметры сохраняются.
+function writeUrlParam(key: string, value: string) {
+  const sp = new URLSearchParams(window.location.search);
+  sp.set(key, value);
+  window.history.replaceState(null, "", `?${sp.toString()}`);
+}
+
+// Диапазон недели для метки тулбара (ISO Пн–Вс): «8 июня – 14 июня».
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
   timeZone: "UTC",
 });
-function planWeekSub(isoYear: number, week: number): string {
+function weekRangeSub(isoYear: number, week: number): string {
   const { start, end } = isoWeekRange(isoYear, week);
   return `${dayMonthFmt.format(start)} – ${dayMonthFmt.format(end)}`;
 }
@@ -80,11 +86,24 @@ function selectedNames(
 export function ShipmentsFeed({
   feed,
   options,
+  initialWeek,
+  initialView,
 }: {
   feed: Feed;
   options: ShipmentOptions;
+  initialWeek: Week;
+  initialView: View;
 }) {
   const weeks = feed.weeks;
+
+  // Вид (Лента/Сводка) — из URL (?view). replaceState не ре-рендерит сервер, поэтому
+  // держим локальный стейт, засеянный сервером, и пишем URL при переключении.
+  const [view, setView] = useState<View>(initialView);
+  function onViewChange(v: string) {
+    if (v !== "lenta" && v !== "summary") return;
+    setView(v);
+    writeUrlParam("view", v);
+  }
 
   // --- Состояние фильтров (React state, без localStorage) ---
   const [search, setSearch] = useState("");
@@ -205,51 +224,14 @@ export function ShipmentsFeed({
     currentIndex !== -1 ? currentIndex : futureIndex !== -1 ? futureIndex : weeks.length - 1;
   const currentKey = weeks.length > 0 ? weekKey(weeks[anchorIndex]) : "";
 
+  // Стартовая неделя из URL (?week): скроллим к ней, если она есть в дереве сезона,
+  // иначе к «Сегодня» (anchor). Неделя в URL глобальна — делится с /planner.
+  const initialWeekKey = weekKey(initialWeek);
+  const startKey =
+    weeks.some((w) => weekKey(w) === initialWeekKey) ? initialWeekKey : currentKey;
+
   // Активная (просматриваемая) неделя — для метки тулбара. Обновляется scrollspy.
-  const [activeKey, setActiveKey] = useState<string>(currentKey);
-
-  // --- Вид «План» (B4a). Своя неделя, независимая от feed.weeks (план задаётся
-  // и на недели без отгрузок). prev/next шагают ±7 дней через ISO-хелперы. ---
-  const [viewMode, setViewMode] = useState<"table" | "plan" | "board">("table");
-  const [planWeek, setPlanWeek] = useState(() => {
-    const c = currentSeasonWeek();
-    return { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
-  });
-  // Загрузка недели плана + состав (B4c) — общие для матрицы (PlanView) и combobox
-  // состава (в тулбаре). Фетчим только в виде «План».
-  const plan = usePlanWeek({ ...planWeek, enabled: viewMode === "plan" });
-  // Доска (B5) делит недельное состояние/навигацию с «Планом»; свой лоадер.
-  const board = useBoardWeek({ ...planWeek, enabled: viewMode === "board" });
-  const [scopeOpen, setScopeOpen] = useState(false);
-
-  function handleViewChange(v: "table" | "plan" | "board") {
-    // При входе в «План»/«Доску» стартуем с недели, которую смотрели в ленте.
-    if ((v === "plan" || v === "board") && activeKey) {
-      const [y, w] = activeKey.split("-").map(Number);
-      if (y && w) {
-        const { start } = isoWeekRange(y, w);
-        setPlanWeek({ seasonYear: seasonYearOf(start), isoYear: y, isoWeek: w });
-      }
-    }
-    setViewMode(v);
-  }
-
-  function stepPlanWeek(delta: number) {
-    setPlanWeek((p) => {
-      const { start } = isoWeekRange(p.isoYear, p.isoWeek);
-      const d = new Date(start);
-      d.setUTCDate(d.getUTCDate() + delta * 7);
-      const w = isoWeekOf(d);
-      // Не уходим за границы сезона (BR-17) — на краю остаёмся на месте.
-      const b = seasonWeekBounds(p.seasonYear);
-      if (compareIsoWeek(w, b.first) < 0 || compareIsoWeek(w, b.last) > 0) return p;
-      return { seasonYear: p.seasonYear, isoYear: w.isoYear, isoWeek: w.isoWeek };
-    });
-  }
-  function goPlanToday() {
-    const c = currentSeasonWeek();
-    setPlanWeek({ seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek });
-  }
+  const [activeKey, setActiveKey] = useState<string>(startKey);
 
   const toolbarRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -312,8 +294,8 @@ export function ShipmentsFeed({
     const target: HTMLElement | Window = scroller ?? window;
     target.addEventListener("scroll", onScroll, { passive: true });
 
-    // Авто-скролл к текущей неделе при первом рендере (поведение 17b).
-    scrollToKey(currentKey);
+    // Авто-скролл к стартовой неделе из URL (или к «Сегодня») при первом рендере.
+    scrollToKey(startKey);
 
     return () => {
       ro?.disconnect();
@@ -430,92 +412,55 @@ export function ShipmentsFeed({
     onReset: resetAll,
   };
 
-  // Вид «Доска» (B5) — недельный, делит неделю/навигацию с «Планом».
-  if (viewMode === "board") {
-    const today = currentSeasonWeek();
-    const isCurrent =
-      planWeek.isoYear === today.isoYear && planWeek.isoWeek === today.isoWeek;
-    const bounds = seasonWeekBounds(planWeek.seasonYear);
-    const atFirst = compareIsoWeek(planWeek, bounds.first) <= 0;
-    const atLast = compareIsoWeek(planWeek, bounds.last) >= 0;
-    return (
-      <div ref={rootRef}>
-        <FeedToolbar
-          ref={toolbarRef}
-          createSlot={createButton}
-          weekLabel={`Неделя ${planWeek.isoWeek}`}
-          weekSub={planWeekSub(planWeek.isoYear, planWeek.isoWeek)}
-          onPrevWeek={() => stepPlanWeek(-1)}
-          onNextWeek={() => stepPlanWeek(1)}
-          onToday={goPlanToday}
-          prevDisabled={atFirst}
-          nextDisabled={atLast}
-          todayActive={!isCurrent}
-          viewMode={viewMode}
-          onViewChange={handleViewChange}
-          {...filterProps}
-        />
-        <BoardView
-          week={board.week}
-          loading={board.loading}
-          options={options}
-          onOpenPlan={() => handleViewChange("plan")}
-        />
-        {createDialog}
-      </div>
-    );
-  }
+  // Общие пропсы видов в переключателе тулбара (Лента/Сводка).
+  const viewProps = {
+    views: VIEWS,
+    viewMode: view,
+    onViewChange,
+  };
 
-  // Вид «План» (B4a) — независим от дерева ленты: своя неделя + getPlanWeek.
-  if (viewMode === "plan") {
-    const today = currentSeasonWeek();
-    const isCurrent =
-      planWeek.isoYear === today.isoYear && planWeek.isoWeek === today.isoWeek;
-    const bounds = seasonWeekBounds(planWeek.seasonYear);
-    const atFirst = compareIsoWeek(planWeek, bounds.first) <= 0;
-    const atLast = compareIsoWeek(planWeek, bounds.last) >= 0;
+  // Вид «Сводка» (быв. Heatmap) — плейсхолдер «скоро» (B5-nav). Неделя в URL
+  // сохраняется (навигация недели тут не нужна — вид сводный по сезону).
+  if (view === "summary") {
     return (
       <div ref={rootRef}>
         <FeedToolbar
           ref={toolbarRef}
           createSlot={createButton}
-          weekLabel={`Неделя ${planWeek.isoWeek}`}
-          weekSub={planWeekSub(planWeek.isoYear, planWeek.isoWeek)}
-          onPrevWeek={() => stepPlanWeek(-1)}
-          onNextWeek={() => stepPlanWeek(1)}
-          onToday={goPlanToday}
-          prevDisabled={atFirst}
-          nextDisabled={atLast}
-          todayActive={!isCurrent}
-          viewMode={viewMode}
-          onViewChange={handleViewChange}
-          scopeSlot={
-            plan.week ? (
-              <ScopeCombo
-                seasonYear={planWeek.seasonYear}
-                isoYear={planWeek.isoYear}
-                isoWeek={planWeek.isoWeek}
-                items={plan.week.scopePicker}
-                count={plan.week.rows.length}
-                open={scopeOpen}
-                setOpen={setScopeOpen}
-                reload={plan.reload}
-              />
-            ) : null
-          }
-          {...filterProps}
+          weekLabel={`Неделя ${initialWeek.isoWeek}`}
+          weekSub={weekRangeSub(initialWeek.isoYear, initialWeek.isoWeek)}
+          onPrevWeek={() => {}}
+          onNextWeek={() => {}}
+          onToday={() => {}}
+          prevDisabled
+          nextDisabled
+          todayActive={false}
+          showFilters={false}
+          {...viewProps}
         />
-        <PlanView
-          seasonYear={planWeek.seasonYear}
-          isoYear={planWeek.isoYear}
-          isoWeek={planWeek.isoWeek}
-          week={plan.week}
-          setWeek={plan.setWeek}
-          loading={plan.loading}
-          version={plan.version}
-          reload={plan.reload}
-          onOpenScope={() => setScopeOpen(true)}
-        />
+        <div className="feedzone">
+          <div className="empty">
+            <div className="ill">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.6}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </svg>
+            </div>
+            <h3>Сводка скоро</h3>
+            <p>
+              Сводный вид по сезону (тепловая карта поставок) появится позже. Пока
+              пользуйтесь «Лентой» и планировщиком.
+            </p>
+          </div>
+        </div>
         {createDialog}
       </div>
     );
@@ -536,8 +481,8 @@ export function ShipmentsFeed({
           prevDisabled
           nextDisabled
           todayActive={false}
-          viewMode={viewMode}
-          onViewChange={handleViewChange}
+          showFilters
+          {...viewProps}
           {...filterProps}
         />
         <div className="feedzone">
@@ -584,18 +529,28 @@ export function ShipmentsFeed({
       weekLabel={activeWeek ? `Неделя ${activeWeek.isoWeek}` : ""}
       weekSub={activeRange}
       onPrevWeek={() => {
-        if (activeIndex > 0) scrollToKey(weekKey(navWeeks[activeIndex - 1]));
+        if (activeIndex > 0) {
+          const w = navWeeks[activeIndex - 1];
+          scrollToKey(weekKey(w));
+          writeUrlParam("week", formatWeekParam(w)); // неделя глобальна — делится с /planner
+        }
       }}
       onNextWeek={() => {
-        if (activeIndex < navWeeks.length - 1)
-          scrollToKey(weekKey(navWeeks[activeIndex + 1]));
+        if (activeIndex < navWeeks.length - 1) {
+          const w = navWeeks[activeIndex + 1];
+          scrollToKey(weekKey(w));
+          writeUrlParam("week", formatWeekParam(w));
+        }
       }}
-      onToday={() => scrollToKey(currentKey)}
+      onToday={() => {
+        scrollToKey(currentKey);
+        if (weeks[anchorIndex]) writeUrlParam("week", formatWeekParam(weeks[anchorIndex]));
+      }}
       prevDisabled={activeIndex <= 0}
       nextDisabled={activeIndex >= navWeeks.length - 1}
       todayActive={activeKey !== currentKey}
-      viewMode={viewMode}
-      onViewChange={handleViewChange}
+      showFilters
+      {...viewProps}
       {...filterProps}
     />
   );

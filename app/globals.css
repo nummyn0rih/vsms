@@ -148,6 +148,10 @@
   html {
     @apply font-sans;
   }
+  /* Табличные цифры (веса/тонны/итоги) — выравнивание разрядов. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* ============================================================= */
@@ -440,6 +444,9 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 
 /* прогресс-бар (Часть B): факт (сплошной) + план (штрих) + перелёт (ink), риска-цель */
 .pbar { position: relative; height: 6px; border-radius: 3px; background: var(--bar-track); overflow: visible; }
+/* Пустая ячейка плана: трек невидим, но резервирует 6px-слот (выравнивание высоты).
+   Класс blank, не empty — иначе совпал бы с глобальным .empty (empty-state). */
+.pbar.blank { background: transparent; }
 .pbar .bf { position: absolute; top: 0; height: 100%; }
 .pbar .actual { left: 0; background: var(--bar-actual); border-radius: 3px 0 0 3px; }
 .pbar .plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }

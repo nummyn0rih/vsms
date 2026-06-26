@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut } from "lucide-react";
 
@@ -25,7 +25,15 @@ export function Sidebar({
   userLabel: string;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const items = navForRole(role);
+
+  // Неделя (?week) глобальна для /shipments и /planner (B5-nav) — переносим её в
+  // ссылки между ними, чтобы при переходе стоял тот же недельный курсор.
+  const week = searchParams.get("week");
+  const weekRoutes = new Set(["/shipments", "/planner"]);
+  const hrefFor = (href: string) =>
+    week && weekRoutes.has(href) ? `${href}?week=${week}` : href;
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r bg-muted/30">
@@ -39,7 +47,7 @@ export function Sidebar({
           return (
             <div key={item.href}>
               <Link
-                href={item.href}
+                href={hrefFor(item.href)}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
                   active

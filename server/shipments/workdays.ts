@@ -167,6 +167,41 @@ export function seasonWeekBounds(seasonYear: number): {
   return { first, last };
 }
 
+// --- Неделя в URL (?week=YYYY-Www, B5-nav). Глобальный курсор недели для /shipments
+// и /planner. Чистые функции — используются и на сервере (parse из searchParams), и
+// в клиенте (format для replaceState). ---
+
+// "2026-W26" — неделя для ?week. isoWeek паддится до 2 цифр.
+export function formatWeekParam(w: { isoYear: number; isoWeek: number }): string {
+  return `${w.isoYear}-W${String(w.isoWeek).padStart(2, "0")}`;
+}
+
+// raw из searchParams (string|string[]|undefined) → {seasonYear,isoYear,isoWeek}.
+// Невалид/нет/несуществующая неделя → currentSeasonWeek(). seasonYear = по началу недели.
+export function parseWeekParam(raw: string | string[] | undefined): {
+  seasonYear: number;
+  isoYear: number;
+  isoWeek: number;
+} {
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (typeof s === "string") {
+    const m = /^(\d{4})-W(\d{1,2})$/.exec(s);
+    if (m) {
+      const isoYear = Number(m[1]);
+      const week = Number(m[2]);
+      if (week >= 1 && week <= 53) {
+        const { start } = isoWeekRange(isoYear, week);
+        // Round-trip: отсев несуществующих недель (напр. W53 в 52-недельном году).
+        const back = isoWeek(start);
+        if (back.isoYear === isoYear && back.isoWeek === week) {
+          return { seasonYear: seasonYearOf(start), isoYear, isoWeek: week };
+        }
+      }
+    }
+  }
+  return currentSeasonWeek();
+}
+
 // Сравнение (isoYear, isoWeek) для классификации past/current/future.
 export function compareIsoWeek(
   a: { isoYear: number; isoWeek: number },

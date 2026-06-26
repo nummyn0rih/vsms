@@ -86,14 +86,9 @@ export default function Loading() {
           <div className="spacer" />
           <div className="seg">
             <button type="button" className="active">
-              Таблица
+              Лента
             </button>
-            <button type="button" className="is-disabled" aria-disabled>
-              Heatmap
-            </button>
-            <button type="button" className="is-disabled" aria-disabled>
-              План
-            </button>
+            <button type="button">Сводка</button>
           </div>
         </div>
         <div className="tbar-row">

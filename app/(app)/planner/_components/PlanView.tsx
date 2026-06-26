@@ -104,10 +104,13 @@ function barGeometry({
 }
 
 function PlanBar({ geom }: { geom: BarGeom }) {
-  // Пустая ячейка (ни цели, ни факта) — бар не рисуем, остаётся только текст.
-  if (geom.segs.length === 0 && geom.tickLeft == null) return null;
+  // Пустая ячейка (ни цели, ни факта): трек всё равно рендерим (класс empty —
+  // прозрачный фон), чтобы зарезервировать 6px-слот шкалы и выровнять высоту всех
+  // ячеек независимо от заполнения (err-plan).
+  const empty = geom.segs.length === 0 && geom.tickLeft == null;
   const cls = [
     "pbar",
+    empty ? "blank" : "", // НЕ "empty": совпало бы с глобальным .empty (empty-state)
     geom.tickLeft == null ? "notarget" : "",
     geom.met ? "met" : "",
   ]

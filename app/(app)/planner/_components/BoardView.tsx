@@ -8,7 +8,7 @@ import type { BoardWeek, BoardCard } from "@/server/board/schema";
 import type { ShipmentDetail, ShipmentOptions } from "@/server/shipments/schema";
 import { getShipment } from "@/server/shipments/actions";
 import { formatTareTotals } from "@/server/shipments/format";
-import { ShipmentFormDialog } from "./ShipmentFormDialog";
+import { ShipmentFormDialog } from "@/app/(app)/shipments/_components/ShipmentFormDialog";
 
 // Полка цели бара: 100%-эффективный/риска садятся на 95,2%, оставляя запас под
 // перелёт (как в PlanView/прототипе). EPS — допуск сравнения тонн (3 знака).

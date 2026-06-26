@@ -36,22 +36,27 @@ type FeedToolbarProps = {
   nextDisabled: boolean;
   /** true → активна не текущая неделя, «Сегодня» подсвечена (вернуться к текущей). */
   todayActive: boolean;
-  // Переключатель вида: «Таблица» / «План» (B4a) / «Доска» (B5). Heatmap — заглушка.
-  viewMode: "table" | "plan" | "board";
-  onViewChange: (v: "table" | "plan" | "board") => void;
+  // Переключатель вида: набор кнопок задаёт маршрут (B5-nav). «Лента»/«Сводка» на
+  // /shipments, «План»/«Доска» на /planner. disabled+tip → кнопка «скоро».
+  viewMode: string;
+  onViewChange: (v: string) => void;
+  views: { key: string; label: string; disabled?: boolean; tip?: string }[];
+  // Строка 2 (поиск/фильтры/тумблер/сброс) — только там, где есть фильтры (Лента).
+  showFilters: boolean;
   // Combobox состава недели (B4c) — только в виде «План».
   scopeSlot?: ReactNode;
-  // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed).
-  search: string;
-  onSearch: (v: string) => void;
-  onClearSearch: () => void;
-  supplierCombo: ReactNode;
-  cultureCombo: ReactNode;
-  statusCombo: ReactNode;
-  hidePlanned: boolean;
-  onToggleHidePlanned: () => void;
-  showReset: boolean;
-  onReset: () => void;
+  // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed). Опциональны:
+  // нужны только при showFilters (Лента). На /planner не передаются.
+  search?: string;
+  onSearch?: (v: string) => void;
+  onClearSearch?: () => void;
+  supplierCombo?: ReactNode;
+  cultureCombo?: ReactNode;
+  statusCombo?: ReactNode;
+  hidePlanned?: boolean;
+  onToggleHidePlanned?: () => void;
+  showReset?: boolean;
+  onReset?: () => void;
 };
 
 // Тулбар ленты. Row 1 — создание/неделя/вид (Часть A). Row 2 — поиск/фильтры/
@@ -71,6 +76,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       todayActive,
       viewMode,
       onViewChange,
+      views,
+      showFilters,
       scopeSlot,
       search,
       onSearch,
@@ -126,38 +133,30 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
           <div className="spacer" />
 
           <div className="seg">
-            <button
-              type="button"
-              className={viewMode === "table" ? "active" : ""}
-              onClick={() => onViewChange("table")}
-            >
-              Таблица
-            </button>
-            <div className="tip-wrap">
-              <button type="button" className="is-disabled" aria-disabled>
-                Heatmap
-              </button>
-              <span className="tip">скоро</span>
-            </div>
-            <button
-              type="button"
-              className={viewMode === "plan" ? "active" : ""}
-              onClick={() => onViewChange("plan")}
-            >
-              План
-            </button>
-            <button
-              type="button"
-              className={viewMode === "board" ? "active" : ""}
-              onClick={() => onViewChange("board")}
-            >
-              Доска
-            </button>
+            {views.map((v) =>
+              v.disabled ? (
+                <div className="tip-wrap" key={v.key}>
+                  <button type="button" className="is-disabled" aria-disabled>
+                    {v.label}
+                  </button>
+                  {v.tip && <span className="tip">{v.tip}</span>}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  key={v.key}
+                  className={viewMode === v.key ? "active" : ""}
+                  onClick={() => onViewChange(v.key)}
+                >
+                  {v.label}
+                </button>
+              ),
+            )}
           </div>
         </div>
 
-        {/* Строка 2 — поиск/фильтры/тумблер/сброс (только для «Таблицы»). */}
-        {viewMode === "table" && (
+        {/* Строка 2 — поиск/фильтры/тумблер/сброс (только в «Ленте»). */}
+        {showFilters && (
         <div className="tbar-row">
           <div className={`search${search ? " has-val" : ""}`}>
             <Svg cls="ic-search">
@@ -166,8 +165,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             </Svg>
             <input
               type="text"
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
+              value={search ?? ""}
+              onChange={(e) => onSearch?.(e.target.value)}
               placeholder="Поиск: фермер, культура, № акта…"
             />
             {search && (
@@ -209,7 +208,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             <input
               type="checkbox"
               className="sr-only"
-              checked={hidePlanned}
+              checked={hidePlanned ?? false}
               onChange={onToggleHidePlanned}
             />
             <span className={`switch${hidePlanned ? "" : " off"}`} />

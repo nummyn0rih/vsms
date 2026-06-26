@@ -1,12 +1,18 @@
 import { getFeed } from "@/server/shipments/feed-loader";
-import { currentSeasonWeek } from "@/server/shipments/workdays";
+import { parseWeekParam } from "@/server/shipments/workdays";
 import { listShipmentOptions } from "@/server/shipments/actions";
 import { ShipmentsFeed } from "./_components/ShipmentsFeed";
 
-export default async function ShipmentsPage() {
-  const { seasonYear } = currentSeasonWeek();
+export default async function ShipmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const sp = await searchParams;
+  const initialWeek = parseWeekParam(sp.week);
+  const initialView = sp.view === "summary" ? "summary" : "lenta";
   const [feed, options] = await Promise.all([
-    getFeed({ seasonYear }),
+    getFeed({ seasonYear: initialWeek.seasonYear }),
     listShipmentOptions(),
   ]);
 
@@ -15,12 +21,17 @@ export default async function ShipmentsPage() {
       <div className="mb-4">
         <h1 className="text-2xl font-semibold tracking-tight">Лента отгрузок</h1>
         <p className="text-sm text-muted-foreground">
-          Овощное сырьё на завод · сезон {seasonYear}
+          Овощное сырьё на завод · сезон {initialWeek.seasonYear}
         </p>
       </div>
 
       {/* Тулбар (+ Отгрузка / неделя / фильтры) — внутри ленты (FeedToolbar). */}
-      <ShipmentsFeed feed={feed} options={options} />
+      <ShipmentsFeed
+        feed={feed}
+        options={options}
+        initialWeek={initialWeek}
+        initialView={initialView}
+      />
     </div>
   );
 }
