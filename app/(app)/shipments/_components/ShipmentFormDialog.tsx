@@ -60,6 +60,8 @@ type CommonProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
+  // Предзаполнение дат при создании (например, «+ Отгрузка» в колонке доски, B5-1b).
+  createDefaults?: { departure_date?: string; arrival_date?: string };
 };
 
 type Props =
@@ -105,8 +107,8 @@ export function ShipmentFormDialog(props: Props) {
     resolver: zodResolver(shipmentSchema),
     defaultValues: {
       driver_id: row?.driver_id != null ? String(row.driver_id) : "",
-      departure_date: row?.departure_date ?? "",
-      arrival_date: row?.arrival_date ?? "",
+      departure_date: row?.departure_date ?? props.createDefaults?.departure_date ?? "",
+      arrival_date: row?.arrival_date ?? props.createDefaults?.arrival_date ?? "",
       comment: row?.comment ?? "",
       items: row
         ? row.items.map((it) => ({

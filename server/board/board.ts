@@ -11,41 +11,48 @@ import {
   type SeasonWorkdays,
 } from "@/server/shipments/workdays";
 import { getPlanWeek } from "@/server/plan/board";
-import type { BoardCard, BoardColumn, BoardWeek } from "./schema";
+import type { BoardCard, BoardColumn, BoardFarmerRow, BoardWeek } from "./schema";
 
 // Загрузчик вида «Доска» (B5-1). Server-only (prisma) — типы для client в schema.ts.
 // Максимальный reuse: карточки/чипы/тара — из ленты (feed.ts), прогресс и колонки
 // (рабочие дни) — из плана (getPlanWeek). Новых агрегаций тары/культур НЕ вводим.
 
-// Имя фермера(ов) машины: обычно один; при нескольких — «имя +N».
-function farmerLabel(fs: FeedShipment): string {
-  const seen = new Map<number, string>();
-  for (const it of fs.items) if (!seen.has(it.farmerId)) seen.set(it.farmerId, it.farmerName);
-  const names = [...seen.values()];
-  if (names.length === 0) return "—";
-  return names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`;
+// Отправление = прибытие − 2 РАБОЧИХ дня (через workdays.ts), НЕ из БД.
+function departureISO(arrivalISO: string, cfg: SeasonWorkdays | null): string {
+  return subtractWorkdays(parseDateUTC(arrivalISO), 2, cfg).toISOString().slice(0, 10);
+}
+
+// Разбивка машины по фермерам (порядок первого появления) — строки .frows карточки.
+function farmerRows(fs: FeedShipment): BoardFarmerRow[] {
+  const byFarmer = new Map<number, BoardFarmerRow>();
+  for (const it of fs.items) {
+    let row = byFarmer.get(it.farmerId);
+    if (!row) {
+      row = { farmerId: it.farmerId, farmerName: it.farmerName, cultureNames: [], totalKg: 0 };
+      byFarmer.set(it.farmerId, row);
+    }
+    if (!row.cultureNames.includes(it.cultureName)) row.cultureNames.push(it.cultureName);
+    row.totalKg += it.plannedKg;
+  }
+  return [...byFarmer.values()];
 }
 
 function toCard(fs: FeedShipment, cfg: SeasonWorkdays | null): BoardCard {
-  // Отправление = прибытие − 2 РАБОЧИХ дня (через workdays.ts), НЕ из БД.
-  let departureDate: string | null = null;
-  if (fs.arrivalDate) {
-    departureDate = subtractWorkdays(parseDateUTC(fs.arrivalDate), 2, cfg)
-      .toISOString()
-      .slice(0, 10);
-  }
+  const locked = fs.status === "arrived" || fs.status === "accepted";
   return {
     shipmentId: fs.id,
     code: fs.code,
     status: fs.status,
-    farmerName: farmerLabel(fs),
+    farmers: farmerRows(fs),
     driverName: fs.driverName,
     transportCompanyName: fs.transportCompanyName,
-    departureDate,
+    departureDate: fs.arrivalDate ? departureISO(fs.arrivalDate, cfg) : null,
     arrivalDate: fs.arrivalDate,
     cultures: summarizeCultures([fs]).cultures,
     tare: buildSendPreview(fs.items).totals,
-    draggable: fs.status === "planned",
+    draggable: fs.status === "planned" || fs.status === "sent",
+    arrivalOnly: fs.status === "sent",
+    locked,
   };
 }
 
@@ -83,6 +90,7 @@ export async function getBoardWeek({
       weekdayName: d.weekdayName,
       daySubtotalKg: summarizeCultures(dayShipments).totalKg,
       machineCount: dayShipments.length,
+      addDepartureISO: departureISO(d.date, cfg),
       cards: dayShipments.map((fs) => toCard(fs, cfg)),
     };
   });

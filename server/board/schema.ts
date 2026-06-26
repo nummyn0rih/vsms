@@ -4,18 +4,28 @@ import type { CultureTotal, FeedShipment } from "@/server/shipments/feed";
 // client-компоненты. Карточка стоит в колонке дня своего arrival_date; колонки —
 // рабочие дни недели (BR-18). Отправление = прибытие − 2 рабочих дня (computed).
 
+// Разбивка машины по фермерам — для строк .frows карточки-машины (B5-1b).
+export type BoardFarmerRow = {
+  farmerId: number;
+  farmerName: string;
+  cultureNames: string[]; // distinct культуры фермера в этом рейсе («Огурцы», «Перец»)
+  totalKg: number; // Σ планового веса фермера
+};
+
 export type BoardCard = {
   shipmentId: number;
   code: string;
   status: FeedShipment["status"];
-  farmerName: string; // distinct фермеры машины: 1 → имя, иначе «имя +N»
+  farmers: BoardFarmerRow[]; // 1 → одно-фермерская карточка; >1 → карточка-машина
   driverName: string | null;
   transportCompanyName: string | null;
   departureDate: string | null; // computed: arrival − 2 рабочих дня (не из БД)
   arrivalDate: string | null;
-  cultures: CultureTotal[]; // чипы культур (цвет + плановый вес)
+  cultures: CultureTotal[]; // чипы культур (цвет + плановый вес), объединённые по машине
   tare: { boxes: number; barrels: number }; // итог тары машины (рассчитанные позиции)
-  draggable: boolean; // status === "planned" (хват в B5-1, dnd в B5-1b)
+  draggable: boolean; // planned || sent (sent — перенос только прибытия)
+  arrivalOnly: boolean; // status === "sent": перенос меняет только дату прибытия
+  locked: boolean; // status arrived|accepted: без переноса
 };
 
 export type BoardColumn = {
@@ -23,6 +33,7 @@ export type BoardColumn = {
   weekdayName: string; // полное имя дня (короткое — на клиенте)
   daySubtotalKg: number; // Σ плановых весов машин дня
   machineCount: number;
+  addDepartureISO: string; // отправление новой отгрузки этого дня (приб − 2 раб. дня) для «+ Отгрузка»
   cards: BoardCard[];
 };
 

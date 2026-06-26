@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { LogOut } from "lucide-react";
+import { LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
 
 import { navForRole } from "@/lib/nav";
 import type { Role } from "@/lib/generated/prisma/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useNavCollapse } from "@/components/layout/sidebar-collapse";
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -27,6 +28,7 @@ export function Sidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const items = navForRole(role);
+  const { collapsed, toggle } = useNavCollapse();
 
   // Неделя (?week) глобальна для /shipments и /planner (B5-nav) — переносим её в
   // ссылки между ними, чтобы при переходе стоял тот же недельный курсор.
@@ -36,27 +38,55 @@ export function Sidebar({
     week && weekRoutes.has(href) ? `${href}?week=${week}` : href;
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-muted/30">
-      <div className="px-4 py-4 text-lg font-semibold tracking-tight">VSMS</div>
+    <aside
+      className={cn(
+        "flex shrink-0 flex-col border-r bg-muted/30 transition-[width] duration-200",
+        collapsed ? "w-14" : "w-60",
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center px-2 py-4",
+          collapsed ? "justify-center" : "justify-between px-4",
+        )}
+      >
+        {!collapsed && (
+          <span className="text-lg font-semibold tracking-tight">VSMS</span>
+        )}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={collapsed ? "Развернуть сайдбар" : "Свернуть сайдбар"}
+          onClick={toggle}
+        >
+          {collapsed ? (
+            <PanelLeft className="size-4" />
+          ) : (
+            <PanelLeftClose className="size-4" />
+          )}
+        </Button>
+      </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2">
         {items.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
-          const showChildren = item.children && active;
+          const showChildren = item.children && active && !collapsed;
           return (
             <div key={item.href}>
               <Link
                 href={hrefFor(item.href)}
+                title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex items-center gap-2 rounded-md py-2 text-sm transition-colors",
+                  collapsed ? "justify-center px-2" : "px-3",
                   active
                     ? "bg-accent font-medium text-accent-foreground"
                     : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                 )}
               >
                 <Icon className="size-4 shrink-0" />
-                {item.label}
+                {!collapsed && item.label}
               </Link>
 
               {showChildren && (
@@ -86,8 +116,15 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="flex items-center justify-between gap-2 border-t px-3 py-3">
-        <span className="truncate text-sm text-muted-foreground">{userLabel}</span>
+      <div
+        className={cn(
+          "flex items-center gap-2 border-t py-3",
+          collapsed ? "justify-center px-2" : "justify-between px-3",
+        )}
+      >
+        {!collapsed && (
+          <span className="truncate text-sm text-muted-foreground">{userLabel}</span>
+        )}
         <Button
           variant="ghost"
           size="icon-sm"

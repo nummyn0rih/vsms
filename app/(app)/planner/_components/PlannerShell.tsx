@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
+import { useNavCollapse } from "@/components/layout/sidebar-collapse";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
 import { ShipmentFormDialog } from "@/app/(app)/shipments/_components/ShipmentFormDialog";
 import {
@@ -65,6 +66,15 @@ export function PlannerShell({
   // Лоадеры читают ОДНУ неделю; enabled — фетчим только активный вид.
   const plan = usePlanWeek({ ...week, enabled: view === "plan" });
   const board = useBoardWeek({ ...week, enabled: view === "board" });
+
+  // Доске нужна ширина — сворачиваем сайдбар на вид «Доска», разворачиваем вне его
+  // (и при уходе со страницы). Ручной тоггл пользователя на доске уважается до
+  // следующей смены вида/маршрута (логика в NavCollapseProvider).
+  const { setAuto } = useNavCollapse();
+  useEffect(() => {
+    setAuto(view === "board");
+    return () => setAuto(false);
+  }, [view, setAuto]);
 
   function changeView(v: string) {
     if (v !== "plan" && v !== "board") return;
@@ -165,6 +175,7 @@ export function PlannerShell({
           week={board.week}
           loading={board.loading}
           options={options}
+          reload={board.reload}
           onOpenPlan={() => changeView("plan")}
         />
       ) : (

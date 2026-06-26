@@ -12,6 +12,8 @@
     "db:seed": "NODE_OPTIONS=--dns-result-order=ipv4first prisma db seed"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@hookform/resolvers": "^5.4.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
