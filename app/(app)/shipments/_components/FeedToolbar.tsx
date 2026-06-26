@@ -36,9 +36,9 @@ type FeedToolbarProps = {
   nextDisabled: boolean;
   /** true → активна не текущая неделя, «Сегодня» подсвечена (вернуться к текущей). */
   todayActive: boolean;
-  // Переключатель вида (B4a): «Таблица» / «План». Heatmap пока заглушка.
-  viewMode: "table" | "plan";
-  onViewChange: (v: "table" | "plan") => void;
+  // Переключатель вида: «Таблица» / «План» (B4a) / «Доска» (B5). Heatmap — заглушка.
+  viewMode: "table" | "plan" | "board";
+  onViewChange: (v: "table" | "plan" | "board") => void;
   // Combobox состава недели (B4c) — только в виде «План».
   scopeSlot?: ReactNode;
   // Часть B — фильтры/поиск/тумблер (состояние в ShipmentsFeed).
@@ -145,6 +145,13 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
               onClick={() => onViewChange("plan")}
             >
               План
+            </button>
+            <button
+              type="button"
+              className={viewMode === "board" ? "active" : ""}
+              onClick={() => onViewChange("board")}
+            >
+              Доска
             </button>
           </div>
         </div>

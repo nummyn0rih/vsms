@@ -1,13 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import {
-  isoWeekRange,
-  weekdayName,
-  isFactoryWorkday,
-  type SeasonWorkdays,
-} from "@/server/shipments/workdays";
+import { isoWeekRange, workdaysOfWeek } from "@/server/shipments/workdays";
 import type {
   CellProgress,
-  PlanDay,
   PlanRow,
   PlanWeek,
   ScopePickerItem,
@@ -42,25 +36,8 @@ const EMPTY_PROGRESS: CellProgress = {
 };
 
 // Загрузчик сетки плана (B4a). Server-only (тянет prisma) — типы для client лежат
-// в schema.ts. Колонки = рабочие дни ISO-недели (SeasonConfig). Режим гранулярности
-// культуры выводится из наличия дневных/недельной строк WeeklyPlan (BR-20).
-
-// Рабочие дни ISO-недели в порядке Пн→Вс (только рабочие, BR-18).
-function workdaysOfWeek(
-  isoYear: number,
-  isoWeek: number,
-  cfg: SeasonWorkdays | null,
-): PlanDay[] {
-  const { start } = isoWeekRange(isoYear, isoWeek);
-  const days: PlanDay[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setUTCDate(d.getUTCDate() + i);
-    if (!isFactoryWorkday(d, cfg)) continue;
-    days.push({ date: d.toISOString().slice(0, 10), weekdayName: weekdayName(d) });
-  }
-  return days;
-}
+// в schema.ts. Колонки = рабочие дни ISO-недели (SeasonConfig, workdaysOfWeek).
+// Режим гранулярности культуры выводится из наличия дневных/недельной строк (BR-20).
 
 export async function getPlanWeek({
   seasonYear,

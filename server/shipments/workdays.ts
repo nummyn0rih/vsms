@@ -74,6 +74,40 @@ export function weekdayName(date: Date): string {
   return WEEKDAY_NAMES[weekdayMonFirst(date)];
 }
 
+// Рабочие дни ISO-недели в порядке Пн→Вс (только рабочие, BR-18). Колонки сетки
+// «Плана» (server/plan/board.ts) и доски (server/board/board.ts).
+export function workdaysOfWeek(
+  isoYear: number,
+  week: number,
+  cfg: SeasonWorkdays | null,
+): { date: string; weekdayName: string }[] {
+  const { start } = isoWeekRange(isoYear, week);
+  const days: { date: string; weekdayName: string }[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setUTCDate(d.getUTCDate() + i);
+    if (!isFactoryWorkday(d, cfg)) continue;
+    days.push({ date: d.toISOString().slice(0, 10), weekdayName: weekdayName(d) });
+  }
+  return days;
+}
+
+// Отнять n РАБОЧИХ дней от даты (отправление = прибытие − 2 рабочих дня, B5).
+// Шагаем назад по календарю, считаем только рабочие дни. Дата в UTC.
+export function subtractWorkdays(
+  date: Date,
+  n: number,
+  cfg: SeasonWorkdays | null,
+): Date {
+  const d = new Date(date);
+  let left = n;
+  while (left > 0) {
+    d.setUTCDate(d.getUTCDate() - 1);
+    if (isFactoryWorkday(d, cfg)) left -= 1;
+  }
+  return d;
+}
+
 // --- ISO-недели (BR-17). Единый источник для ленты B3 (группировка/скролл). ---
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

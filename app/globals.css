@@ -567,4 +567,154 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .scope-add-btn:hover svg { color: var(--ink); }
 .ro-note { color: var(--mute); font-size: 13px; }
 
+/* ============================================================
+   Вид «Доска-планировщик» (B5). Вербатим из docs/prototypes/board-b5.html;
+   отсутствующие в проекте токены (warning/cyan/st-fg) инлайнятся hex по
+   DESIGN-SYSTEM status-fills. .toolbar/.seg/.weeknav уже определены выше.
+   ============================================================ */
+
+/* ---- полоса прогресса к плану ---- */
+.progress {
+  position: sticky; top: 69px; z-index: 20;
+  background: var(--canvas-soft);
+  border-bottom: 1px solid var(--hairline);
+  padding: 13px 28px;
+  display: flex; align-items: stretch; gap: 26px; flex-wrap: wrap;
+}
+.pg-lead { display: flex; flex-direction: column; gap: 3px; justify-content: center; padding-right: 22px; border-right: 1px solid var(--hairline); }
+.pg-lead .t { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); }
+.pg-lead .v { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+.pg-lead .v .g { color: var(--mute); font-weight: 400; }
+
+.pgbars { display: flex; align-items: stretch; gap: 24px; flex-wrap: wrap; }
+.pgcol { min-width: 168px; display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+.pgcol-top { display: flex; align-items: center; gap: 8px; }
+.pgcol-top .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.pgcol-top .nm { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+.pgcol-top .delta { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.pgcol-top .delta.under { color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+.pgcol-top .delta.over { color: #fff; background: var(--ink); }
+
+.mbar { position: relative; height: 7px; border-radius: 4px; background: var(--canvas-soft-2); box-shadow: inset 0 0 0 1px #0000000a; overflow: visible; }
+.mbar .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; }
+.mbar .tick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--hairline-strong); border-radius: 1px; }
+.mbar.over .tick { width: 3px; background: var(--ink); top: -3px; bottom: -3px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 12%, transparent); }
+.pgcol-cap { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--body); letter-spacing: 0; }
+.pgcol-cap .g { color: var(--mute); }
+
+/* нет плана — намёк */
+.progress.flat { position: static; border: 1px solid var(--hairline); border-radius: 8px; padding: 13px 16px; margin: 13px 28px 0; }
+.noplan { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--mute); letter-spacing: -0.02em; }
+.noplan svg { width: 15px; height: 15px; opacity: .8; flex-shrink: 0; }
+.noplan a { color: var(--link); text-decoration: none; font-weight: 500; }
+.noplan a:hover { text-decoration: underline; }
+
+/* ---- доска ---- */
+.board-wrap { overflow: auto; padding: 20px 28px 40px; }
+.board { display: flex; gap: 16px; align-items: flex-start; }
+.col {
+  flex: 0 0 312px; width: 312px;
+  background: var(--canvas-soft);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 200px);
+}
+.col-head {
+  padding: 12px 14px 11px; border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: baseline; gap: 9px;
+  position: sticky; top: 0; background: var(--canvas-soft); border-radius: 10px 10px 0 0; z-index: 2;
+}
+.col-head .dow { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+.col-head .date { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); letter-spacing: 0; }
+.col-head .sub { margin-left: auto; font-size: 12px; color: var(--mute); white-space: nowrap; text-align: right; }
+.col-head .sub b { color: var(--body); font-weight: 600; font-variant-numeric: tabular-nums; }
+.col-body { padding: 12px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; flex: 1; }
+.col.is-empty .col-body { min-height: 120px; }
+.col-foot { padding: 0 12px 12px; }
+.addship {
+  width: 100%; height: 38px; border: 1px dashed var(--hairline-strong); border-radius: 8px; background: transparent;
+  font-family: inherit; font-size: 13px; font-weight: 500; color: var(--body); letter-spacing: -0.02em;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
+}
+.addship:hover:not(:disabled) { background: var(--canvas); border-color: var(--ink); color: var(--ink); }
+.addship:disabled { opacity: .5; cursor: not-allowed; }
+.addship svg { width: 14px; height: 14px; }
+
+.col-empty-hint {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 120px; padding: 16px; color: var(--mute); font-size: 12px; letter-spacing: -0.01em; line-height: 17px;
+  border: 1px dashed var(--hairline); border-radius: 8px;
+}
+
+/* ---- карточка-машина ---- */
+.mcard {
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+  overflow: hidden; position: relative; cursor: pointer;
+  transition: box-shadow .14s, transform .14s, border-color .14s;
+}
+.mcard:hover { box-shadow: 0 1px 1px #00000005, 0 4px 10px -2px #0000001c; border-color: var(--hairline-strong); }
+.mcard-strip { height: 3px; width: 100%; }
+.mcard.s-planned .mcard-strip { background: #d9d9d9; }
+.mcard.s-sent .mcard-strip { background: var(--link); }
+.mcard.s-arrived .mcard-strip { background: #f5a623; }
+.mcard.s-accepted .mcard-strip { background: #29bc9b; }
+
+.mcard-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  height: 22px; padding: 0 9px; border-radius: 6px;
+  font-size: 12px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+}
+.badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+.badge.s-planned { background: #ededed; color: #888888; }
+.badge.s-planned .dot { background: #b3b3b3; }
+.badge.s-sent { background: var(--link-bg-soft); color: #0761d1; }
+.badge.s-sent .dot { background: var(--link); }
+.badge.s-arrived { background: #ffefcf; color: #ab570a; }
+.badge.s-arrived .dot { background: #f5a623; }
+.badge.s-accepted { background: #c7f6ea; color: #1d8e75; }
+.badge.s-accepted .dot { background: #29bc9b; }
+
+.mcard-dates { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; letter-spacing: -0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mcard-dates .dep { color: var(--mute); }
+.mcard-dates .arrow { color: var(--hairline-strong); font-size: 11px; }
+.mcard-dates .arr { color: var(--ink); font-weight: 600; }
+
+.mcard-handle { width: 20px; height: 22px; display: grid; place-items: center; color: var(--hairline-strong); flex-shrink: 0; margin-left: -2px; }
+.mcard-handle svg { width: 15px; height: 15px; }
+
+.mcard-body { padding: 9px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
+.farmer { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; line-height: 19px; }
+.driver { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mute); letter-spacing: -0.01em; margin-top: 1px; }
+.driver .i { width: 13px; height: 13px; opacity: .8; }
+.driver-none { font-style: italic; }
+
+.chips { display: flex; flex-direction: column; gap: 5px; }
+.cchip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 9px; border-radius: 6px; border: 1px solid var(--hairline);
+  font-size: 13px; letter-spacing: -0.02em;
+}
+.cchip .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.cchip .nm { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cchip .wt { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; white-space: nowrap; }
+.cchip .wt .u { color: var(--mute); font-weight: 400; font-size: 11px; margin-left: 1px; }
+
+.mcard-foot { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
+.tara { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--body); letter-spacing: -0.01em; }
+.tara svg { width: 13px; height: 13px; color: var(--mute); flex-shrink: 0; }
+.tara b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.deficit-slot { margin-left: auto; height: 22px; min-width: 22px; }
+
+/* planned = перетаскиваемая (хват, B5-1; dnd — B5-1b) */
+.mcard.draggable .mcard-handle { cursor: grab; }
+/* sent+ = залочена */
+.mcard.locked { background: var(--canvas-soft); }
+.mcard.locked .farmer { color: var(--body); }
+.mcard.locked .mcard-body { opacity: .92; }
+
 }

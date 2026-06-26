@@ -15,8 +15,10 @@ import {
 } from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
 import { PlanView } from "./PlanView";
+import { BoardView } from "./BoardView";
 import { ScopeCombo } from "./ScopeCombo";
 import { usePlanWeek } from "./usePlanWeek";
+import { useBoardWeek } from "./useBoardWeek";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "./FeedToolbar";
 import { FilterCombo } from "./FilterCombo";
@@ -208,7 +210,7 @@ export function ShipmentsFeed({
 
   // --- Вид «План» (B4a). Своя неделя, независимая от feed.weeks (план задаётся
   // и на недели без отгрузок). prev/next шагают ±7 дней через ISO-хелперы. ---
-  const [viewMode, setViewMode] = useState<"table" | "plan">("table");
+  const [viewMode, setViewMode] = useState<"table" | "plan" | "board">("table");
   const [planWeek, setPlanWeek] = useState(() => {
     const c = currentSeasonWeek();
     return { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
@@ -216,11 +218,13 @@ export function ShipmentsFeed({
   // Загрузка недели плана + состав (B4c) — общие для матрицы (PlanView) и combobox
   // состава (в тулбаре). Фетчим только в виде «План».
   const plan = usePlanWeek({ ...planWeek, enabled: viewMode === "plan" });
+  // Доска (B5) делит недельное состояние/навигацию с «Планом»; свой лоадер.
+  const board = useBoardWeek({ ...planWeek, enabled: viewMode === "board" });
   const [scopeOpen, setScopeOpen] = useState(false);
 
-  function handleViewChange(v: "table" | "plan") {
-    // При входе в «План» стартуем с недели, которую пользователь смотрел в ленте.
-    if (v === "plan" && activeKey) {
+  function handleViewChange(v: "table" | "plan" | "board") {
+    // При входе в «План»/«Доску» стартуем с недели, которую смотрели в ленте.
+    if ((v === "plan" || v === "board") && activeKey) {
       const [y, w] = activeKey.split("-").map(Number);
       if (y && w) {
         const { start } = isoWeekRange(y, w);
@@ -425,6 +429,42 @@ export function ShipmentsFeed({
     showReset: anyFilterActive,
     onReset: resetAll,
   };
+
+  // Вид «Доска» (B5) — недельный, делит неделю/навигацию с «Планом».
+  if (viewMode === "board") {
+    const today = currentSeasonWeek();
+    const isCurrent =
+      planWeek.isoYear === today.isoYear && planWeek.isoWeek === today.isoWeek;
+    const bounds = seasonWeekBounds(planWeek.seasonYear);
+    const atFirst = compareIsoWeek(planWeek, bounds.first) <= 0;
+    const atLast = compareIsoWeek(planWeek, bounds.last) >= 0;
+    return (
+      <div ref={rootRef}>
+        <FeedToolbar
+          ref={toolbarRef}
+          createSlot={createButton}
+          weekLabel={`Неделя ${planWeek.isoWeek}`}
+          weekSub={planWeekSub(planWeek.isoYear, planWeek.isoWeek)}
+          onPrevWeek={() => stepPlanWeek(-1)}
+          onNextWeek={() => stepPlanWeek(1)}
+          onToday={goPlanToday}
+          prevDisabled={atFirst}
+          nextDisabled={atLast}
+          todayActive={!isCurrent}
+          viewMode={viewMode}
+          onViewChange={handleViewChange}
+          {...filterProps}
+        />
+        <BoardView
+          week={board.week}
+          loading={board.loading}
+          options={options}
+          onOpenPlan={() => handleViewChange("plan")}
+        />
+        {createDialog}
+      </div>
+    );
+  }
 
   // Вид «План» (B4a) — независим от дерева ленты: своя неделя + getPlanWeek.
   if (viewMode === "plan") {

@@ -14,7 +14,9 @@ import {
   isFactoryWorkday,
   type SeasonWorkdays,
 } from "./workdays";
+import type { PackagingContext } from "./packaging";
 import type { Feed, FeedDay, FeedItem, FeedShipment, FeedWeek } from "./feed";
+import type { Prisma } from "@/lib/generated/prisma/client";
 
 // Серверный загрузчик ленты (B3). ОТДЕЛЁН от feed.ts, т.к. тянет prisma — чтобы
 // чистые типы/подытоги (feed.ts) можно было импортировать в client-компоненты
@@ -45,6 +47,108 @@ const feedItemInclude = {
   },
 } as const;
 
+// Include машины целиком (позиции + водитель/ТК) — общий для getFeed и
+// loadWeekShipments (доска B5), чтобы маппинг был единым (mapShipmentRow).
+const feedShipmentInclude = {
+  items: { include: feedItemInclude, orderBy: { id: "asc" } },
+  // Модалка водителя (DESIGN §2): кроме имени/ТК нужны id, телефон, инфо.
+  driver: {
+    select: {
+      id: true,
+      full_name: true,
+      phone: true,
+      info: true,
+      transportCompany: { select: { name: true } },
+    },
+  },
+} as const;
+
+type ShipmentRow = Prisma.ShipmentGetPayload<{ include: typeof feedShipmentInclude }>;
+type ShipmentItemRow = ShipmentRow["items"][number];
+
+// Позиция БД → FeedItem. Норма тары берётся из пакетного контекста (без N+1).
+function mapItem(item: ShipmentItemRow, ctx: PackagingContext): FeedItem {
+  const norm =
+    item.packaging_type_id != null
+      ? ctx.normByTriple.get(
+          tripleKey(item.farmer_id, item.culture_id, item.packaging_type_id),
+        )
+      : null;
+  const calc = calcPackagingUnits(item.planned_weight_kg, item.packaging_type_id, norm);
+  return {
+    id: item.id,
+    farmerId: item.farmer_id,
+    farmerName: item.farmer.name,
+    cultureId: item.culture_id,
+    cultureName: item.culture.name,
+    color: item.culture.color,
+    plannedKg: item.planned_weight_kg.toNumber(),
+    actualKg: item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
+    packagingTypeId: item.packaging_type_id,
+    packagingTypeName: item.packagingType?.name ?? null,
+    packagingKind: item.packagingType?.kind ?? null,
+    tareUnits: calc.status === "ok" ? calc.units : null,
+    tareMissingNorm: calc.status === "missing_norm",
+    contractLineId: item.contract_line_id,
+    contractLineLabel: item.contractLine?.label ?? null,
+    accepted: item.acceptanceAct != null,
+    acceptedKg: item.acceptanceAct
+      ? computeAcceptedKg(
+          item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
+          item.acceptanceAct.brak_percent != null
+            ? item.acceptanceAct.brak_percent.toNumber()
+            : null,
+          item.acceptanceAct.calibreResults.map((c) => ({
+            percent: c.percent.toNumber(),
+            isAccepted: c.calibreRange.is_accepted,
+          })),
+        )
+      : null,
+  };
+}
+
+// Машина БД → FeedShipment. ctx — пакетный контекст норм для её позиций.
+function mapShipmentRow(s: ShipmentRow, ctx: PackagingContext): FeedShipment {
+  return {
+    id: s.id,
+    code: s.code,
+    status: s.status,
+    departureDate: toDateStr(s.departure_date),
+    arrivalDate: toDateStr(s.arrival_date),
+    driverName: s.driver?.full_name ?? null,
+    transportCompanyName: s.driver?.transportCompany.name ?? null,
+    driverId: s.driver?.id ?? null,
+    driverPhone: s.driver?.phone ?? null,
+    driverInfo: s.driver?.info ?? null,
+    comment: s.comment,
+    createdAt: s.created_at.toISOString(),
+    items: s.items.map((it) => mapItem(it, ctx)),
+  };
+}
+
+// Машины одной ISO-недели по дате прибытия [Пн, следующий Пн) — для доски (B5).
+// Переиспользует общий include/маппинг ленты (тара считается один раз).
+export async function loadWeekShipments({
+  isoYear,
+  isoWeek: week,
+}: {
+  seasonYear: number;
+  isoYear: number;
+  isoWeek: number;
+}): Promise<FeedShipment[]> {
+  const { start } = isoWeekRange(isoYear, week);
+  const nextMonday = new Date(start);
+  nextMonday.setUTCDate(nextMonday.getUTCDate() + 7);
+
+  const shipments = await prisma.shipment.findMany({
+    where: { arrival_date: { gte: start, lt: nextMonday } },
+    include: feedShipmentInclude,
+    orderBy: [{ created_at: "asc" }, { id: "asc" }],
+  });
+  const ctx = await loadPackagingContext(prisma, shipments.flatMap((s) => s.items));
+  return shipments.map((s) => mapShipmentRow(s, ctx));
+}
+
 export async function getFeed({
   seasonYear,
   weekFrom,
@@ -61,19 +165,7 @@ export async function getFeed({
   const [shipments, cfg] = await Promise.all([
     prisma.shipment.findMany({
       where: { arrival_date: { gte: seasonStart, lt: seasonEnd } },
-      include: {
-        items: { include: feedItemInclude, orderBy: { id: "asc" } },
-        // Модалка водителя (DESIGN §2): кроме имени/ТК нужны id, телефон, инфо.
-        driver: {
-          select: {
-            id: true,
-            full_name: true,
-            phone: true,
-            info: true,
-            transportCompany: { select: { name: true } },
-          },
-        },
-      },
+      include: feedShipmentInclude,
       // Машины внутри дня сортируем стабильно: время создания, затем id.
       orderBy: [{ created_at: "asc" }, { id: "asc" }],
     }),
@@ -81,74 +173,14 @@ export async function getFeed({
   ]);
 
   // Один пакетный проход нормы по тройкам для ВСЕХ позиций (без N+1).
-  const allItems = shipments.flatMap((s) => s.items);
-  const ctx = await loadPackagingContext(prisma, allItems);
-
-  function mapItem(item: (typeof allItems)[number]): FeedItem {
-    const norm =
-      item.packaging_type_id != null
-        ? ctx.normByTriple.get(
-            tripleKey(item.farmer_id, item.culture_id, item.packaging_type_id),
-          )
-        : null;
-    const calc = calcPackagingUnits(
-      item.planned_weight_kg,
-      item.packaging_type_id,
-      norm,
-    );
-    return {
-      id: item.id,
-      farmerId: item.farmer_id,
-      farmerName: item.farmer.name,
-      cultureId: item.culture_id,
-      cultureName: item.culture.name,
-      color: item.culture.color,
-      plannedKg: item.planned_weight_kg.toNumber(),
-      actualKg:
-        item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
-      packagingTypeId: item.packaging_type_id,
-      packagingTypeName: item.packagingType?.name ?? null,
-      packagingKind: item.packagingType?.kind ?? null,
-      tareUnits: calc.status === "ok" ? calc.units : null,
-      tareMissingNorm: calc.status === "missing_norm",
-      contractLineId: item.contract_line_id,
-      contractLineLabel: item.contractLine?.label ?? null,
-      accepted: item.acceptanceAct != null,
-      acceptedKg: item.acceptanceAct
-        ? computeAcceptedKg(
-            item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
-            item.acceptanceAct.brak_percent != null
-              ? item.acceptanceAct.brak_percent.toNumber()
-              : null,
-            item.acceptanceAct.calibreResults.map((c) => ({
-              percent: c.percent.toNumber(),
-              isAccepted: c.calibreRange.is_accepted,
-            })),
-          )
-        : null,
-    };
-  }
+  const ctx = await loadPackagingContext(prisma, shipments.flatMap((s) => s.items));
 
   // Группируем машины по дням (дата прибытия) → потом дни в недели.
   const shipmentsByDate = new Map<string, FeedShipment[]>();
   for (const s of shipments) {
     if (!s.arrival_date) continue;
     const key = s.arrival_date.toISOString().slice(0, 10);
-    const fs: FeedShipment = {
-      id: s.id,
-      code: s.code,
-      status: s.status,
-      departureDate: toDateStr(s.departure_date),
-      arrivalDate: toDateStr(s.arrival_date),
-      driverName: s.driver?.full_name ?? null,
-      transportCompanyName: s.driver?.transportCompany.name ?? null,
-      driverId: s.driver?.id ?? null,
-      driverPhone: s.driver?.phone ?? null,
-      driverInfo: s.driver?.info ?? null,
-      comment: s.comment,
-      createdAt: s.created_at.toISOString(),
-      items: s.items.map(mapItem),
-    };
+    const fs = mapShipmentRow(s, ctx);
     const arr = shipmentsByDate.get(key);
     if (arr) arr.push(fs);
     else shipmentsByDate.set(key, [fs]);

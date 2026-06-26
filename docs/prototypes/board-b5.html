@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Доска-планировщик (B5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* surfaces */
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    /* text */
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    /* accents */
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --cyan-deep: #29bc9b;
+    --error: #ee0000;
+
+    /* status fills (single source of truth — DESIGN-SYSTEM status-fills) */
+    --st-planned-bg: #f5f5f5;
+    --st-planned-fg: #888888;
+    --st-sent-bg: #eaf2ff;
+    --st-sent-fg: #0761d1;
+    --st-arrived-bg: #fff6e3;
+    --st-arrived-fg: #ab570a;
+    --st-accepted-bg: #ddfff7;
+    --st-accepted-fg: #1d8e75;
+
+    /* culture colors (in production come from Culture.color) */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------- shell ---------- */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--canvas-soft);
+    border-right: 1px solid var(--hairline);
+    display: flex; flex-direction: column;
+    position: sticky; top: 0; height: 100vh;
+  }
+  .brand {
+    padding: 18px 20px 14px;
+    font-size: 18px; font-weight: 600; letter-spacing: -0.03em;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .brand .mark { width: 22px; height: 22px; flex-shrink: 0; }
+  .nav { flex: 1; overflow-y: auto; padding: 4px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none;
+    letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-foot {
+    border-top: 1px solid var(--hairline);
+    padding: 12px 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--mute);
+  }
+  .nav-foot button { border: 0; background: transparent; color: var(--mute); cursor: pointer; width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; }
+  .nav-foot button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--canvas); }
+
+  /* ---------- page head ---------- */
+  .page-head { padding: 22px 28px 0; }
+  .page-title { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; margin: 0; }
+  .page-sub { margin: 4px 0 0; color: var(--mute); font-size: 13px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 30;
+    background: color-mix(in srgb, var(--canvas) 88%, transparent);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--hairline);
+    padding: 14px 28px; margin-top: 18px;
+    display: flex; flex-direction: column; gap: 0;
+  }
+  .tbar-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+
+  .btn {
+    height: 40px; padding: 0 14px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 15px; height: 15px; }
+  .btn:hover { background: var(--canvas-soft); }
+  .btn-primary { background: var(--ink); color: #fff; border-color: var(--ink); box-shadow: 0 1px 2px #0000001f; }
+  .btn-primary:hover { background: #000; }
+  .btn-ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--body); }
+  .btn-ghost:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .btn-sm { height: 32px; padding: 0 10px; font-size: 13px; }
+
+  /* week switcher */
+  .weeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); box-shadow: 0 1px 1px #0000000a; overflow: hidden; }
+  .weeknav button { height: 100%; width: 36px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; }
+  .weeknav button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .weeknav button svg { width: 16px; height: 16px; }
+  .weeknav .wlabel { padding: 0 13px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .wlabel .wsub { color: var(--mute); font-weight: 400; }
+
+  /* season chip */
+  .season { font-size: 12px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 6px; padding: 0 10px; height: 40px; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .season .wk { font-family: "Geist Mono", monospace; color: var(--mute); letter-spacing: 0; }
+  .season .sep { width: 1px; height: 16px; background: var(--hairline); }
+  .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber); }
+
+  /* view segmented */
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button { border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover:not(.active) { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  /* ---------- plan progress strip ---------- */
+  .progress {
+    position: sticky; top: 69px; z-index: 20;
+    background: var(--canvas-soft);
+    border-bottom: 1px solid var(--hairline);
+    padding: 13px 28px;
+    display: flex; align-items: stretch; gap: 26px; flex-wrap: wrap;
+  }
+  .pg-lead { display: flex; flex-direction: column; gap: 3px; justify-content: center; padding-right: 22px; border-right: 1px solid var(--hairline); }
+  .pg-lead .t { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); }
+  .pg-lead .v { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  .pg-lead .v .g { color: var(--mute); font-weight: 400; }
+
+  .pgbars { display: flex; align-items: stretch; gap: 24px; flex-wrap: wrap; }
+  .pgcol { min-width: 168px; display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+  .pgcol-top { display: flex; align-items: center; gap: 8px; }
+  .pgcol-top .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .pgcol-top .nm { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  .pgcol-top .delta { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+  .pgcol-top .delta.under { color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+  .pgcol-top .delta.over { color: #fff; background: var(--ink); }
+
+  .mbar { position: relative; height: 7px; border-radius: 4px; background: var(--canvas-soft-2); box-shadow: inset 0 0 0 1px #0000000a; overflow: visible; }
+  .mbar .fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 4px; }
+  .mbar .tick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--hairline-strong); border-radius: 1px; }
+  .mbar.over .tick { width: 3px; background: var(--ink); top: -3px; bottom: -3px; box-shadow: 0 0 0 2px color-mix(in srgb, var(--ink) 12%, transparent); }
+  .pgcol-cap { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--body); letter-spacing: 0; }
+  .pgcol-cap .g { color: var(--mute); }
+
+  /* ---------- board ---------- */
+  .board-wrap { flex: 1; min-height: 0; overflow: auto; padding: 20px 28px 40px; }
+  .board { display: flex; gap: 16px; align-items: flex-start; min-height: 100%; }
+  .col {
+    flex: 0 0 312px; width: 312px;
+    background: var(--canvas-soft);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 200px);
+  }
+  .col-head {
+    padding: 12px 14px 11px; border-bottom: 1px solid var(--hairline);
+    display: flex; align-items: baseline; gap: 9px;
+    position: sticky; top: 0; background: var(--canvas-soft); border-radius: 10px 10px 0 0; z-index: 2;
+  }
+  .col-head .dow { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .col-head .date { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); letter-spacing: 0; }
+  .col-head .sub { margin-left: auto; font-size: 12px; color: var(--mute); white-space: nowrap; text-align: right; }
+  .col-head .sub b { color: var(--body); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .col-body { padding: 12px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; flex: 1; }
+
+  .col-foot { padding: 0 12px 12px; }
+  .addship {
+    width: 100%; height: 38px; border: 1px dashed var(--hairline-strong); border-radius: 8px; background: transparent;
+    font-family: inherit; font-size: 13px; font-weight: 500; color: var(--body); letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
+  }
+  .addship:hover { background: var(--canvas); border-color: var(--ink); color: var(--ink); }
+  .addship svg { width: 14px; height: 14px; }
+
+  /* ---------- machine card ---------- */
+  .mcard {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+    position: relative;
+    transition: box-shadow .14s, transform .14s, border-color .14s;
+  }
+  .mcard-strip { height: 3px; width: 100%; }
+  .mcard.s-planned .mcard-strip { background: #d9d9d9; }
+  .mcard.s-sent .mcard-strip { background: var(--link); }
+  .mcard.s-arrived .mcard-strip { background: var(--warning); }
+  .mcard.s-accepted .mcard-strip { background: var(--cyan-deep); }
+
+  .mcard-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    height: 22px; padding: 0 9px; border-radius: 6px;
+    font-size: 12px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge.s-planned { background: #ededed; color: var(--st-planned-fg); }
+  .badge.s-planned .dot { background: #b3b3b3; }
+  .badge.s-sent { background: var(--link-bg-soft); color: var(--st-sent-fg); }
+  .badge.s-sent .dot { background: var(--link); }
+  .badge.s-arrived { background: var(--warning-soft); color: var(--st-arrived-fg); }
+  .badge.s-arrived .dot { background: var(--warning); }
+  .badge.s-accepted { background: #c7f6ea; color: var(--st-accepted-fg); }
+  .badge.s-accepted .dot { background: var(--cyan-deep); }
+
+  .mcard-dates { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; letter-spacing: -0.02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .mcard-dates .dep { color: var(--mute); }
+  .mcard-dates .arrow { color: var(--hairline-strong); font-size: 11px; }
+  .mcard-dates .arr { color: var(--ink); font-weight: 600; }
+
+  /* grab / lock affordance */
+  .mcard-handle { width: 20px; height: 22px; display: grid; place-items: center; color: var(--hairline-strong); flex-shrink: 0; margin-left: -2px; }
+  .mcard-handle svg { width: 15px; height: 15px; }
+
+  .mcard-body { padding: 9px 12px 12px; display: flex; flex-direction: column; gap: 9px; }
+  .farmer { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; line-height: 19px; }
+  .driver { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--mute); letter-spacing: -0.01em; margin-top: 1px; }
+  .driver .i { width: 13px; height: 13px; opacity: .8; }
+  .driver-none { font-style: italic; }
+
+  .chips { display: flex; flex-direction: column; gap: 5px; }
+  .cchip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 9px; border-radius: 6px;
+    border: 1px solid var(--hairline);
+    font-size: 13px; letter-spacing: -0.02em;
+  }
+  .cchip .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .cchip .nm { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cchip .wt { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; white-space: nowrap; }
+  .cchip .wt .u { color: var(--mute); font-weight: 400; font-size: 11px; margin-left: 1px; }
+
+  .mcard-foot { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
+  .tara { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--body); letter-spacing: -0.01em; }
+  .tara svg { width: 13px; height: 13px; color: var(--mute); flex-shrink: 0; }
+  .tara b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* deficit slot — B5-2 placeholder (neutral empty) */
+  .deficit-slot { margin-left: auto; height: 22px; min-width: 22px; }
+  .deficit-slot.shown {
+    display: inline-flex; align-items: center; gap: 5px; padding: 0 8px;
+    border: 1px dashed var(--hairline); border-radius: 6px;
+    font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--hairline-strong);
+  }
+  .deficit-slot.shown .ph { width: 5px; height: 5px; border-radius: 50%; background: var(--hairline-strong); }
+
+  /* planned = draggable */
+  .mcard.draggable { cursor: grab; }
+  .mcard.draggable:hover { box-shadow: 0 1px 1px #00000005, 0 4px 10px -2px #0000001c; border-color: var(--hairline-strong); }
+  .mcard.draggable:active { cursor: grabbing; }
+  .mcard.dragging { opacity: .5; box-shadow: 0 8px 20px -4px #00000026; transform: scale(1.01); }
+
+  /* sent+ = locked */
+  .mcard.locked { background: var(--canvas-soft); }
+  .mcard.locked .farmer { color: var(--body); }
+  .mcard.locked .mcard-body { opacity: .92; }
+  .mcard.locked .mcard-handle { color: var(--hairline-strong); }
+
+  /* drop placeholder */
+  .drop-ph {
+    border: 1.5px dashed var(--hairline-strong); border-radius: 8px;
+    min-height: 96px; display: none; align-items: center; justify-content: center;
+    color: var(--mute); font-size: 12px; letter-spacing: -0.01em; text-align: center; padding: 12px;
+    background: color-mix(in srgb, var(--link) 4%, var(--canvas-soft));
+  }
+  .col.drop-ready .drop-ph { display: flex; }
+  .col.drop-ready { border-color: var(--link); box-shadow: 0 0 0 1px var(--link); }
+  .col.drop-ready .col-head { background: var(--link-bg-soft); }
+  .drop-ph .ph-date { font-family: "Geist Mono", monospace; color: var(--ink); font-weight: 500; }
+
+  .col.is-empty .col-body { min-height: 120px; }
+  .col-empty-hint {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    min-height: 120px; padding: 16px; color: var(--mute); font-size: 12px; letter-spacing: -0.01em; line-height: 17px;
+    border: 1px dashed var(--hairline); border-radius: 8px;
+  }
+
+  /* drag hint toast */
+  .draghint {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(12px);
+    background: var(--ink); color: #fff; font-size: 13px; font-weight: 500; letter-spacing: -0.02em;
+    padding: 9px 14px; border-radius: 8px; box-shadow: 0 8px 24px -6px #00000040;
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .16s, transform .16s; z-index: 200;
+  }
+  .draghint.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .draghint svg { width: 15px; height: 15px; opacity: .8; }
+  .draghint .mono { color: #d4d4d4; }
+
+  /* ---------- specimens (edge states) ---------- */
+  .specimens { background: var(--canvas-soft); border-top: 1px solid var(--hairline); padding: 30px 28px 56px; }
+  .spec-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin: 0 0 4px; }
+  .spec-title { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 22px; }
+  .spec-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+  .spec-stage { background: var(--canvas); border: 1px solid var(--hairline); border-radius: 12px; padding: 18px; min-width: 0; overflow: hidden; }
+  .spec-stage .board { overflow-x: auto; }
+  .spec-cap { font-size: 12px; color: var(--mute); margin: 0 0 14px; letter-spacing: -0.01em; }
+
+  /* empty progress strip (no plan) */
+  .progress.flat { position: static; border: 1px solid var(--hairline); border-radius: 8px; padding: 13px 16px; }
+  .noplan { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--mute); letter-spacing: -0.02em; }
+  .noplan svg { width: 15px; height: 15px; opacity: .8; flex-shrink: 0; }
+  .noplan a { color: var(--link); text-decoration: none; font-weight: 500; }
+  .noplan a:hover { text-decoration: underline; }
+
+  /* empty week */
+  .empty-week { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 40px 20px; }
+  .empty-week .ill { width: 54px; height: 54px; border-radius: 12px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--hairline-strong); margin-bottom: 16px; }
+  .empty-week .ill svg { width: 26px; height: 26px; }
+  .empty-week h4 { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .empty-week p { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin: 7px 0 0; max-width: 320px; line-height: 18px; }
+  .empty-week .actions { margin-top: 18px; display: flex; gap: 9px; }
+
+  .endnote { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; max-width: 980px; }
+  .endnote .mono { color: var(--body); }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="150" y="120" width="900" height="44" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="200" y="220" width="240" height="360" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="480" y="220" width="240" height="360" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="760" y="220" width="240" height="360" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="224" y="260" width="192" height="80" rx="6" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="224" y="262" width="192" height="4" fill="#e5484d"/>
+    <rect x="504" y="260" width="192" height="80" rx="6" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="504" y="262" width="192" height="4" fill="#f5a623"/>
+    <rect x="784" y="260" width="192" height="80" rx="6" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="784" y="262" width="192" height="4" fill="#0070f3"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="app">
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>
+      VSMS
+    </div>
+    <nav class="nav">
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Лента отгрузок
+      </a>
+      <a class="nav-item active" href="#" data-screen-label="Доска-планировщик">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Планировщик
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Приёмка
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Контракты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+        Тара
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+        Ингредиенты
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Аналитика
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Настройки
+      </a>
+    </nav>
+    <div class="nav-foot">
+      <span>snabzhenec</span>
+      <button title="Выйти">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <div class="page-head">
+      <h1 class="page-title">Планировщик отгрузок</h1>
+      <p class="page-sub">Распределение машин по дням недели · сезон 2026</p>
+    </div>
+
+    <!-- ===================== TOOLBAR ===================== -->
+    <div class="toolbar">
+      <div class="tbar-row">
+        <button class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Отгрузка
+        </button>
+
+        <div class="weeknav">
+          <button title="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <div class="wlabel">Неделя 24 <span class="wsub">8–13 июня</span></div>
+          <button title="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        <button class="btn btn-sm btn-ghost">Сегодня</button>
+
+        <span class="season"><span class="dot"></span>Сезон 2026<span class="sep"></span><span class="wk">ISO W24</span></span>
+
+        <div class="spacer"></div>
+
+        <div class="seg">
+          <button>Лента</button>
+          <button>План</button>
+          <button class="active">Доска</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== PLAN PROGRESS STRIP ===================== -->
+    <div class="progress" data-screen-label="Полоса прогресса к плану">
+      <div class="pg-lead">
+        <span class="t">Прогресс к плану</span>
+        <span class="v tnum">19,0 <span class="g">/ 20,5 т</span></span>
+      </div>
+      <div class="pgbars">
+        <!-- Томаты · недобор -->
+        <div class="pgcol">
+          <div class="pgcol-top">
+            <span class="sq" style="background:var(--cult-tomato)"></span>
+            <span class="nm">Томаты</span>
+            <span class="delta under tnum">−1,8</span>
+          </div>
+          <div class="mbar">
+            <div class="fill" style="width:76.2%; background:var(--cult-tomato)"></div>
+            <div class="tick" style="left:95.2%"></div>
+          </div>
+          <div class="pgcol-cap tnum">7,2 <span class="g">/ 9,0 т</span></div>
+        </div>
+
+        <!-- Огурцы · недобор -->
+        <div class="pgcol">
+          <div class="pgcol-top">
+            <span class="sq" style="background:var(--cult-cucumber)"></span>
+            <span class="nm">Огурцы</span>
+            <span class="delta under tnum">−0,5</span>
+          </div>
+          <div class="mbar">
+            <div class="fill" style="width:87.3%; background:var(--cult-cucumber)"></div>
+            <div class="tick" style="left:95.2%"></div>
+          </div>
+          <div class="pgcol-cap tnum">5,5 <span class="g">/ 6,0 т</span></div>
+        </div>
+
+        <!-- Перец · перелёт -->
+        <div class="pgcol">
+          <div class="pgcol-top">
+            <span class="sq" style="background:var(--cult-pepper)"></span>
+            <span class="nm">Перец</span>
+            <span class="delta over tnum">+0,8</span>
+          </div>
+          <div class="mbar over">
+            <div class="fill" style="width:95.2%; background:var(--cult-pepper)"></div>
+            <div class="tick" style="left:79.4%"></div>
+          </div>
+          <div class="pgcol-cap tnum">5,8 <span class="g">/ 5,0 т</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== BOARD ===================== -->
+    <div class="board-wrap">
+      <div class="board" id="board">
+
+        <!-- ===== ПОНЕДЕЛЬНИК 8 июня ===== -->
+        <section class="col" data-col-date="8 июня" data-dep="6 июня" data-screen-label="Колонка · Пн 8 июня">
+          <div class="col-head">
+            <span class="dow">Пн</span><span class="date">8 июня</span>
+            <span class="sub"><b>1</b> машина · <b>3,24 т</b></span>
+          </div>
+          <div class="col-body">
+            <div class="drop-ph"><span>Прибытие <span class="ph-date">8 июня</span> · отправление <span class="ph-date">6 июня</span></span></div>
+
+            <!-- Принята · locked -->
+            <article class="mcard s-accepted locked" data-screen-label="Карточка · Принята (залочена)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-accepted"><span class="dot"></span>Принята</span>
+                <span class="mcard-dates"><span class="dep">6</span><span class="arrow">&rarr;</span><span class="arr">8 июня</span></span>
+                <span class="mcard-handle" title="Залочена — отправлена, перенос недоступен"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">ИП Ковальчук</div>
+                  <span class="driver">Петренко А. В. · Юг-Логистик <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-tomato) 9%, #fff); border-color:color-mix(in srgb, var(--cult-tomato) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="wt tnum">1 240<span class="u">кг</span></span></div>
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-pepper) 9%, #fff); border-color:color-mix(in srgb, var(--cult-pepper) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-pepper)"></span><span class="nm">Перец сладкий</span><span class="wt tnum">2 000<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>62 ящика</b>, 8 бочек</span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="col-foot">
+            <button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button>
+          </div>
+        </section>
+
+        <!-- ===== СРЕДА 10 июня ===== -->
+        <section class="col" data-col-date="10 июня" data-dep="8 июня" data-screen-label="Колонка · Ср 10 июня">
+          <div class="col-head">
+            <span class="dow">Ср</span><span class="date">10 июня</span>
+            <span class="sub"><b>2</b> машины · <b>6,80 т</b></span>
+          </div>
+          <div class="col-body">
+            <div class="drop-ph"><span>Прибытие <span class="ph-date">10 июня</span> · отправление <span class="ph-date">8 июня</span></span></div>
+
+            <!-- Прибыла · locked -->
+            <article class="mcard s-arrived locked" data-screen-label="Карточка · Прибыла (залочена)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-arrived"><span class="dot"></span>Прибыла</span>
+                <span class="mcard-dates"><span class="dep">8</span><span class="arrow">&rarr;</span><span class="arr">10 июня</span></span>
+                <span class="mcard-handle" title="Залочена — отправлена, перенос недоступен"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">КФХ Бондаренко</div>
+                  <span class="driver">Сидоров И. Н. · АвтоТранс <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-tomato) 9%, #fff); border-color:color-mix(in srgb, var(--cult-tomato) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="wt tnum">3 100<span class="u">кг</span></span></div>
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-cucumber) 9%, #fff); border-color:color-mix(in srgb, var(--cult-cucumber) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="wt tnum">2 700<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>305 ящиков</b></span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Плановая · draggable, без водителя -->
+            <article class="mcard s-planned draggable" draggable="true" data-screen-label="Карточка · Плановая (перетаскиваемая)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-planned"><span class="dot"></span>Плановая</span>
+                <span class="mcard-dates"><span class="dep">8</span><span class="arrow">&rarr;</span><span class="arr">10 июня</span></span>
+                <span class="mcard-handle" title="Перетащите на другой день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">ООО «Зелёный Дол»</div>
+                  <span class="driver driver-none">водитель не назначен</span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-cucumber) 9%, #fff); border-color:color-mix(in srgb, var(--cult-cucumber) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="wt tnum">1 000<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>≈ 56 ящиков</b></span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="col-foot">
+            <button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button>
+          </div>
+        </section>
+
+        <!-- ===== ЧЕТВЕРГ 11 июня ===== -->
+        <section class="col" data-col-date="11 июня" data-dep="9 июня" data-screen-label="Колонка · Чт 11 июня">
+          <div class="col-head">
+            <span class="dow">Чт</span><span class="date">11 июня</span>
+            <span class="sub"><b>1</b> машина · <b>1,50 т</b></span>
+          </div>
+          <div class="col-body">
+            <div class="drop-ph"><span>Прибытие <span class="ph-date">11 июня</span> · отправление <span class="ph-date">9 июня</span></span></div>
+
+            <!-- Плановая · draggable, с дефицит-слотом (показан) -->
+            <article class="mcard s-planned draggable" draggable="true" data-screen-label="Карточка · Плановая (со слотом дефицита)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-planned"><span class="dot"></span>Плановая</span>
+                <span class="mcard-dates"><span class="dep">9</span><span class="arrow">&rarr;</span><span class="arr">11 июня</span></span>
+                <span class="mcard-handle" title="Перетащите на другой день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">ООО «Юг-Агро»</div>
+                  <span class="driver">Петренко А. В. · Юг-Логистик <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-pepper) 9%, #fff); border-color:color-mix(in srgb, var(--cult-pepper) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-pepper)"></span><span class="nm">Перец сладкий</span><span class="wt tnum">1 500<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>6 бочек</b></span>
+                  <span class="deficit-slot shown" title="Слот под бейдж дефицита тары / ингредиента (B5-2)"><span class="ph"></span>слот B5-2</span>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="col-foot">
+            <button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button>
+          </div>
+        </section>
+
+        <!-- ===== ПЯТНИЦА 12 июня — много машин (скролл колонки) ===== -->
+        <section class="col" data-col-date="12 июня" data-dep="10 июня" data-screen-label="Колонка · Пт 12 июня (скролл)">
+          <div class="col-head">
+            <span class="dow">Пт</span><span class="date">12 июня</span>
+            <span class="sub"><b>3</b> машины · <b>8,15 т</b></span>
+          </div>
+          <div class="col-body">
+            <div class="drop-ph"><span>Прибытие <span class="ph-date">12 июня</span> · отправление <span class="ph-date">10 июня</span></span></div>
+
+            <!-- Отправлена · locked (единственная sent) -->
+            <article class="mcard s-sent locked" data-screen-label="Карточка · Отправлена (залочена)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-sent"><span class="dot"></span>Отправлена</span>
+                <span class="mcard-dates"><span class="dep">10</span><span class="arrow">&rarr;</span><span class="arr">12 июня</span></span>
+                <span class="mcard-handle" title="Залочена — отправлена, перенос недоступен"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">ИП Мельник</div>
+                  <span class="driver">Гнатюк В. П. · Магистраль <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-cucumber) 9%, #fff); border-color:color-mix(in srgb, var(--cult-cucumber) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="wt tnum">2 900<span class="u">кг</span></span></div>
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-tomato) 9%, #fff); border-color:color-mix(in srgb, var(--cult-tomato) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="wt tnum">1 800<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>251 ящик</b></span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Плановая · draggable — двигает Перец в перелёт -->
+            <article class="mcard s-planned draggable" draggable="true" data-screen-label="Карточка · Плановая (перелёт перца)">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-planned"><span class="dot"></span>Плановая</span>
+                <span class="mcard-dates"><span class="dep">10</span><span class="arrow">&rarr;</span><span class="arr">12 июня</span></span>
+                <span class="mcard-handle" title="Перетащите на другой день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">ООО «Юг-Агро»</div>
+                  <span class="driver driver-none">водитель не назначен</span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-pepper) 9%, #fff); border-color:color-mix(in srgb, var(--cult-pepper) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-pepper)"></span><span class="nm">Перец сладкий</span><span class="wt tnum">2 250<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>≈ 9 бочек</b></span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+
+            <!-- Плановая · draggable -->
+            <article class="mcard s-planned draggable" draggable="true" data-screen-label="Карточка · Плановая">
+              <div class="mcard-strip"></div>
+              <div class="mcard-top">
+                <span class="badge s-planned"><span class="dot"></span>Плановая</span>
+                <span class="mcard-dates"><span class="dep">10</span><span class="arrow">&rarr;</span><span class="arr">12 июня</span></span>
+                <span class="mcard-handle" title="Перетащите на другой день"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
+              </div>
+              <div class="mcard-body">
+                <div>
+                  <div class="farmer">КФХ Бондаренко</div>
+                  <span class="driver">Коваль Р. С. · Юг-Логистик <svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+                </div>
+                <div class="chips">
+                  <div class="cchip" style="background:color-mix(in srgb, var(--cult-tomato) 9%, #fff); border-color:color-mix(in srgb, var(--cult-tomato) 18%, var(--hairline))"><span class="sq" style="background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="wt tnum">1 200<span class="u">кг</span></span></div>
+                </div>
+                <div class="mcard-foot">
+                  <span class="tara"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg><b>60 ящиков</b></span>
+                  <span class="deficit-slot"></span>
+                </div>
+              </div>
+            </article>
+          </div>
+          <div class="col-foot">
+            <button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ===================== EDGE STATES ===================== -->
+    <section class="specimens">
+      <p class="spec-eyebrow">Краевые состояния · статичные</p>
+      <h2 class="spec-title">Пустая неделя · нет плана</h2>
+      <div class="spec-grid">
+
+        <!-- empty week -->
+        <div class="spec-stage">
+          <p class="spec-cap">Неделя без машин — колонки есть, карточек нет</p>
+          <div class="board" style="gap:12px;">
+            <section class="col is-empty" style="flex-basis:168px; width:168px;" data-screen-label="Колонка · пустая">
+              <div class="col-head"><span class="dow">Пн</span><span class="date">15 июня</span><span class="sub"><b>0</b> · <b>—</b></span></div>
+              <div class="col-body"><div class="col-empty-hint">Нет отгрузок<br/>Перетащите сюда плановую<br/>или создайте новую</div></div>
+              <div class="col-foot"><button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button></div>
+            </section>
+            <section class="col is-empty" style="flex-basis:168px; width:168px;" data-screen-label="Колонка · пустая 2">
+              <div class="col-head"><span class="dow">Ср</span><span class="date">17 июня</span><span class="sub"><b>0</b> · <b>—</b></span></div>
+              <div class="col-body"><div class="col-empty-hint">Нет отгрузок</div></div>
+              <div class="col-foot"><button class="addship"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Отгрузка</button></div>
+            </section>
+          </div>
+        </div>
+
+        <!-- no plan -->
+        <div class="spec-stage">
+          <p class="spec-cap">Нет плана — полоса прогресса без целей</p>
+          <div class="progress flat" style="display:block;">
+            <div class="noplan">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Цели по культурам на неделю не заданы — прогресс не считается.&nbsp;<a href="#">Задать план →</a>
+            </div>
+          </div>
+          <div class="empty-week" style="padding:28px 20px 8px;">
+            <div class="ill">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+            </div>
+            <h4>Прогресс появится с планом</h4>
+            <p>Откройте вид «План» и задайте недельные цели по культурам — полоса заполнится по мере планирования и перевески машин.</p>
+            <div class="actions"><button class="btn btn-sm btn-primary">Открыть план</button></div>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="endnote">VSMS · инструмент снабженца. Статичный макет вида «Доска» (B5). Карточка стоит в колонке по дню <span class="mono">прибытия</span>. Перетаскивание плановой карточки между колонками задаёт прибытие&nbsp;=&nbsp;день колонки, отправление&nbsp;=&nbsp;−2&nbsp;рабочих&nbsp;дня (даты/сервер в прототипе не реализованы). Карточки <span class="mono">sent+</span> (Отправлена / Прибыла / Принята) залочены — без хвата, с замком. Полоса прогресса считается от суммы по культурам видимой недели; перелёт цели отмечен акцентной риской. Цвета — статусам (status-fills) и культурам (Culture.color); хром нейтрален.</p>
+    </section>
+  </main>
+</div>
+
+<!-- drag hint toast -->
+<div class="draghint" id="draghint">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
+  <span>Дроп: прибытие = день колонки · отправление = <span class="mono">−2 рабочих дня</span></span>
+</div>
+
+<script>
+(function () {
+  const board = document.getElementById('board');
+  if (!board) return;
+  const hint = document.getElementById('draghint');
+  const cols = Array.from(board.querySelectorAll('.col'));
+  let dragging = null;
+
+  board.querySelectorAll('.mcard.draggable').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragging = card;
+      card.classList.add('dragging');
+      cols.forEach(c => { if (!c.contains(card)) c.classList.add('drop-ready'); });
+      hint.classList.add('show');
+      try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', ''); } catch (_) {}
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      cols.forEach(c => c.classList.remove('drop-ready'));
+      hint.classList.remove('show');
+      dragging = null;
+    });
+  });
+
+  cols.forEach(col => {
+    col.addEventListener('dragover', e => {
+      if (dragging && !col.contains(dragging)) e.preventDefault();
+    });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragging || col.contains(dragging)) return;
+      // STATIC PROTOTYPE: visually move the card into the target column's body.
+      // Server-side date recalculation (arrival = column day, departure = −2 working days)
+      // is NOT implemented here — only the affordance is demonstrated.
+      const body = col.querySelector('.col-body');
+      const arr = col.getAttribute('data-col-date');
+      const dep = col.getAttribute('data-dep');
+      body.appendChild(dragging);
+      const arrEl = dragging.querySelector('.mcard-dates .arr');
+      const depEl = dragging.querySelector('.mcard-dates .dep');
+      if (arrEl) arrEl.textContent = arr;
+      if (depEl) depEl.textContent = (dep || '').replace(' июня', '');
+    });
+  });
+})();
+</script>
+</body>
+</html>
