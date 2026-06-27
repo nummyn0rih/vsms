@@ -47,6 +47,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ShipmentFormDialog } from "@/app/(app)/shipments/_components/ShipmentFormDialog";
+import { WholeMachineDialog } from "./WholeMachineDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -202,6 +203,18 @@ function DeficitBadge({ card }: { card: BoardCard }) {
   );
 }
 
+// B5-bulk: загрузка рейса для одно-парной карточки (Σ план / норма рейса).
+// Информационно, приглушённо, без нового цвета. Нет нормы/смешанная карточка → null.
+function TripCap({ card }: { card: BoardCard }) {
+  const cap = card.tripCapacity;
+  if (!cap || cap.normKg <= 0) return null;
+  const over = cap.plannedKg > cap.normKg;
+  const label = over
+    ? `перегруз +${tons1((cap.plannedKg - cap.normKg) / 1000)} т`
+    : `рейс ${Math.round((cap.plannedKg / cap.normKg) * 100)}%`;
+  return <span className={`trip-cap tnum${over ? " over" : ""}`}>{label}</span>;
+}
+
 function TareFoot({ card, showDeficit = true }: { card: BoardCard; showDeficit?: boolean }) {
   const tareLabel = formatTareTotals(card.tare.boxes, card.tare.barrels);
   return (
@@ -210,6 +223,7 @@ function TareFoot({ card, showDeficit = true }: { card: BoardCard; showDeficit?:
         <Package />
         <b>{tareLabel ? `${card.status === "planned" ? "≈ " : ""}${tareLabel}` : "навал"}</b>
       </span>
+      <TripCap card={card} />
       {/* B5-2: бейдж дефицита (single). В машине рендерится в .mcard-actions. */}
       <span className="deficit-slot">{showDeficit && <DeficitBadge card={card} />}</span>
     </>
@@ -638,6 +652,8 @@ export function BoardView({
   // Режим выбора для сборки в машину (тумблер «Выбрать»). Скоуп выбора — колонка (день).
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // B5-bulk: диалог «Целая машина».
+  const [wholeOpen, setWholeOpen] = useState(false);
 
   if (week !== prevWeek) {
     setPrevWeek(week);
@@ -754,6 +770,14 @@ export function BoardView({
   const boardActions = (
     <RoleGate allow={["admin"]}>
       <div className="board-actions">
+        <button
+          type="button"
+          className="select-toggle"
+          onClick={() => setWholeOpen(true)}
+        >
+          <Truck />
+          Целая машина
+        </button>
         <button
           type="button"
           className={`select-toggle${selectMode ? " on" : ""}`}
@@ -873,6 +897,16 @@ export function BoardView({
             if (!o) void reload();
           }}
           showTrigger={false}
+        />
+      )}
+
+      {wholeOpen && (
+        <WholeMachineDialog
+          options={options}
+          columns={columns}
+          open={true}
+          onOpenChange={setWholeOpen}
+          onSuccess={reload}
         />
       )}
 

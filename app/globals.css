@@ -769,6 +769,10 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .tara b { font-weight: 600; font-variant-numeric: tabular-nums; }
 .deficit-slot { margin-left: auto; display: flex; align-items: center; justify-content: flex-end; height: 22px; min-width: 22px; }
 
+/* B5-bulk: загрузка рейса (одно-парная карточка) — приглушённый инфо-хинт, без нового цвета */
+.trip-cap { font-size: 11px; color: var(--mute); letter-spacing: -0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.trip-cap.over { color: var(--body); font-weight: 600; }
+
 /* B5-2: бейдж дефицита — амбер из status-fills (как .badge.s-arrived), информационно */
 .deficit-chip {
   display: inline-flex; align-items: center; gap: 4px;

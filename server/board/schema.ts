@@ -47,6 +47,9 @@ export type BoardCard = {
   locked: boolean; // status arrived|accepted: без переноса
   tareDeficit?: TareDeficitLine[]; // B5-2: тип тары в дефиците у фермеров рейса
   ingredientDeficit?: IngredientDeficitLine[]; // B5-2: ингредиент в дефиците
+  // B5-bulk: загрузка рейса. Только для одно-парной карточки (1 фермер × 1 культура)
+  // с заданной TripWeightNorm; смешанные карточки — без поля (хинт не показываем).
+  tripCapacity?: { plannedKg: number; normKg: number };
 };
 
 export type BoardColumn = {

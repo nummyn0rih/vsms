@@ -60,7 +60,27 @@ type DeficitContext = {
   tareHave: Map<string, number>; // `${farmerId}:${packagingTypeId}` → годная тара
   ingHave: Map<string, number>; // `${farmerId}:${ingredientId}` → баланс ингредиента
   recipesByCulture: Map<number, RecipeRow[]>;
+  // B5-bulk: норма рейса по паре `${farmerId}:${cultureId}` → planned_trip_weight_kg.
+  tripNormByPair: Map<string, number>;
 };
+
+// B5-bulk: загрузка рейса для одно-парной карточки (1 фермер × 1 культура). Смешанная
+// (машина / >1 культуры) → undefined: ёмкость по паре не определена, хинт не показываем.
+function computeTripCapacity(
+  fs: FeedShipment,
+  tripNormByPair: Map<string, number>,
+): { plannedKg: number; normKg: number } | undefined {
+  if (fs.items.length === 0) return undefined;
+  const { farmerId, cultureId } = fs.items[0];
+  const singlePair = fs.items.every(
+    (it) => it.farmerId === farmerId && it.cultureId === cultureId,
+  );
+  if (!singlePair) return undefined;
+  const normKg = tripNormByPair.get(`${farmerId}:${cultureId}`);
+  if (normKg == null) return undefined;
+  const plannedKg = fs.items.reduce((s, it) => s + it.plannedKg, 0);
+  return { plannedKg, normKg };
+}
 
 const EPS = 1e-9; // отсекаем float-шум при сравнении нужно/доступно (микродозы ингредиентов)
 
@@ -160,6 +180,7 @@ function toCard(
     arrivalOnly: fs.status === "sent",
     locked,
     ...computeCardDeficit(fs, send, ctx),
+    tripCapacity: computeTripCapacity(fs, ctx.tripNormByPair),
   };
 }
 
@@ -178,7 +199,7 @@ export async function getBoardWeek({
     ...new Set(shipments.flatMap((s) => s.items.map((i) => i.cultureId))),
   ];
 
-  const [plan, cfg, tareBal, ingBal, recipes] = await Promise.all([
+  const [plan, cfg, tareBal, ingBal, recipes, tripNorms] = await Promise.all([
     // Прогресс по культурам + рабочие дни (колонки) + недельный итог.
     getPlanWeek({ seasonYear, isoYear, isoWeek }),
     prisma.seasonConfig.findUnique({ where: { season_year: seasonYear } }),
@@ -196,6 +217,10 @@ export async function getBoardWeek({
           },
         })
       : Promise.resolve([]),
+    // B5-bulk: нормы рейса по парам — для хинта загрузки на одно-парных карточках.
+    prisma.tripWeightNorm.findMany({
+      select: { farmer_id: true, culture_id: true, planned_trip_weight_kg: true },
+    }),
   ]);
 
   // Контекст дефицита: годная тара и ингредиенты по фермерам + рецептуры по культуре.
@@ -221,7 +246,11 @@ export async function getBoardWeek({
     if (arr) arr.push(row);
     else recipesByCulture.set(r.culture_id, [row]);
   }
-  const deficitCtx: DeficitContext = { tareHave, ingHave, recipesByCulture };
+  const tripNormByPair = new Map<string, number>();
+  for (const n of tripNorms) {
+    tripNormByPair.set(`${n.farmer_id}:${n.culture_id}`, Number(n.planned_trip_weight_kg));
+  }
+  const deficitCtx: DeficitContext = { tareHave, ingHave, recipesByCulture, tripNormByPair };
 
   // Машины по дню прибытия. Машина в НЕрабочий день не попадёт ни в одну колонку
   // (колонки = только рабочие дни); в недельный прогресс она учтена через

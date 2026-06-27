@@ -28,6 +28,7 @@ import {
   isFactoryWorkday,
   parseDateUTC,
   seasonYearOf,
+  subtractWorkdays,
   weekdayName,
 } from "./workdays";
 
@@ -157,6 +158,156 @@ export async function createShipment(
     return (
       toValidationFail(e) ??
       authFail(e) ?? { ok: false, error: "Не удалось создать отгрузку" }
+    );
+  }
+}
+
+// --- B5-bulk: шорткат «Целая машина» — N плановых одно-фермерских отгрузок ---
+
+// Норма рейса пары (фермер, культура) в кг или null. Read — для автозаполнения веса
+// в диалоге «Целая машина». UI под admin-RoleGate; запись делает createWholeMachines.
+export async function getTripWeightNorm(
+  farmerId: number,
+  cultureId: number,
+): Promise<number | null> {
+  const r = await prisma.tripWeightNorm.findUnique({
+    where: { farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId } },
+  });
+  return r ? Number(r.planned_trip_weight_kg) : null;
+}
+
+export type WholeMachinesInput = {
+  farmerId: number;
+  cultureId: number;
+  plannedWeightKg: string; // Decimal-строка (точность), как planned_weight_kg позиции
+  packagingTypeId?: number | null; // null = навал (только для культур без типов тары)
+  dayDatesISO: string[]; // отмеченные дни прибытия (YYYY-MM-DD)
+};
+
+// Создаёт по одной плановой одно-фермерской отгрузке на каждый отмеченный день.
+// Переиспользует генератор code/даты/persistShipmentItems из createShipment.
+export async function createWholeMachines(
+  input: WholeMachinesInput,
+): Promise<ActionResult<{ created: number }>> {
+  try {
+    const user = await requireRole("admin");
+
+    const farmerId = Number(input.farmerId);
+    const cultureId = Number(input.cultureId);
+    if (!Number.isInteger(farmerId) || !Number.isInteger(cultureId)) {
+      return { ok: false, error: "Выберите фермера и культуру" };
+    }
+
+    const weightNum = Number(String(input.plannedWeightKg).trim().replace(",", "."));
+    if (!Number.isFinite(weightNum) || weightNum <= 0) {
+      return { ok: false, error: "Вес должен быть больше 0" };
+    }
+
+    const days = [...new Set(input.dayDatesISO.map((d) => d.trim()).filter(Boolean))];
+    if (days.length === 0) {
+      return { ok: false, error: "Выберите хотя бы один день" };
+    }
+
+    const [farmer, culture] = await Promise.all([
+      prisma.farmer.findFirst({ where: { id: farmerId, active: true }, select: { name: true } }),
+      prisma.culture.findFirst({ where: { id: cultureId, active: true }, select: { name: true } }),
+    ]);
+    if (!farmer) return { ok: false, error: "Фермер не найден или неактивен" };
+    if (!culture) return { ok: false, error: "Культура не найдена или неактивна" };
+
+    // Тип тары (если задан) должен иметь норму фасовки для пары — иначе отправка
+    // (planned→sent) заблокируется. Навал (null) валидируется в persistShipmentItems.
+    const packagingTypeId =
+      input.packagingTypeId != null ? Number(input.packagingTypeId) : null;
+    if (packagingTypeId != null) {
+      const norm = await prisma.packagingNorm.findUnique({
+        where: {
+          farmer_id_culture_id_packaging_type_id: {
+            farmer_id: farmerId,
+            culture_id: cultureId,
+            packaging_type_id: packagingTypeId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!norm) {
+        return { ok: false, error: "Нет нормы фасовки для выбранной тары" };
+      }
+    }
+
+    // Каждый день: не в прошлом + рабочий день завода. departure = прибытие − 2 раб. дня.
+    const today = new Date().toISOString().slice(0, 10);
+    const cfgBySeason = new Map<number, Awaited<ReturnType<typeof prisma.seasonConfig.findUnique>>>();
+    const plan: { arrival: string; departure: string }[] = [];
+    for (const day of days) {
+      if (day < today) {
+        return { ok: false, error: `${formatRu(day)} — прошедший день, нельзя` };
+      }
+      const arrivalDate = parseDateUTC(day);
+      if (Number.isNaN(arrivalDate.getTime())) {
+        return { ok: false, error: `Некорректная дата: ${day}` };
+      }
+      const seasonYear = seasonYearOf(arrivalDate);
+      let cfg = cfgBySeason.get(seasonYear);
+      if (cfg === undefined) {
+        cfg = await prisma.seasonConfig.findUnique({ where: { season_year: seasonYear } });
+        cfgBySeason.set(seasonYear, cfg);
+      }
+      if (!isFactoryWorkday(arrivalDate, cfg)) {
+        return {
+          ok: false,
+          error: `${formatRu(day)} — ${weekdayName(arrivalDate)}, нерабочий день завода`,
+        };
+      }
+      const departure = subtractWorkdays(arrivalDate, 2, cfg).toISOString().slice(0, 10);
+      plan.push({ arrival: day, departure });
+    }
+
+    const createdIds: number[] = [];
+    await prisma.$transaction(async (tx) => {
+      for (const p of plan) {
+        const code = await getNextCode(tx);
+        const created = await tx.shipment.create({
+          data: {
+            code,
+            departure_date: parseDateUTC(p.departure),
+            arrival_date: parseDateUTC(p.arrival),
+            status: "planned",
+            driver_id: null,
+            created_by: Number(user.id),
+          },
+        });
+        await persistShipmentItems(tx, created.id, [
+          {
+            farmer_id: String(farmerId),
+            culture_id: String(cultureId),
+            planned_weight_kg: String(input.plannedWeightKg),
+            packaging_type_id: packagingTypeId != null ? String(packagingTypeId) : undefined,
+          },
+        ]);
+        createdIds.push(created.id);
+      }
+
+      const summary = `${farmer.name} × ${culture.name}, ${weightNum} кг, дни: ${days.join(", ")}`;
+      await logChange(
+        createdIds.map((id) => ({
+          entity: ENTITY,
+          entityId: id,
+          field: "bulk_create",
+          newValue: summary,
+        })),
+        Number(user.id),
+        tx,
+      );
+    });
+
+    revalidatePath("/planner");
+    revalidatePath(PATH);
+    return { ok: true, data: { created: createdIds.length } };
+  } catch (e) {
+    return (
+      toValidationFail(e) ??
+      authFail(e) ?? { ok: false, error: "Не удалось создать отгрузки" }
     );
   }
 }
