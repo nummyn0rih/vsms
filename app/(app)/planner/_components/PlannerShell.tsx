@@ -45,8 +45,8 @@ function writeUrlParam(key: string, value: string) {
 }
 
 const VIEWS = [
-  { key: "plan", label: "План" },
   { key: "board", label: "Доска" },
+  { key: "plan", label: "План" },
 ];
 
 export function PlannerShell({

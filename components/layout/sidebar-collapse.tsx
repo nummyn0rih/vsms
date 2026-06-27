@@ -1,20 +1,12 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { usePathname } from "next/navigation";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 // Состояние сворачивания сайдбара (B5-1b). БЕЗ localStorage: эффективное состояние =
 // ручной оверрайд (если есть), иначе авто-вывод из текущего вида (доска → свёрнут).
-// Авто задаёт экран (PlannerShell.setAuto) и сбрасывает ручной оверрайд; смена
-// маршрута тоже сбрасывает (на других страницах сайдбар развёрнут).
+// Авто задаёт экран (PlannerShell.setAuto) и сбрасывает ручной оверрайд. Уход со
+// страницы разворачивает через cleanup эффекта PlannerShell (setAuto(false)) — без
+// сброса по pathname здесь (иначе он перетирал бы setAuto экрана при заходе на доску).
 type NavCollapseCtx = {
   collapsed: boolean;
   toggle: () => void;
@@ -36,19 +28,6 @@ export function NavCollapseProvider({ children }: { children: React.ReactNode })
 
   // Ручной тоггл уважается до следующего setAuto (смены вида/маршрута).
   const toggle = useCallback(() => setManual(!collapsed), [collapsed]);
-
-  // Смена маршрута → развернуть (другие страницы), сбросить ручной оверрайд.
-  // Экранный эффект (PlannerShell) при необходимости снова свернёт.
-  const pathname = usePathname();
-  const firstRun = useRef(true);
-  useEffect(() => {
-    if (firstRun.current) {
-      firstRun.current = false;
-      return;
-    }
-    setAutoState(false);
-    setManual(null);
-  }, [pathname]);
 
   const value = useMemo(() => ({ collapsed, toggle, setAuto }), [collapsed, toggle, setAuto]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -660,7 +660,8 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .addship svg { width: 14px; height: 14px; }
 
 /* ---- B5-merge: режим выбора (сборка в машину) ---- */
-.board-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+/* Кластер действий доски — в полосе прогресса справа; расширяемый (B5-bulk). */
+.board-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .select-toggle {
   height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline-strong);
   background: var(--canvas); color: var(--body); font-family: inherit; font-size: 13px; font-weight: 500;
@@ -669,7 +670,6 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .select-toggle:hover { background: var(--canvas-soft); border-color: var(--ink); color: var(--ink); }
 .select-toggle.on { background: var(--ink); border-color: var(--ink); color: #fff; }
 .select-toggle svg { width: 15px; height: 15px; }
-.select-hint { font-size: 12.5px; color: var(--mute); letter-spacing: -0.01em; }
 
 /* чекбокс на одно-фермерской плановой карточке */
 .card-check {
@@ -682,15 +682,15 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .card.selected { border-color: var(--link); box-shadow: 0 0 0 1px var(--link); }
 .card.selected .card-check { color: var(--link); }
 
-/* кнопка сборки в подвале колонки */
+/* кнопка сборки в подвале колонки — стиль под прототип board-b5-v2 (ink + белый текст) */
 .assemble-btn {
-  width: 100%; height: 36px; margin-bottom: 8px; border: 1px solid var(--link); border-radius: 8px;
-  background: var(--link); color: #fff; font-family: inherit; font-size: 13px; font-weight: 600;
+  width: 100%; height: 32px; margin-bottom: 8px; border: 0; border-radius: 6px;
+  background: var(--ink); color: #fff; font-family: inherit; font-size: 13px; font-weight: 600;
   letter-spacing: -0.02em; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
   cursor: pointer; font-variant-numeric: tabular-nums;
 }
-.assemble-btn:hover { filter: brightness(0.94); }
-.assemble-btn svg { width: 15px; height: 15px; }
+.assemble-btn:hover { background: #2a2a2a; }
+.assemble-btn svg { width: 14px; height: 14px; }
 
 .col-empty-hint {
   display: flex; align-items: center; justify-content: center; text-align: center;

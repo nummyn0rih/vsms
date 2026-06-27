@@ -684,6 +684,23 @@ export function BoardView({
     );
   }
 
+  // Кластер действий доски — живёт в полосе прогресса справа (admin-only). Расширяемый:
+  // позже рядом встанет «+ Целая машина» (B5-bulk). Нужен в обоих вариантах полосы.
+  const boardActions = (
+    <RoleGate allow={["admin"]}>
+      <div className="board-actions">
+        <button
+          type="button"
+          className={`select-toggle${selectMode ? " on" : ""}`}
+          onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+        >
+          <CheckSquare />
+          {selectMode ? "Готово" : "Выбрать"}
+        </button>
+      </div>
+    </RoleGate>
+  );
+
   return (
     <>
       {/* Прогресс к плану (или намёк, если плана нет) */}
@@ -718,6 +735,7 @@ export function BoardView({
               );
             })}
           </div>
+          {boardActions}
         </div>
       ) : (
         <div className="progress flat">
@@ -734,29 +752,13 @@ export function BoardView({
               Задать план →
             </a>
           </div>
+          {boardActions}
         </div>
       )}
 
       {/* Доска: колонки рабочих дней, карточки по дате прибытия */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="board-wrap">
-          <RoleGate allow={["admin"]}>
-            <div className="board-toolbar">
-              <button
-                type="button"
-                className={`select-toggle${selectMode ? " on" : ""}`}
-                onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-              >
-                <CheckSquare />
-                {selectMode ? "Готово" : "Выбрать"}
-              </button>
-              {selectMode && (
-                <span className="select-hint">
-                  Отметьте плановые отгрузки одного дня → «Собрать в машину»
-                </span>
-              )}
-            </div>
-          </RoleGate>
           <div className="board" style={{ "--cols": columns.length } as React.CSSProperties}>
             {columns.map((col) => (
               <Column
