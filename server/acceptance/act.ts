@@ -462,8 +462,83 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
   }
 }
 
+// Ядро отката приёмки ПО ПОЗИЦИИ (без транзакции и смены статуса машины — это решает
+// вызывающий). Сторно расхода ингредиентов ДО удаления акта: исходные движения НЕ
+// трогаем (аудит), сторнируем НЕТТО по (ingredient_id × фермер): оригинал (from=farmer,
+// to=null) плюс, уже созданное сторно (from=null, to=farmer) минус — повторный откат
+// даёт нетто 0 (идемпотентно). Паттерн revertShipmentToPlanned. Возвращает ChangeEntry[]
+// (пустой массив, если акта нет — идемпотентно).
+async function revertActItemWithin(
+  tx: Prisma.TransactionClient,
+  shipmentItemId: number,
+): Promise<ChangeEntry[]> {
+  const item = await tx.shipmentItem.findUnique({
+    where: { id: shipmentItemId },
+    select: { acceptanceAct: { select: { id: true, act_number: true } } },
+  });
+  if (item?.acceptanceAct == null) return []; // идемпотентно
+  const act = item.acceptanceAct;
+
+  const movements = await tx.stockMovement.findMany({
+    where: {
+      source_doc_type: "acceptance_act",
+      source_doc_id: act.id,
+      kind: "ingredient",
+    },
+  });
+  const net = new Map<string, { ingredientId: number; farmerId: number; qty: Prisma.Decimal }>();
+  for (const m of movements) {
+    const isOriginal = m.to_location_id == null;
+    const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
+    if (m.ingredient_id == null || farmerId == null) continue;
+    const key = `${m.ingredient_id}:${farmerId}`;
+    const cur = net.get(key) ?? {
+      ingredientId: m.ingredient_id,
+      farmerId,
+      qty: new Prisma.Decimal(0),
+    };
+    cur.qty = isOriginal ? cur.qty.plus(m.quantity) : cur.qty.minus(m.quantity);
+    net.set(key, cur);
+  }
+  const storno = [...net.values()].filter((g) => g.qty.gt(0));
+  if (storno.length > 0) {
+    await tx.stockMovement.createMany({
+      data: storno.map((g) => ({
+        date: new Date(),
+        kind: "ingredient" as const,
+        ingredient_id: g.ingredientId,
+        quantity: g.qty,
+        from_location_id: null,
+        to_location_id: g.farmerId,
+        from_state: null,
+        to_state: null,
+        movement_type: "consumption" as const,
+        source_doc_type: "acceptance_act" as const,
+        source_doc_id: act.id,
+      })),
+    });
+  }
+
+  await tx.acceptanceAct.delete({ where: { shipment_item_id: shipmentItemId } });
+
+  return [
+    {
+      entity: ACT,
+      entityId: shipmentItemId,
+      field: "deleted",
+      oldValue: act.act_number,
+    },
+    {
+      entity: ACT,
+      entityId: shipmentItemId,
+      field: "storno",
+      newValue: `сторно ингр.: ${storno.length} групп`,
+    },
+  ];
+}
+
 // Откат приёмки позиции (admin). Удаляет акт; если машина была accepted — возвращает
-// arrived (BR-13). Идемпотентно. Сторно склада — C2 (движений ещё нет).
+// arrived (BR-13). Идемпотентно. Сторно склада — C2.
 export async function revertAct(input: {
   shipmentItemId: number;
 }): Promise<ActionResult> {
@@ -477,76 +552,12 @@ export async function revertAct(input: {
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.shipmentItem.findUnique({
         where: { id: shipmentItemId },
-        select: {
-          farmer_id: true,
-          shipment: { select: { id: true, status: true } },
-          acceptanceAct: { select: { id: true, act_number: true } },
-        },
+        select: { shipment: { select: { id: true, status: true } } },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
-      if (item.acceptanceAct == null) return { ok: true as const }; // идемпотентно
-      const act = item.acceptanceAct;
 
-      // C2: сторно расхода ингредиентов ДО удаления акта. Исходные движения НЕ трогаем
-      // (аудит). Сторнируем НЕТТО по (ingredient_id × фермер): оригинал (from=farmer,
-      // to=null) плюс, уже созданное сторно (from=null, to=farmer) минус — повторный
-      // откат даёт нетто 0 (идемпотентно). Паттерн revertShipmentToPlanned.
-      const movements = await tx.stockMovement.findMany({
-        where: {
-          source_doc_type: "acceptance_act",
-          source_doc_id: act.id,
-          kind: "ingredient",
-        },
-      });
-      const net = new Map<string, { ingredientId: number; farmerId: number; qty: Prisma.Decimal }>();
-      for (const m of movements) {
-        const isOriginal = m.to_location_id == null;
-        const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
-        if (m.ingredient_id == null || farmerId == null) continue;
-        const key = `${m.ingredient_id}:${farmerId}`;
-        const cur = net.get(key) ?? {
-          ingredientId: m.ingredient_id,
-          farmerId,
-          qty: new Prisma.Decimal(0),
-        };
-        cur.qty = isOriginal ? cur.qty.plus(m.quantity) : cur.qty.minus(m.quantity);
-        net.set(key, cur);
-      }
-      const storno = [...net.values()].filter((g) => g.qty.gt(0));
-      if (storno.length > 0) {
-        await tx.stockMovement.createMany({
-          data: storno.map((g) => ({
-            date: new Date(),
-            kind: "ingredient" as const,
-            ingredient_id: g.ingredientId,
-            quantity: g.qty,
-            from_location_id: null,
-            to_location_id: g.farmerId,
-            from_state: null,
-            to_state: null,
-            movement_type: "consumption" as const,
-            source_doc_type: "acceptance_act" as const,
-            source_doc_id: act.id,
-          })),
-        });
-      }
-
-      await tx.acceptanceAct.delete({ where: { shipment_item_id: shipmentItemId } });
-
-      const entries: ChangeEntry[] = [
-        {
-          entity: ACT,
-          entityId: shipmentItemId,
-          field: "deleted",
-          oldValue: act.act_number,
-        },
-        {
-          entity: ACT,
-          entityId: shipmentItemId,
-          field: "storno",
-          newValue: `сторно ингр.: ${storno.length} групп`,
-        },
-      ];
+      const entries = await revertActItemWithin(tx, shipmentItemId);
+      if (entries.length === 0) return { ok: true as const }; // акта не было
 
       if (item.shipment.status === "accepted") {
         await tx.shipment.update({
@@ -559,7 +570,7 @@ export async function revertAct(input: {
           field: "status",
           oldValue: "accepted",
           newValue: "arrived",
-        } as (typeof entries)[number]);
+        });
       }
 
       await logChange(entries, Number(user.id), tx);
@@ -570,5 +581,52 @@ export async function revertAct(input: {
     return result;
   } catch (e) {
     return authFail(e) ?? { ok: false, error: "Не удалось откатить акт" };
+  }
+}
+
+// Откат приёмки ВСЕЙ машины accepted → arrived (admin). Снимает акты у всех позиций
+// (сторно ингредиентов по каждой) и переводит машину в arrived одной транзакцией.
+// Для ленты, где машина = отгрузка с N позициями. Идемпотентно по позициям.
+export async function revertShipmentToArrived(
+  shipmentId: number,
+): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipment = await tx.shipment.findUnique({
+        where: { id: shipmentId },
+        select: { status: true, items: { select: { id: true } } },
+      });
+      if (!shipment) return { ok: false as const, error: "Отгрузка не найдена" };
+      if (shipment.status !== "accepted") {
+        return { ok: false as const, error: "Откат акта возможен только из статуса «Принята»" };
+      }
+
+      const entries: ChangeEntry[] = [];
+      for (const it of shipment.items) {
+        entries.push(...(await revertActItemWithin(tx, it.id)));
+      }
+
+      await tx.shipment.update({
+        where: { id: shipmentId },
+        data: { status: "arrived" },
+      });
+      entries.push({
+        entity: SHIPMENT,
+        entityId: shipmentId,
+        field: "status",
+        oldValue: "accepted",
+        newValue: "arrived",
+      });
+
+      await logChange(entries, Number(user.id), tx);
+      return { ok: true as const };
+    });
+
+    if (result.ok) revalidate();
+    return result;
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось откатить приёмку" };
   }
 }

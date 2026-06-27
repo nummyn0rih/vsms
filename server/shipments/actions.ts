@@ -701,6 +701,113 @@ export async function revertShipmentToPlanned(id: number): Promise<ActionResult>
   }
 }
 
+// arrived → sent (только Admin): зеркало плеча ПРИБЫТИЯ. Сторнируем НЕТТО по типу тары
+// (ось завод 0): входящее (-1→0) плюс, прежнее сторно (0→-1) минус. Перевеска очищается
+// — снимется заново при повторном прибытии. Откат запрещён, если у любой позиции есть
+// акт (сначала откатить акт). Образец — revertShipmentToPlanned.
+export async function revertShipmentToSent(id: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipment = await tx.shipment.findUnique({
+        where: { id },
+        include: { items: { select: { id: true, acceptanceAct: { select: { id: true } } } } },
+      });
+      if (!shipment) return { ok: false as const, error: "Отгрузка не найдена" };
+      if (shipment.status !== "arrived") {
+        return { ok: false as const, error: "Откат возможен только из статуса «Прибыла»" };
+      }
+      if (shipment.items.some((it) => it.acceptanceAct != null)) {
+        return { ok: false as const, error: "Сначала откатите акт(ы)" };
+      }
+
+      const movements = await tx.stockMovement.findMany({
+        where: {
+          source_doc_type: "shipment",
+          source_doc_id: id,
+          kind: "packaging",
+          movement_type: "return",
+        },
+      });
+
+      // Нетто плеча прибытия по типу тары (ось завод 0). Фермер на заводской стороне не
+      // важен — на завод тара приходит по типам. Плечо отправки (фермер↔-1) пропускаем.
+      const net = new Map<number, Prisma.Decimal>();
+      for (const m of movements) {
+        if (m.packaging_type_id == null) continue;
+        let delta: Prisma.Decimal | null = null;
+        if (m.to_location_id === FACTORY_LOCATION_ID) delta = m.quantity; // входящее -1→0
+        else if (m.from_location_id === FACTORY_LOCATION_ID) delta = m.quantity.neg(); // сторно 0→-1
+        if (delta == null) continue;
+        net.set(
+          m.packaging_type_id,
+          (net.get(m.packaging_type_id) ?? new Prisma.Decimal(0)).plus(delta),
+        );
+      }
+
+      const storno = [...net.entries()].filter(([, qty]) => qty.gt(0));
+      if (storno.length > 0) {
+        await tx.stockMovement.createMany({
+          data: storno.map(([packagingTypeId, qty]) => ({
+            date: new Date(),
+            kind: "packaging" as const,
+            packaging_type_id: packagingTypeId,
+            quantity: qty,
+            from_location_id: FACTORY_LOCATION_ID,
+            to_location_id: TRANSIT_TO_FACTORY,
+            from_state: "good" as const,
+            to_state: "good" as const,
+            movement_type: "return" as const,
+            source_doc_type: "shipment" as const,
+            source_doc_id: id,
+          })),
+        });
+      }
+
+      // Перевеска сбрасывается — при повторном прибытии setActualWeight снова даст
+      // «первый вес» и авто-переход sent → arrived.
+      await tx.shipmentItem.updateMany({
+        where: { shipment_id: id },
+        data: { actual_weight_kg: null },
+      });
+
+      await tx.shipment.update({ where: { id }, data: { status: "sent" } });
+
+      await logChange(
+        [
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "status",
+            oldValue: "arrived",
+            newValue: "sent",
+          },
+          {
+            entity: ENTITY,
+            entityId: id,
+            field: "storno",
+            newValue: `сторно прибытия: ${storno.length} групп`,
+          },
+        ],
+        Number(user.id),
+        tx,
+      );
+
+      return { ok: true as const };
+    });
+
+    if (result.ok) {
+      revalidatePath(PATH);
+      revalidatePath("/acceptance");
+      revalidateStockDashboards();
+    }
+    return result;
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось откатить отгрузку" };
+  }
+}
+
 // --- Чтение (доступно всем ролям) ---
 
 function mapItem(item: {

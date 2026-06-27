@@ -21,7 +21,9 @@ import {
   deleteShipment,
   sendShipment,
   revertShipmentToPlanned,
+  revertShipmentToSent,
 } from "@/server/shipments/actions";
+import { revertShipmentToArrived } from "@/server/acceptance/act";
 import type { ShipmentDetail, ShipmentOptions } from "@/server/shipments/schema";
 import type { FeedShipment, SendPreview } from "@/server/shipments/feed";
 import { buildSendPreview } from "@/server/shipments/feed";
@@ -446,6 +448,182 @@ export function RevertShipmentButton({ shipment }: { shipment: FeedShipment }) {
           {pre.groups.length > 0 && (
             <TarePreview pre={pre} totalLabel="Вернётся" />
           )}
+
+          <p className="m-0 flex items-center gap-[7px] text-xs leading-[17px] tracking-tight text-[#888]">
+            <FileText className="size-[13px] shrink-0 opacity-80" />
+            Действие фиксируется в журнале изменений.
+          </p>
+          {error && <p className="text-sm text-[#c50000]">{error}</p>}
+        </div>
+
+        <div className="flex gap-2 px-5 pb-5">
+          <DialogClose asChild>
+            <button className={BTN_SECONDARY_CLS}>Отмена</button>
+          </DialogClose>
+          <button
+            onClick={onConfirm}
+            disabled={reverting}
+            className={BTN_PRIMARY_CLS}
+          >
+            <RotateCcw className="size-[15px]" /> Откатить
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Откат arrived → sent (только admin). Сторно плеча прибытия + очистка перевески. Если
+// у машины есть акт(ы) — кнопка заблокирована с подсказкой (сервер тоже отклонит).
+export function RevertToSentButton({
+  shipment,
+  blocked,
+}: {
+  shipment: FeedShipment;
+  blocked: boolean;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [reverting, setReverting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function onOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) setError(null);
+  }
+
+  async function onConfirm() {
+    setReverting(true);
+    setError(null);
+    const res = await revertShipmentToSent(shipment.id);
+    setReverting(false);
+    if (res.ok) {
+      toast.success(`Отгрузка №${shipment.code} возвращена в «Отправлена»`);
+      setOpen(false);
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+  }
+
+  if (blocked) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="Сначала откатите акт"
+        disabled
+      >
+        <Undo2 className="size-4" />
+      </Button>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon-sm" title="Откатить в «Отправлена»">
+          <Undo2 className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent showCloseButton={false} className={M_CONTENT_CLS}>
+        <div className="flex items-start gap-3 px-5 pt-5">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className={M_TITLE_CLS}>
+              Откатить прибытие?
+            </DialogTitle>
+            <MCtx shipment={shipment} />
+          </div>
+          <DialogCloseX />
+        </div>
+
+        <div className="flex flex-col gap-3.5 px-5 pb-5 pt-[18px]">
+          <DialogDescription className={M_LEAD_CLS}>
+            Машина вернётся в статус{" "}
+            <strong className="font-medium text-[#171717]">«Отправлена»</strong>.
+            Плечо прибытия тары будет{" "}
+            <strong className="font-medium text-[#171717]">сторнировано</strong>{" "}
+            (тара вернётся «в пути на завод»), а{" "}
+            <strong className="font-medium text-[#171717]">перевеска очистится</strong>{" "}
+            — её внесут заново при повторном прибытии.
+          </DialogDescription>
+
+          <p className="m-0 flex items-center gap-[7px] text-xs leading-[17px] tracking-tight text-[#888]">
+            <FileText className="size-[13px] shrink-0 opacity-80" />
+            Действие фиксируется в журнале изменений.
+          </p>
+          {error && <p className="text-sm text-[#c50000]">{error}</p>}
+        </div>
+
+        <div className="flex gap-2 px-5 pb-5">
+          <DialogClose asChild>
+            <button className={BTN_SECONDARY_CLS}>Отмена</button>
+          </DialogClose>
+          <button
+            onClick={onConfirm}
+            disabled={reverting}
+            className={BTN_PRIMARY_CLS}
+          >
+            <RotateCcw className="size-[15px]" /> Откатить
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Откат приёмки машины accepted → arrived (только admin). Снимает все акты позиций и
+// сторнирует расход ингредиентов. Чтобы затем править — откатывать дальше по цепочке.
+export function RevertActButton({ shipment }: { shipment: FeedShipment }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [reverting, setReverting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function onOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) setError(null);
+  }
+
+  async function onConfirm() {
+    setReverting(true);
+    setError(null);
+    const res = await revertShipmentToArrived(shipment.id);
+    setReverting(false);
+    if (res.ok) {
+      toast.success(`Приёмка №${shipment.code} откачена в «Прибыла»`);
+      setOpen(false);
+      router.refresh();
+    } else {
+      setError(res.error);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon-sm" title="Откатить приёмку (акты)">
+          <RotateCcw className="size-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent showCloseButton={false} className={M_CONTENT_CLS}>
+        <div className="flex items-start gap-3 px-5 pt-5">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className={M_TITLE_CLS}>Откатить приёмку?</DialogTitle>
+            <MCtx shipment={shipment} />
+          </div>
+          <DialogCloseX />
+        </div>
+
+        <div className="flex flex-col gap-3.5 px-5 pb-5 pt-[18px]">
+          <DialogDescription className={M_LEAD_CLS}>
+            Машина вернётся в статус{" "}
+            <strong className="font-medium text-[#171717]">«Прибыла»</strong>. Все
+            акты позиций будут{" "}
+            <strong className="font-medium text-[#171717]">удалены</strong>, а расход
+            ингредиентов{" "}
+            <strong className="font-medium text-[#171717]">сторнирован</strong>.
+          </DialogDescription>
 
           <p className="m-0 flex items-center gap-[7px] text-xs leading-[17px] tracking-tight text-[#888]">
             <FileText className="size-[13px] shrink-0 opacity-80" />

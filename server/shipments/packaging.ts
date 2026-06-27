@@ -121,25 +121,14 @@ export async function loadPackagingContext(
 
 // Плечо ПРИБЫТИЯ (sent → arrived, BR-3): тара переходит из транзита «в пути на
 // завод» (-1) на завод (0). Чистый помощник, зовётся из acceptance при переходе.
-// Идемпотентен: повторный вызов (повтор markArrived) НЕ дублирует движения.
+// Идемпотентен ПО НЕТТО (не по существованию): повторный вызов даёт net=0 (входящее
+// плечо -1→0 учтено ниже как from=-1 → −qty), поэтому ничего не дублирует. После
+// отката arrived→sent сторно прибытия (0→-1) возвращает net>0 — плечо пересоздаётся.
 // Возвращает число созданных движений (для ChangeLog).
 export async function applyInboundArrivedTareLeg(
   tx: Tx,
   shipmentId: number,
 ): Promise<number> {
-  // Уже есть хоть одно движение плеча прибытия (-1 → 0) по этой отгрузке → выходим.
-  const existing = await tx.stockMovement.findFirst({
-    where: {
-      source_doc_type: "shipment",
-      source_doc_id: shipmentId,
-      kind: "packaging",
-      from_location_id: TRANSIT_TO_FACTORY,
-      to_location_id: FACTORY_LOCATION_ID,
-    },
-    select: { id: true },
-  });
-  if (existing) return 0;
-
   // Движения плеча ОТПРАВКИ (фермер → -1) и его сторно (-1 → фермер при откате).
   const movements = await tx.stockMovement.findMany({
     where: {

@@ -8,6 +8,8 @@ import {
   EditShipmentButton,
   SendShipmentButton,
   RevertShipmentButton,
+  RevertToSentButton,
+  RevertActButton,
   DeleteShipmentButton,
   formatWeight,
 } from "./shipment-actions";
@@ -114,6 +116,10 @@ export function MachineRow({
   const zoneBg = STATUS_STYLE[shipment.status].zone;
   const canRevert = shipment.status === "sent";
   const isPlanned = shipment.status === "planned";
+  const isArrived = shipment.status === "arrived";
+  const isAccepted = shipment.status === "accepted";
+  // Частичные акты возможны на arrived → откат в sent блокируем, пока есть акт.
+  const hasAct = shipment.items.some((i) => i.accepted);
 
   return (
     <div className="flex overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
@@ -141,6 +147,10 @@ export function MachineRow({
                 </>
               )}
               {canRevert && <RevertShipmentButton shipment={shipment} />}
+              {isArrived && (
+                <RevertToSentButton shipment={shipment} blocked={hasAct} />
+              )}
+              {isAccepted && <RevertActButton shipment={shipment} />}
             </div>
           </RoleGate>
         </div>
