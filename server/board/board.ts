@@ -95,16 +95,20 @@ export async function getBoardWeek({
     };
   });
 
-  // Прогресс — только культуры с заданной целью на неделю.
+  // Прогресс — культуры с целью на неделю в ЛЮБОМ режиме (BR-20): недельная строка
+  // (date=null) ИЛИ сумма дневных (date≠null). getPlanWeek уже свёл оба в PlanRow.
   const progress = plan.rows
-    .filter((r) => r.weekTarget != null)
     .map((r) => ({
       cultureId: r.cultureId,
       name: r.cultureName,
       color: r.color,
       plannedTons: r.weekProgress.effectiveTons,
-      targetTons: r.weekTarget as number,
-    }));
+      targetTons:
+        r.weekTarget != null
+          ? r.weekTarget
+          : Object.values(r.dayTargets).reduce((s, t) => s + t, 0),
+    }))
+    .filter((p) => p.targetTons > 0);
   const totalTargetTons = progress.reduce((s, p) => s + p.targetTons, 0);
 
   return {

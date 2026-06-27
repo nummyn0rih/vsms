@@ -678,6 +678,7 @@ table.pmatrix tfoot td.week-col { text-align: left; }
   border-radius: 8px;
   box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
   overflow: hidden; position: relative; cursor: pointer;
+  flex: 0 0 auto; /* не сжимать — колонка скроллится, карточка держит высоту */
   transition: box-shadow .14s, transform .14s, border-color .14s;
 }
 .card-strip { height: 3px; width: 100%; }

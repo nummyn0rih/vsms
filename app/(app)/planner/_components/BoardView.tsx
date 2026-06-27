@@ -617,6 +617,8 @@ export function BoardView({
 
       {detail && (
         <ShipmentFormDialog
+          // key по id — форма реинициализируется под СВОЮ отгрузку при смене карточки
+          key={detail.id}
           mode="edit"
           row={detail}
           options={options}
