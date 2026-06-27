@@ -10,6 +10,7 @@ import {
   Package,
   Info,
   AlertCircle,
+  AlertTriangle,
   Truck,
   Unlink,
   RefreshCcw,
@@ -39,6 +40,12 @@ import {
 import { moveShipmentToDay } from "@/server/board/actions";
 import { formatTareTotals } from "@/server/shipments/format";
 import { RoleGate } from "@/components/auth/RoleGate";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ShipmentFormDialog } from "@/app/(app)/shipments/_components/ShipmentFormDialog";
 import {
   AlertDialog,
@@ -64,6 +71,9 @@ const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
 });
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", timeZone: "UTC" });
 const kgFmt = new Intl.NumberFormat("ru-RU");
+// Дефицит ингредиента: до 3 знаков (соль ~кг; микродозы — округление на показе).
+const ingFmt = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 });
+const UNIT_LABEL: Record<"kg" | "l", string> = { kg: "кг", l: "л" };
 
 function parse(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00Z`);
@@ -139,7 +149,60 @@ function CultureChips({ card }: { card: BoardCard }) {
   );
 }
 
-function TareFoot({ card }: { card: BoardCard }) {
+// B5-2: информационный бейдж дефицита тары/ингредиента у фермеров рейса. Тон —
+// амбер из status-fills (как s-arrived). null, если дефицита нет (слот остаётся пуст).
+function DeficitBadge({ card }: { card: BoardCard }) {
+  const tare = card.tareDeficit ?? [];
+  const ing = card.ingredientDeficit ?? [];
+  if (tare.length === 0 && ing.length === 0) return null;
+  const kinds: string[] = [];
+  if (tare.length > 0) kinds.push("тары");
+  if (ing.length > 0) kinds.push("ингредиента");
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="deficit-chip"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`дефицит ${kinds.join(" и ")}`}
+        >
+          <AlertTriangle />
+          дефицит
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        <div className="deficit-tip">
+          {tare.length > 0 && (
+            <div className="dt-group">
+              <div className="dt-head">Дефицит тары</div>
+              {tare.map((t) => (
+                <div key={t.packagingTypeId} className="dt-row">
+                  <span>{t.name}</span>
+                  <span className="tnum">−{kgFmt.format(t.shortUnits)} ед.</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {ing.length > 0 && (
+            <div className="dt-group">
+              <div className="dt-head">Дефицит ингредиента</div>
+              {ing.map((i) => (
+                <div key={i.ingredientId} className="dt-row">
+                  <span>{i.name}</span>
+                  <span className="tnum">
+                    −{ingFmt.format(i.shortQty)} {UNIT_LABEL[i.unit]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function TareFoot({ card, showDeficit = true }: { card: BoardCard; showDeficit?: boolean }) {
   const tareLabel = formatTareTotals(card.tare.boxes, card.tare.barrels);
   return (
     <>
@@ -147,8 +210,8 @@ function TareFoot({ card }: { card: BoardCard }) {
         <Package />
         <b>{tareLabel ? `${card.status === "planned" ? "≈ " : ""}${tareLabel}` : "навал"}</b>
       </span>
-      {/* B5-2: слот под бейдж дефицита тары/ингредиента — пока пустой */}
-      <span className="deficit-slot" />
+      {/* B5-2: бейдж дефицита (single). В машине рендерится в .mcard-actions. */}
+      <span className="deficit-slot">{showDeficit && <DeficitBadge card={card} />}</span>
     </>
   );
 }
@@ -366,7 +429,7 @@ function MachineCard({
         </div>
         <CultureChips card={card} />
         <div className="card-foot">
-          <TareFoot card={card} />
+          <TareFoot card={card} showDeficit={false} />
         </div>
         <div className="mcard-actions">
           {/* B5-merge: разборка машины — только плановую, admin-only, с подтверждением */}
@@ -402,7 +465,9 @@ function MachineCard({
               </AlertDialog>
             </RoleGate>
           )}
-          <span className="deficit-slot" style={{ marginLeft: "auto" }} />
+          <span className="deficit-slot" style={{ marginLeft: "auto" }}>
+            <DeficitBadge card={card} />
+          </span>
         </div>
       </div>
     </article>
@@ -758,6 +823,7 @@ export function BoardView({
 
       {/* Доска: колонки рабочих дней, карточки по дате прибытия */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <TooltipProvider delayDuration={150}>
         <div className="board-wrap">
           <div className="board" style={{ "--cols": columns.length } as React.CSSProperties}>
             {columns.map((col) => (
@@ -782,6 +848,7 @@ export function BoardView({
             ))}
           </div>
         </div>
+        </TooltipProvider>
         <DragOverlay dropAnimation={null}>
           {activeCard ? (
             <div className="drag-ghost">

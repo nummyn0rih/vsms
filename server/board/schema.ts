@@ -12,6 +12,25 @@ export type BoardFarmerRow = {
   totalKg: number; // Σ планового веса фермера
 };
 
+// B5-2: дефицит тары/ингредиента на карточке (информационно, не блокирует).
+// Только позиции с short>0. Для машины — агрегат по всем фермерам карточки.
+export type TareDeficitLine = {
+  packagingTypeId: number;
+  name: string;
+  needUnits: number;
+  haveUnits: number;
+  shortUnits: number;
+};
+
+export type IngredientDeficitLine = {
+  ingredientId: number;
+  name: string;
+  unit: "kg" | "l";
+  needQty: number;
+  haveQty: number;
+  shortQty: number;
+};
+
 export type BoardCard = {
   shipmentId: number;
   code: string;
@@ -26,6 +45,8 @@ export type BoardCard = {
   draggable: boolean; // planned || sent (sent — перенос только прибытия)
   arrivalOnly: boolean; // status === "sent": перенос меняет только дату прибытия
   locked: boolean; // status arrived|accepted: без переноса
+  tareDeficit?: TareDeficitLine[]; // B5-2: тип тары в дефиците у фермеров рейса
+  ingredientDeficit?: IngredientDeficitLine[]; // B5-2: ингредиент в дефиците
 };
 
 export type BoardColumn = {
