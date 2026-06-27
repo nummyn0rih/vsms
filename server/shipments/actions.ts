@@ -286,6 +286,153 @@ export async function deleteShipment(id: number): Promise<ActionResult> {
   }
 }
 
+// --- B5-merge: сборка/разборка ПЛАНОВЫХ отгрузок (одна машина = несколько фермеров) ---
+// Плановые отгрузки не имеют StockMovement (движения — при planned→sent), поэтому
+// сборка/разборка НЕ трогают склад/балансы: только перенос ShipmentItem.shipment_id
+// и создание/удаление пустых Shipment.
+
+// Собрать ≥2 одно-дневных плановых отгрузки в одну машину (target = первый выбранный).
+export async function assembleShipments(shipmentIds: number[]): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const ids = [...new Set(shipmentIds)];
+    if (ids.length < 2) {
+      return { ok: false, error: "Выберите минимум 2 отгрузки" };
+    }
+
+    const shipments = await prisma.shipment.findMany({
+      where: { id: { in: ids } },
+      include: { items: { include: { acceptanceAct: { select: { id: true } } } } },
+    });
+    if (shipments.length !== ids.length) {
+      return { ok: false, error: "Некоторые отгрузки не найдены" };
+    }
+    if (shipments.some((s) => s.status !== "planned")) {
+      return { ok: false, error: "Собрать можно только плановые отгрузки" };
+    }
+    // У планов актов быть не должно — гард на всякий случай.
+    if (shipments.some((s) => s.items.some((it) => it.acceptanceAct != null))) {
+      return { ok: false, error: "Есть позиции с актом приёмки — сборка запрещена" };
+    }
+    const arrivals = new Set(shipments.map((s) => toDateString(s.arrival_date)));
+    if (arrivals.size !== 1) {
+      return { ok: false, error: "Только отгрузки одного дня прибытия" };
+    }
+
+    const target = shipments.find((s) => s.id === ids[0]);
+    if (!target) return { ok: false, error: "Целевая отгрузка не найдена" };
+    const absorbedIds = ids.filter((id) => id !== target.id);
+    const absorbed = shipments.filter((s) => absorbedIds.includes(s.id));
+    const movedItems = absorbed.reduce((n, s) => n + s.items.length, 0);
+
+    await prisma.$transaction(async (tx) => {
+      // Переносим позиции поглощаемых отгрузок на target, затем удаляем их (пустые).
+      await tx.shipmentItem.updateMany({
+        where: { shipment_id: { in: absorbedIds } },
+        data: { shipment_id: target.id },
+      });
+      await tx.shipment.deleteMany({ where: { id: { in: absorbedIds } } });
+      await logChange(
+        [
+          ...absorbed.map((s) => ({
+            entity: ENTITY,
+            entityId: target.id,
+            field: "assemble",
+            oldValue: s.code,
+            newValue: target.code,
+          })),
+          {
+            entity: ENTITY,
+            entityId: target.id,
+            field: "items",
+            newValue: `+${movedItems} позиц. → машина ${target.code}`,
+          },
+        ],
+        Number(user.id),
+        tx,
+      );
+    });
+
+    revalidatePath("/planner");
+    revalidatePath(PATH);
+    return { ok: true };
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось собрать машину" };
+  }
+}
+
+// Разобрать машину обратно на одно-фермерские плановые отгрузки (по фермеру).
+export async function disassembleShipment(shipmentId: number): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const src = await prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: { items: true },
+    });
+    if (!src) return { ok: false, error: "Отгрузка не найдена" };
+    if (src.status !== "planned") {
+      return { ok: false, error: "Разобрать можно только плановую отгрузку" };
+    }
+    if (src.items.length === 0) {
+      return { ok: false, error: "В отгрузке нет позиций" };
+    }
+
+    // Позиции по фермеру (порядок первого появления).
+    const byFarmer = new Map<number, number[]>();
+    for (const it of src.items) {
+      const arr = byFarmer.get(it.farmer_id);
+      if (arr) arr.push(it.id);
+      else byFarmer.set(it.farmer_id, [it.id]);
+    }
+    if (byFarmer.size === 1) {
+      return { ok: true }; // уже одно-фермерская — no-op
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const createdCodes: string[] = [];
+      for (const itemIds of byFarmer.values()) {
+        const code = await getNextCode(tx); // последовательно — код уникален
+        const created = await tx.shipment.create({
+          data: {
+            code,
+            departure_date: src.departure_date,
+            arrival_date: src.arrival_date,
+            status: "planned",
+            driver_id: null,
+            created_by: Number(user.id),
+          },
+        });
+        await tx.shipmentItem.updateMany({
+          where: { id: { in: itemIds } },
+          data: { shipment_id: created.id },
+        });
+        createdCodes.push(code);
+      }
+      // Исходная отгрузка опустела — удаляем.
+      await tx.shipment.delete({ where: { id: shipmentId } });
+      await logChange(
+        {
+          entity: ENTITY,
+          entityId: shipmentId,
+          field: "disassemble",
+          oldValue: src.code,
+          newValue: createdCodes.join(", "),
+        },
+        Number(user.id),
+        tx,
+      );
+    });
+
+    revalidatePath("/planner");
+    revalidatePath(PATH);
+    return { ok: true };
+  } catch (e) {
+    return authFail(e) ?? { ok: false, error: "Не удалось разобрать машину" };
+  }
+}
+
 // --- B2: переходы статуса planned ↔ sent + авто-движение тары (BR-3, BR-13, BR-19) ---
 
 // Позиция в объёме, нужном расчёту тары (имена — для текста/ChangeLog).

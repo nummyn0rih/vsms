@@ -13,6 +13,8 @@ import {
   Truck,
   Unlink,
   RefreshCcw,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import {
   DndContext,
@@ -29,11 +31,26 @@ import { CSS } from "@dnd-kit/utilities";
 
 import type { BoardWeek, BoardCard, BoardColumn } from "@/server/board/schema";
 import type { ShipmentDetail, ShipmentOptions } from "@/server/shipments/schema";
-import { getShipment } from "@/server/shipments/actions";
+import {
+  getShipment,
+  assembleShipments,
+  disassembleShipment,
+} from "@/server/shipments/actions";
 import { moveShipmentToDay } from "@/server/board/actions";
 import { formatTareTotals } from "@/server/shipments/format";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { ShipmentFormDialog } from "@/app/(app)/shipments/_components/ShipmentFormDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Прогресс-бар: цель стоит на 95.2%, чтобы оставить поле. EPS — допуск сравнения тонн (3 знака).
 const BAR_FILL_PCT = 95.2;
@@ -187,10 +204,16 @@ function SingleCard({
   card,
   canDrag,
   onOpen,
+  selectable,
+  selected,
+  onToggleSelect,
 }: {
   card: BoardCard;
   canDrag: boolean;
   onOpen: (id: number) => void;
+  selectable: boolean;
+  selected: boolean;
+  onToggleSelect: (id: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
     useDraggable({ id: card.shipmentId, disabled: !canDrag });
@@ -202,11 +225,26 @@ function SingleCard({
       style={{ transform: CSS.Translate.toString(transform) }}
       className={`card s-${card.status} ${canDrag ? "draggable" : ""} ${
         card.locked ? "locked" : ""
-      } ${isDragging ? "dragging" : ""}`}
-      onClick={() => onOpen(card.shipmentId)}
+      } ${isDragging ? "dragging" : ""} ${selectable ? "selectable" : ""} ${
+        selected ? "selected" : ""
+      }`}
+      onClick={() => (selectable ? onToggleSelect(card.shipmentId) : onOpen(card.shipmentId))}
     >
       <div className="card-strip" />
       <div className="card-top">
+        {selectable && (
+          <button
+            type="button"
+            className="card-check"
+            title={selected ? "Снять выбор" : "Выбрать для сборки"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(card.shipmentId);
+            }}
+          >
+            {selected ? <CheckSquare /> : <Square />}
+          </button>
+        )}
         <span className={`badge s-${card.status}`}>
           <span className="dot" />
           {STATUS_LABEL[card.status]}
@@ -246,10 +284,12 @@ function MachineCard({
   card,
   canDrag,
   onOpen,
+  onDisassemble,
 }: {
   card: BoardCard;
   canDrag: boolean;
   onOpen: (id: number) => void;
+  onDisassemble: (id: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
     useDraggable({ id: card.shipmentId, disabled: !canDrag });
@@ -329,17 +369,39 @@ function MachineCard({
           <TareFoot card={card} />
         </div>
         <div className="mcard-actions">
-          {/* B5-merge: разборка машины — заглушка */}
-          <button
-            type="button"
-            className="btn-disassemble"
-            disabled
-            title="Скоро — B5-merge"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Unlink />
-            Разобрать
-          </button>
+          {/* B5-merge: разборка машины — только плановую, admin-only, с подтверждением */}
+          {card.status === "planned" && (
+            <RoleGate allow={["admin"]}>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    className="btn-disassemble"
+                    title="Разобрать на отдельные отгрузки"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Unlink />
+                    Разобрать
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Разобрать машину {card.code}?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Машина разделится на {card.farmers.length} отдельных плановых отгрузки
+                      (по фермеру). Водитель будет снят. Действие обратимо сборкой.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onDisassemble(card.shipmentId)}>
+                      Разобрать
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </RoleGate>
+          )}
           <span className="deficit-slot" style={{ marginLeft: "auto" }} />
         </div>
       </div>
@@ -351,16 +413,32 @@ function BoardCardView({
   card,
   isAdmin,
   onOpen,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onDisassemble,
 }: {
   card: BoardCard;
   isAdmin: boolean;
   onOpen: (id: number) => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: (id: number) => void;
+  onDisassemble: (id: number) => void;
 }) {
-  const canDrag = card.draggable && isAdmin;
+  // В режиме выбора drag отключаем — клик по карточке = выбор.
+  const canDrag = card.draggable && isAdmin && !selectMode;
   return card.farmers.length > 1 ? (
-    <MachineCard card={card} canDrag={canDrag} onOpen={onOpen} />
+    <MachineCard card={card} canDrag={canDrag} onOpen={onOpen} onDisassemble={onDisassemble} />
   ) : (
-    <SingleCard card={card} canDrag={canDrag} onOpen={onOpen} />
+    <SingleCard
+      card={card}
+      canDrag={canDrag}
+      onOpen={onOpen}
+      selectable={selectMode && isAdmin && card.status === "planned"}
+      selected={selected}
+      onToggleSelect={onToggleSelect}
+    />
   );
 }
 
@@ -370,15 +448,30 @@ function Column({
   activeCard,
   onOpen,
   onAdd,
+  selectMode,
+  selected,
+  onToggleSelect,
+  onAssemble,
+  onDisassemble,
 }: {
   col: BoardColumn;
   isAdmin: boolean;
   activeCard: BoardCard | null;
   onOpen: (id: number) => void;
   onAdd: (col: BoardColumn) => void;
+  selectMode: boolean;
+  selected: Set<number>;
+  onToggleSelect: (id: number) => void;
+  onAssemble: (ids: number[]) => void;
+  onDisassemble: (id: number) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: col.dateISO });
   const dropReady = activeCard != null && canDrop(activeCard, col.dateISO);
+
+  // Выбранные сборочные id ИМЕННО этой колонки (одно-фермерские плановые) — скоуп днём.
+  const selectedInCol = col.cards
+    .filter((c) => c.status === "planned" && c.farmers.length === 1 && selected.has(c.shipmentId))
+    .map((c) => c.shipmentId);
 
   return (
     <section
@@ -400,11 +493,30 @@ function Column({
           <div className="col-empty-hint">Нет отгрузок</div>
         ) : (
           col.cards.map((card) => (
-            <BoardCardView key={card.shipmentId} card={card} isAdmin={isAdmin} onOpen={onOpen} />
+            <BoardCardView
+              key={card.shipmentId}
+              card={card}
+              isAdmin={isAdmin}
+              onOpen={onOpen}
+              selectMode={selectMode}
+              selected={selected.has(card.shipmentId)}
+              onToggleSelect={onToggleSelect}
+              onDisassemble={onDisassemble}
+            />
           ))
         )}
       </div>
       <div className="col-foot">
+        {selectMode && selectedInCol.length >= 2 && (
+          <button
+            type="button"
+            className="assemble-btn"
+            onClick={() => onAssemble(selectedInCol)}
+          >
+            <Truck />
+            Собрать в машину ({selectedInCol.length})
+          </button>
+        )}
         <RoleGate allow={["admin"]}>
           <button type="button" className="addship" onClick={() => onAdd(col)}>
             <Plus />
@@ -457,9 +569,51 @@ export function BoardView({
   // фазе рендера (паттерн React «информация из предыдущего рендера»), а не в effect.
   const [columns, setColumns] = useState<BoardColumn[]>(week?.columns ?? []);
   const [prevWeek, setPrevWeek] = useState(week);
+
+  // Режим выбора для сборки в машину (тумблер «Выбрать»). Скоуп выбора — колонка (день).
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
   if (week !== prevWeek) {
     setPrevWeek(week);
     setColumns(week?.columns ?? []);
+    // Смена недели — выходим из выбора (выбранные id больше не на экране).
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exitSelect() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  async function onAssemble(ids: number[]) {
+    const res = await assembleShipments(ids);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Машина собрана");
+    exitSelect();
+    await reload();
+  }
+
+  async function onDisassemble(id: number) {
+    const res = await disassembleShipment(id);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Машина разобрана");
+    await reload();
   }
 
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -586,6 +740,23 @@ export function BoardView({
       {/* Доска: колонки рабочих дней, карточки по дате прибытия */}
       <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <div className="board-wrap">
+          <RoleGate allow={["admin"]}>
+            <div className="board-toolbar">
+              <button
+                type="button"
+                className={`select-toggle${selectMode ? " on" : ""}`}
+                onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
+              >
+                <CheckSquare />
+                {selectMode ? "Готово" : "Выбрать"}
+              </button>
+              {selectMode && (
+                <span className="select-hint">
+                  Отметьте плановые отгрузки одного дня → «Собрать в машину»
+                </span>
+              )}
+            </div>
+          </RoleGate>
           <div className="board" style={{ "--cols": columns.length } as React.CSSProperties}>
             {columns.map((col) => (
               <Column
@@ -600,6 +771,11 @@ export function BoardView({
                     departure_date: c.addDepartureISO,
                   })
                 }
+                selectMode={selectMode}
+                selected={selected}
+                onToggleSelect={toggleSelect}
+                onAssemble={onAssemble}
+                onDisassemble={onDisassemble}
               />
             ))}
           </div>

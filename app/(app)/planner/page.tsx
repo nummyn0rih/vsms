@@ -9,7 +9,8 @@ export default async function PlannerPage({
 }) {
   const sp = await searchParams;
   const week = parseWeekParam(sp.week);
-  const view = sp.view === "board" ? "board" : "plan";
+  // Дефолт — «Доска»; «План» открывается явным ?view=plan.
+  const view = sp.view === "plan" ? "plan" : "board";
   // options — для «+ Отгрузка» и диалога правки карточки на доске.
   const options = await listShipmentOptions();
 
