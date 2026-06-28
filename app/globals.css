@@ -102,6 +102,10 @@
   --bar-plan-b: #ededed; /* план — светлая полоса штриха */
   --bar-tick: #b0b0b0; /* риска-цель */
   --bar-accent: #171717; /* достигнуто / перелёт */
+
+  /* Сводка · отклонение от плана (НЕ статусные цвета отгрузок) */
+  --pos: #1d8e75; /* перелёт плана */
+  --neg: #ab570a; /* недобор (нейтральный янтарь, не алярм) */
 }
 
 .dark {
@@ -615,6 +619,56 @@ table.pmatrix tfoot td.week-col { text-align: left; }
 .noplan svg { width: 15px; height: 15px; opacity: .8; flex-shrink: 0; }
 .noplan a { color: var(--link); text-decoration: none; font-weight: 500; }
 .noplan a:hover { text-decoration: underline; }
+
+/* ============ Вид «Сводка» (heatmap недели) — read-only ============ */
+/* Источник вёрстки: docs/prototypes/summary-v1.html. Контекст-полоса .ctx —
+   общая с видом «План». headline справа. */
+.summary-view { display: block; }
+.summary-view .ctx .head-metric { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+.summary-view .ctx .head-metric b { color: var(--ink); font-weight: 600; }
+
+.hm-wrap { overflow-x: auto; }
+table.hm { border-collapse: collapse; width: 100%; min-width: 920px; }
+table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
+.hm thead th {
+  position: sticky; top: var(--toolbar-h, 0px); background: var(--canvas); z-index: 2;
+  font-weight: 500; font-size: 12px; color: var(--mute); padding: 11px 10px;
+  text-align: center; white-space: nowrap;
+}
+.hm thead th .dnum { display: block; font-size: 11px; color: var(--hairline-strong); font-family: "Geist Mono", ui-monospace, monospace; margin-top: 2px; }
+.hm th.cor, .hm td.cult { position: sticky; left: 0; background: var(--canvas); z-index: 3; text-align: left; min-width: 168px; padding-left: 18px; }
+.hm thead th.cor { z-index: 4; }
+.hm thead th.sep, .hm td.sep { border-left: 1px solid var(--hairline); }
+.hm thead th.tot { color: var(--body); text-align: right; padding-right: 14px; }
+
+.hm td.cult { padding: 10px 10px 10px 18px; }
+.cult .nm { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; }
+.cult .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.cult .wk-badge { margin-left: 8px; font-family: "Geist Mono", ui-monospace, monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; }
+
+.hm td.cell { text-align: center; padding: 0; height: 46px; position: relative; }
+.hm td.cell .v { position: relative; z-index: 1; font-size: 13px; font-variant-numeric: tabular-nums; font-family: "Geist Mono", ui-monospace, monospace; color: var(--ink); }
+.hm td.cell.zero .v { color: #cfcfcf; }
+.hm td.cell.wkmode { background: repeating-linear-gradient(45deg, #fafafa, #fafafa 6px, #f3f3f3 6px, #f3f3f3 12px); text-align: center; }
+.hm td.cell.wkmode .v { color: #9a9a9a; }
+
+.hm td.tot { text-align: right; padding: 0 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hm th.tot, .hm td.tot { width: 94px; min-width: 94px; }
+.hm td.tot.plan { color: var(--mute); font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+.hm td.tot.fact { color: var(--ink); font-weight: 600; font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+.hm td.tot.pct { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+.hm td.tot.delta { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+.hm .delta.pos { color: var(--pos); }
+.hm .delta.neg { color: var(--neg); }
+.hm .pctbar { display: inline-grid; grid-template-columns: 1fr; align-items: center; gap: 3px; min-width: 56px; width: 100%; }
+.hm .pctbar .track { display: block; height: 5px; border-radius: 3px; background: #efefef; overflow: hidden; }
+.hm .pctbar .fill { display: block; height: 100%; border-radius: 3px; background: var(--ink); }
+.hm .pctbar .fill.over { background: var(--pos); }
+.hm .pctbar .lbl { font-size: 11px; color: var(--body); }
+
+.hm tfoot td { background: var(--canvas-soft); font-weight: 600; padding: 11px 10px; text-align: center; font-variant-numeric: tabular-nums; font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; border-top: 1px solid var(--hairline); }
+.hm tfoot td.cult { text-align: left; font-family: "Geist", sans-serif; font-size: 13px; color: var(--body); }
+.hm tfoot td.tot.fact { color: var(--ink); }
 
 /* ---- доска (B5-1b) ---- */
 /* Грид рабочих дней во всю ширину; число колонок — inline-переменная --cols. */

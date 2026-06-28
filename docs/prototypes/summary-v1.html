@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Лента отгрузок — Сводка (V1.1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+
+    /* culture colors (в проде — из Culture.color) */
+    --cult-tomato: #d4322c;
+    --cult-cucumber: #1d8e75;
+    --cult-pepper: #e8830c;
+    --cult-squash: #7928ca;
+
+    --pos: #1d8e75;   /* перелёт плана */
+    --neg: #ab570a;   /* недобор (нейтральный янтарь, не алярм) */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft); color: var(--ink);
+    -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .doc { max-width: 1380px; margin: 0 auto; padding: 48px 40px 100px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 30px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 10px 0 0; color: var(--body); font-size: 14px; line-height: 21px; max-width: 820px; }
+
+  .stage { margin-top: 34px; background: var(--canvas); border: 1px solid var(--hairline); border-radius: 12px; box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; overflow: hidden; }
+
+  /* toolbar */
+  .toolbar { background: var(--canvas); border-bottom: 1px solid var(--hairline); padding: 14px 22px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  .weeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 6px; background: var(--canvas); box-shadow: 0 1px 1px #0000000a; overflow: hidden; }
+  .weeknav button { height: 100%; width: 36px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; font-size: 15px; }
+  .weeknav button:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .weeknav .wlabel { padding: 0 13px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .wlabel .wsub { color: var(--mute); font-weight: 400; }
+  .btn-sm { height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); color: var(--body); font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-sm:hover { background: var(--canvas-soft); color: var(--ink); }
+  .seg { display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 8px; gap: 2px; }
+  .seg button { border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute); padding: 6px 13px; border-radius: 6px; cursor: pointer; }
+  .seg button:hover:not(.active) { color: var(--ink); }
+  .seg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  /* context strip */
+  .ctx { padding: 13px 22px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); }
+  .ctx .week-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; }
+  .ctx .week-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .ctx .week-title .wmeta { color: var(--mute); font-weight: 400; }
+  .ctx .head-metric { margin-left: auto; font-size: 13px; color: var(--mute); white-space: nowrap; }
+  .ctx .head-metric b { color: var(--ink); font-weight: 600; }
+
+  /* heatmap grid */
+  .wrap { overflow-x: auto; }
+  table.hm { border-collapse: collapse; width: 100%; min-width: 920px; }
+  table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
+  .hm thead th { position: sticky; top: 0; background: var(--canvas); z-index: 2; font-weight: 500; font-size: 12px; color: var(--mute); padding: 11px 10px; text-align: center; white-space: nowrap; }
+  .hm thead th .dnum { display: block; font-size: 11px; color: var(--hairline-strong); font-family: "Geist Mono", monospace; margin-top: 2px; }
+  .hm th.cor, .hm td.cult { position: sticky; left: 0; background: var(--canvas); z-index: 3; text-align: left; min-width: 168px; padding-left: 18px; }
+  .hm thead th.cor { z-index: 4; }
+  .hm thead th.sep, .hm td.sep { border-left: 1px solid var(--hairline); }
+  .hm thead th.tot { color: var(--body); }
+
+  .hm td.cult { padding: 10px 10px 10px 18px; }
+  .cult .nm { display: inline-flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; }
+  .cult .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .cult .wk-badge { margin-left: 8px; font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+
+  .hm td.cell { text-align: center; padding: 0; height: 46px; position: relative; }
+  .hm td.cell .v { position: relative; z-index: 1; font-size: 13px; font-variant-numeric: tabular-nums; font-family: "Geist Mono", monospace; color: var(--ink); }
+  .hm td.cell.zero .v { color: #cfcfcf; }
+  .hm td.cell.wkmode { background: repeating-linear-gradient(45deg, #fafafa, #fafafa 6px, #f3f3f3 6px, #f3f3f3 12px); }
+  .hm td.cell.wkmode .v { color: #c4c4c4; }
+
+  /* totals zone */
+  .hm td.tot { text-align: right; padding: 0 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hm th.tot, .hm td.tot { width: 94px; min-width: 94px; }
+  .hm thead th.tot { text-align: right; padding-right: 14px; }
+  .hm td.tot.plan { color: var(--mute); font-family: "Geist Mono", monospace; font-size: 13px; }
+  .hm td.tot.fact { color: var(--ink); font-weight: 600; font-family: "Geist Mono", monospace; font-size: 13px; }
+  .hm td.tot.pct { font-family: "Geist Mono", monospace; font-size: 13px; }
+  .hm td.tot.delta { font-family: "Geist Mono", monospace; font-size: 13px; }
+  .delta.pos { color: var(--pos); }
+  .delta.neg { color: var(--neg); }
+  .pctbar { display: inline-grid; grid-template-columns: 1fr; align-items: center; gap: 3px; min-width: 56px; width: 100%; }
+  .pctbar .track { display: block; height: 5px; border-radius: 3px; background: #efefef; overflow: hidden; }
+  .pctbar .fill { display: block; height: 100%; border-radius: 3px; background: var(--ink); }
+  .pctbar .fill.over { background: var(--pos); }
+  .pctbar .lbl { font-size: 11px; color: var(--body); }
+
+  /* footer totals row */
+  .hm tfoot td { background: var(--canvas-soft); font-weight: 600; padding: 11px 10px; text-align: center; font-variant-numeric: tabular-nums; font-family: "Geist Mono", monospace; font-size: 13px; border-top: 1px solid var(--hairline); }
+  .hm tfoot td.cult { text-align: left; font-family: "Geist", sans-serif; font-size: 13px; color: var(--body); }
+  .hm tfoot td.tot.fact { color: var(--ink); }
+  .hm tfoot td.muted { color: var(--mute); font-weight: 500; }
+
+  .legend { display: flex; align-items: center; gap: 20px; padding: 13px 22px; border-top: 1px solid var(--hairline); background: var(--canvas); flex-wrap: wrap; }
+  .legend .lg { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--mute); }
+  .ramp { display: inline-flex; height: 12px; border-radius: 3px; overflow: hidden; border: 1px solid var(--hairline); }
+  .ramp i { width: 22px; height: 100%; }
+
+  .notes { margin-top: 26px; font-size: 12.5px; color: var(--body); line-height: 19px; background: var(--canvas); border: 1px solid var(--hairline); border-radius: 10px; padding: 16px 18px; }
+  .notes b { color: var(--ink); }
+  .notes code { font-family: "Geist Mono", monospace; font-size: 11.5px; background: var(--canvas-soft-2); padding: 1px 5px; border-radius: 4px; }
+  .notes ul { margin: 8px 0 0; padding-left: 18px; }
+  .notes li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <p class="doc-eyebrow">VSMS · Прототип · V1.1</p>
+  <h1 class="doc-title">Лента отгрузок — вид «Сводка»</h1>
+  <p class="doc-lead">Heatmap текущей недели: строки — культуры, колонки — рабочие дни. Ячейка = эффективный вес (факт перевески, где есть, иначе плановый) по всем поставщикам за день; интенсивность заливки = объём. Справа — итоги недели по культуре: план · факт · % выполнения · отклонение. Read-only, все роли.</p>
+
+  <div class="stage">
+    <!-- toolbar -->
+    <div class="toolbar">
+      <div class="weeknav">
+        <button>‹</button>
+        <span class="wlabel">Неделя 27 <span class="wsub">29 июн–4 июл</span></span>
+        <button>›</button>
+      </div>
+      <button class="btn-sm">Сегодня</button>
+      <div class="spacer"></div>
+      <div class="seg">
+        <button>Лента</button>
+        <button class="active">Сводка</button>
+      </div>
+    </div>
+
+    <!-- context strip -->
+    <div class="ctx">
+      <span class="week-num mono">2026-W27</span>
+      <span class="week-title">29 июня – 4 июля <span class="wmeta">· Пн–Сб · сезон 2026</span></span>
+      <span class="head-metric">Выполнение недели <b>361 / 390 т</b> · 93%</span>
+    </div>
+
+    <!-- heatmap -->
+    <div class="wrap">
+      <table class="hm">
+        <thead>
+          <tr>
+            <th class="cor">Культура</th>
+            <th>Пн<span class="dnum">29.06</span></th>
+            <th>Вт<span class="dnum">30.06</span></th>
+            <th>Ср<span class="dnum">01.07</span></th>
+            <th>Чт<span class="dnum">02.07</span></th>
+            <th>Пт<span class="dnum">03.07</span></th>
+            <th>Сб<span class="dnum">04.07</span></th>
+            <th class="tot sep">План</th>
+            <th class="tot">Факт</th>
+            <th class="tot">%</th>
+            <th class="tot">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Томаты (day-mode) · интенсивность по строке, max=51 (Ср) -->
+          <tr>
+            <td class="cult"><span class="nm"><span class="dot" style="background:var(--cult-tomato)"></span>Томаты</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-tomato) 85%, transparent)"><span class="v" style="color:#fff">42,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-tomato) 79%, transparent)"><span class="v" style="color:#fff">38,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-tomato) 100%, transparent)"><span class="v" style="color:#fff">51,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-tomato) 61%, transparent)"><span class="v">27,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-tomato) 66%, transparent)"><span class="v">30,0</span></td>
+            <td class="cell zero"><span class="v">·</span></td>
+            <td class="tot plan sep">210,0</td>
+            <td class="tot fact">188,0</td>
+            <td class="tot pct"><span class="pctbar"><span class="track"><span class="fill" style="width:90%"></span></span><span class="lbl">90%</span></span></td>
+            <td class="tot delta neg">−22,0</td>
+          </tr>
+          <!-- Огурцы (day-mode, перелёт) · max=28 (Чт) -->
+          <tr>
+            <td class="cult"><span class="nm"><span class="dot" style="background:var(--cult-cucumber)"></span>Огурцы</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 71%, transparent)"><span class="v">18,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 88%, transparent)"><span class="v" style="color:#fff">24,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 82%, transparent)"><span class="v" style="color:#fff">22,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 100%, transparent)"><span class="v" style="color:#fff">28,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 94%, transparent)"><span class="v" style="color:#fff">26,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-cucumber) 59%, transparent)"><span class="v">14,0</span></td>
+            <td class="tot plan sep">120,0</td>
+            <td class="tot fact">132,0</td>
+            <td class="tot pct"><span class="pctbar"><span class="track"><span class="fill over" style="width:100%"></span></span><span class="lbl">110%</span></span></td>
+            <td class="tot delta pos">+12,0</td>
+          </tr>
+          <!-- Перец (day-mode) · max=12 (Ср) -->
+          <tr>
+            <td class="cult"><span class="nm"><span class="dot" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td>
+            <td class="cell zero"><span class="v">·</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-pepper) 80%, transparent)"><span class="v" style="color:#fff">9,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-pepper) 100%, transparent)"><span class="v" style="color:#fff">12,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-pepper) 73%, transparent)"><span class="v" style="color:#fff">8,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-pepper) 66%, transparent)"><span class="v">7,0</span></td>
+            <td class="cell" style="background:color-mix(in srgb, var(--cult-pepper) 52%, transparent)"><span class="v">5,0</span></td>
+            <td class="tot plan sep">60,0</td>
+            <td class="tot fact">41,0</td>
+            <td class="tot pct"><span class="pctbar"><span class="track"><span class="fill" style="width:68%"></span></span><span class="lbl">68%</span></span></td>
+            <td class="tot delta neg">−19,0</td>
+          </tr>
+          <!-- Патиссоны (week-mode: цель на неделю, дневных ячеек нет) -->
+          <tr>
+            <td class="cult"><span class="nm"><span class="dot" style="background:var(--cult-squash)"></span>Патиссоны</span><span class="wk-badge">неделя</span></td>
+            <td class="cell wkmode" colspan="6" style="text-align:center"><span class="v">цель задана на неделю · факт 64,0 т за неделю</span></td>
+            <td class="tot plan sep">80,0</td>
+            <td class="tot fact">64,0</td>
+            <td class="tot pct"><span class="pctbar"><span class="track"><span class="fill" style="width:80%"></span></span><span class="lbl">80%</span></span></td>
+            <td class="tot delta neg">−16,0</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="cult">Итого по дням</td>
+            <td>60,0</td><td>71,0</td><td>85,0</td><td>63,0</td><td>63,0</td><td>19,0</td>
+            <td class="tot plan sep muted">470</td>
+            <td class="tot fact">425,0</td>
+            <td class="tot muted">90%</td>
+            <td class="tot delta neg">−45,0</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- legend -->
+    <div class="legend">
+      <span class="lg">Интенсивность = объём внутри культуры (по строке):
+        <span class="ramp"><i style="background:color-mix(in srgb,var(--cult-cucumber) 18%,transparent)"></i><i style="background:color-mix(in srgb,var(--cult-cucumber) 45%,transparent)"></i><i style="background:color-mix(in srgb,var(--cult-cucumber) 72%,transparent)"></i><i style="background:var(--cult-cucumber)"></i></span>
+        меньше → больше</span>
+      <span class="lg">Δ: <span class="delta pos">+перелёт</span> / <span class="delta neg">−недобор</span></span>
+      <span class="lg">эффективный = факт перевески ?? плановый вес</span>
+    </div>
+  </div>
+
+  <div class="notes">
+    <b>Решения, заложенные в прототип (зафиксированы с пользователем):</b>
+    <ul>
+      <li><b>Охват:</b> текущая неделя (глобальная из URL <code>?week</code>), ось дни × культуры — ровно «день×культура» из PRD.</li>
+      <li><b>Метрика ячейки:</b> эффективный вес <code>actual ?? planned</code> (BR-22), Σ по всем поставщикам за день по <code>arrival_date</code>.</li>
+      <li><b>Итоги по культуре:</b> план (<code>weekTarget</code> для недельной цели или Σ дневных целей), факт (Σ эфф. за неделю), % = факт/план, Δ = факт − план.</li>
+      <li><b>week-mode культура</b> (цель <code>date=null</code>, BR-23): дневных ячеек нет — факт только в итогах; помечена бейджем «неделя».</li>
+      <li><b>Подвал «Итого по дням»</b> — только day-mode культуры (BR-23); колонка «Факт» итога = все культуры (вкл. week-mode).</li>
+      <li><b>Цвета</b> — из <code>Culture.color</code>; <b>интенсивность — внутри культуры (по строке):</b> opacity ∝ значение / макс. ячейка ЭТОЙ культуры за неделю, с минимальным видимым порогом (~18%). Культуры с разными объёмами (томаты 60–80 т/день vs перец 20–50 т/неделю) читаются одинаково; межкультурное сравнение даёт зона итогов, не заливка.</li>
+      <li><b>Данные:</b> переиспользуется существующий <code>getPlanWeek</code> (server/plan/board.ts) — без новой агрегации и без миграции. Вид read-only, все роли (R).</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

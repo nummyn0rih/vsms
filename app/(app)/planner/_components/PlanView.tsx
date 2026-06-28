@@ -16,6 +16,7 @@ import {
   convertDaysToWeek,
   convertWeekToDays,
 } from "@/server/plan/actions";
+import { fmtTons } from "@/lib/format";
 import { PlanInput } from "./PlanInput";
 
 const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -31,11 +32,6 @@ function shortWeekday(dateStr: string): string {
 }
 function dayMonth(dateStr: string): string {
   return dayMonthFmt.format(new Date(`${dateStr}T00:00:00Z`));
-}
-// Вывод тонн: округление до 0,1 т, целые целыми, запятая. Только отображение —
-// в БД/расчётах полная точность. 123.251→«123,3»; 240→«240»; 39.001→«39»; 1.4→«1,4».
-function fmtTons(n: number): string {
-  return n.toFixed(1).replace(/\.0$/, "").replace(".", ",");
 }
 
 const EMPTY_PROGRESS: CellProgress = {

@@ -5,12 +5,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Feed, FeedShipment, FeedWeek } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
-import { isoWeekRange, formatWeekParam } from "@/server/shipments/workdays";
+import {
+  isoWeekRange,
+  formatWeekParam,
+  isoWeek as isoWeekOf,
+  seasonWeekBounds,
+  compareIsoWeek,
+  currentSeasonWeek,
+} from "@/server/shipments/workdays";
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
 import { FilterCombo } from "./FilterCombo";
 import { weekKey, formatWeekRange } from "./week-format";
+import { SummaryView } from "./SummaryView";
+import { usePlanWeek } from "@/app/(app)/planner/_components/usePlanWeek";
 
 type Week = { seasonYear: number; isoYear: number; isoWeek: number };
 type View = "lenta" | "summary";
@@ -104,6 +113,39 @@ export function ShipmentsFeed({
     setView(v);
     writeUrlParam("view", v);
   }
+
+  // --- Вид «Сводка»: своя неделя (локальный стейт, засеян URL) + лоадер getPlanWeek
+  // (тот же источник, что у вида «План»). Навигация недели пишет ?week (replaceState)
+  // и рефетчит данные через хук — как PlannerShell. ---
+  const [summaryWeek, setSummaryWeek] = useState<Week>(initialWeek);
+  const plan = usePlanWeek({ ...summaryWeek, enabled: view === "summary" });
+
+  function summaryStepWeek(delta: number) {
+    setSummaryWeek((p) => {
+      const { start } = isoWeekRange(p.isoYear, p.isoWeek);
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + delta * 7);
+      const w = isoWeekOf(d);
+      const b = seasonWeekBounds(p.seasonYear);
+      if (compareIsoWeek(w, b.first) < 0 || compareIsoWeek(w, b.last) > 0) return p;
+      const next = { seasonYear: p.seasonYear, isoYear: w.isoYear, isoWeek: w.isoWeek };
+      writeUrlParam("week", formatWeekParam(next));
+      return next;
+    });
+  }
+  function summaryGoToday() {
+    const c = currentSeasonWeek();
+    const next = { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
+    setSummaryWeek(next);
+    writeUrlParam("week", formatWeekParam(next));
+  }
+  const summaryToday = currentSeasonWeek();
+  const summaryIsCurrent =
+    summaryWeek.isoYear === summaryToday.isoYear &&
+    summaryWeek.isoWeek === summaryToday.isoWeek;
+  const summaryBounds = seasonWeekBounds(summaryWeek.seasonYear);
+  const summaryAtFirst = compareIsoWeek(summaryWeek, summaryBounds.first) <= 0;
+  const summaryAtLast = compareIsoWeek(summaryWeek, summaryBounds.last) >= 0;
 
   // --- Состояние фильтров (React state, без localStorage) ---
   const [search, setSearch] = useState("");
@@ -419,48 +461,26 @@ export function ShipmentsFeed({
     onViewChange,
   };
 
-  // Вид «Сводка» (быв. Heatmap) — плейсхолдер «скоро» (B5-nav). Неделя в URL
-  // сохраняется (навигация недели тут не нужна — вид сводный по сезону).
+  // Вид «Сводка» (heatmap недели): данные — getPlanWeek по ?week (тот же источник,
+  // что вид «План»). Неделя глобальна в URL, навигация рефетчит через usePlanWeek.
   if (view === "summary") {
     return (
       <div ref={rootRef}>
         <FeedToolbar
           ref={toolbarRef}
           createSlot={createButton}
-          weekLabel={`Неделя ${initialWeek.isoWeek}`}
-          weekSub={weekRangeSub(initialWeek.isoYear, initialWeek.isoWeek)}
-          onPrevWeek={() => {}}
-          onNextWeek={() => {}}
-          onToday={() => {}}
-          prevDisabled
-          nextDisabled
-          todayActive={false}
+          weekLabel={`Неделя ${summaryWeek.isoWeek}`}
+          weekSub={weekRangeSub(summaryWeek.isoYear, summaryWeek.isoWeek)}
+          onPrevWeek={() => summaryStepWeek(-1)}
+          onNextWeek={() => summaryStepWeek(1)}
+          onToday={summaryGoToday}
+          prevDisabled={summaryAtFirst}
+          nextDisabled={summaryAtLast}
+          todayActive={!summaryIsCurrent}
           showFilters={false}
           {...viewProps}
         />
-        <div className="feedzone">
-          <div className="empty">
-            <div className="ill">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="18" y1="20" x2="18" y2="10" />
-                <line x1="12" y1="20" x2="12" y2="4" />
-                <line x1="6" y1="20" x2="6" y2="14" />
-              </svg>
-            </div>
-            <h3>Сводка скоро</h3>
-            <p>
-              Сводный вид по сезону (тепловая карта поставок) появится позже. Пока
-              пользуйтесь «Лентой» и планировщиком.
-            </p>
-          </div>
-        </div>
+        <SummaryView week={plan.week} loading={plan.loading} />
         {createDialog}
       </div>
     );
