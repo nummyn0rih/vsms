@@ -135,7 +135,11 @@ export function AcceptanceMachine({
         {isSent && (
           <RoleGate allow={["operator", "admin"]}>
             <div className="mt-auto flex items-center gap-2 pt-1">
-              <MarkArrivedButton shipmentId={machine.id} code={machine.code} />
+              <MarkArrivedButton
+                shipmentId={machine.id}
+                code={machine.code}
+                arrivalDate={machine.arrivalDate}
+              />
             </div>
           </RoleGate>
         )}

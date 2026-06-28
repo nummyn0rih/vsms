@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole, AuthError } from "@/server/auth/session";
-import { logChange } from "@/server/changelog";
+import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
   setActualWeightSchema,
@@ -13,12 +13,18 @@ import {
   type SetActualWeightInput,
 } from "./schema";
 import { applyInboundArrivedTareLeg } from "@/server/shipments/packaging";
+import { parseDateUTC } from "@/server/shipments/workdays";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
 const SHIPMENT = "Shipment";
 const ITEM = "ShipmentItem";
 const PATH = "/acceptance";
 const FEED_PATH = "/shipments"; // лента и вид «План» читают факт
+
+// Дата-only YYYY-MM-DD для ChangeLog old-значений (как в server/shipments/actions).
+function toDateString(d: Date | null): string | null {
+  return d ? d.toISOString().slice(0, 10) : null;
+}
 
 function authFail(e: unknown): { ok: false; error: string } | null {
   if (e instanceof AuthError) {
@@ -60,7 +66,9 @@ export async function setActualWeight(
         where: { id: shipmentItemId },
         select: {
           actual_weight_kg: true,
-          shipment: { select: { id: true, status: true } },
+          shipment: {
+            select: { id: true, status: true, arrival_date: true },
+          },
         },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
@@ -88,9 +96,13 @@ export async function setActualWeight(
       // Авто-arrived: первый сохранённый вес (был null, стал не-null) у машины sent.
       const isFirstWeight = oldValue == null && newDecimal != null;
       if (isFirstWeight && item.shipment.status === "sent") {
+        // Фактическая дата прибытия = сегодня (BR-24а): первая перевеска и есть факт
+        // прибытия. Молча, в том же переходе. Второй вес сюда не входит (status уже
+        // arrived) → дата не перезаписывается.
+        const today = new Date().toISOString().slice(0, 10);
         await tx.shipment.update({
           where: { id: item.shipment.id },
-          data: { status: "arrived" },
+          data: { status: "arrived", arrival_date: parseDateUTC(today) },
         });
         // BR-3: плечо прибытия тары (в пути -1 → завод 0). Идемпотентно.
         const created = await applyInboundArrivedTareLeg(tx, item.shipment.id);
@@ -100,6 +112,13 @@ export async function setActualWeight(
           field: "status",
           oldValue: "sent",
           newValue: "arrived",
+        });
+        entries.push({
+          entity: SHIPMENT,
+          entityId: item.shipment.id,
+          field: "arrival_date",
+          oldValue: toDateString(item.shipment.arrival_date),
+          newValue: today,
         });
         entries.push({
           entity: SHIPMENT,
@@ -125,6 +144,7 @@ export async function setActualWeight(
 // arrived не падает и не дублирует лог). На иных статусах — отказ.
 export async function markArrived(input: {
   shipmentId: number;
+  arrivalDate?: string;
 }): Promise<ActionResult> {
   try {
     const user = await requireRole("operator", "admin");
@@ -133,44 +153,56 @@ export async function markArrived(input: {
     if (!parsed.success) {
       return { ok: false, error: "Некорректная машина" };
     }
-    const { shipmentId } = parsed.data;
+    const { shipmentId, arrivalDate } = parsed.data;
 
     const result = await prisma.$transaction(async (tx) => {
       const shipment = await tx.shipment.findUnique({
         where: { id: shipmentId },
-        select: { status: true },
+        select: { status: true, arrival_date: true },
       });
       if (!shipment) return { ok: false as const, error: "Отгрузка не найдена" };
-      if (shipment.status === "arrived") return { ok: true as const }; // идемпотентно
+      if (shipment.status === "arrived") return { ok: true as const }; // идемпотентно, дату не трогаем
       if (shipment.status !== "sent") {
         return { ok: false as const, error: "Машина не в пути" };
       }
 
+      // Фактическая дата прибытия (BR-24б): если оператор выбрал — пишем, иначе
+      // arrival_date не меняем (старое поведение). Факт допустим в любой день —
+      // без проверки рабочего дня / departure ≤ arrival.
       await tx.shipment.update({
         where: { id: shipmentId },
-        data: { status: "arrived" },
+        data: {
+          status: "arrived",
+          ...(arrivalDate ? { arrival_date: parseDateUTC(arrivalDate) } : {}),
+        },
       });
       // BR-3: плечо прибытия тары (в пути -1 → завод 0). Идемпотентно.
       const created = await applyInboundArrivedTareLeg(tx, shipmentId);
-      await logChange(
-        [
-          {
-            entity: SHIPMENT,
-            entityId: shipmentId,
-            field: "status",
-            oldValue: "sent",
-            newValue: "arrived",
-          },
-          {
-            entity: SHIPMENT,
-            entityId: shipmentId,
-            field: "movements",
-            newValue: `плечо прибытия: ${created} движ.`,
-          },
-        ],
-        Number(user.id),
-        tx,
-      );
+      const entries: ChangeEntry[] = [
+        {
+          entity: SHIPMENT,
+          entityId: shipmentId,
+          field: "status",
+          oldValue: "sent",
+          newValue: "arrived",
+        },
+        {
+          entity: SHIPMENT,
+          entityId: shipmentId,
+          field: "movements",
+          newValue: `плечо прибытия: ${created} движ.`,
+        },
+      ];
+      if (arrivalDate) {
+        entries.push({
+          entity: SHIPMENT,
+          entityId: shipmentId,
+          field: "arrival_date",
+          oldValue: toDateString(shipment.arrival_date),
+          newValue: arrivalDate,
+        });
+      }
+      await logChange(entries, Number(user.id), tx);
       return { ok: true as const };
     });
 

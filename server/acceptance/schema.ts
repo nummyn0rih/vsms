@@ -14,6 +14,9 @@ export type SetActualWeightInput = z.infer<typeof setActualWeightSchema>;
 
 export const markArrivedSchema = z.object({
   shipmentId: z.number().int().positive(),
+  // Фактическая дата прибытия (BR-24б). Опционально ради идемпотентности/обратной
+  // совместимости: не передана → arrival_date не меняется. Date-only YYYY-MM-DD.
+  arrivalDate: z.string().date().optional(),
 });
 
 // --- C1a. Акт приёмки позиции (simple). Принятый вес — производное (BR-10),
