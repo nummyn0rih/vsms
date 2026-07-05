@@ -98,6 +98,18 @@ UI
 
 ---
 
+## Фикс шапки (summary-fix, после первой реализации)
+Симптом: sticky-`thead` «Сводки» всплывает посреди таблицы и просвечивает. Две причины в `app/globals.css`
+(сверка с рабочей матрицей «Плана» `table.pmatrix`, у которой бага нет):
+1. **`.hm-wrap { overflow-x: auto }`** → по CSS `overflow-y: visible` при этом вычисляется в `auto`, обёртка
+   становится вертикальным скролл-контейнером, sticky-шапка прилипает к ней, а не к странице. **Фикс:**
+   `.hm-wrap { overflow: visible }` (как `.matrixwrap` у «Плана»; один скролл — страницы).
+2. **`table.hm { border-collapse: collapse }`** ломает sticky-`th` + низкий `z-index`. **Фикс:**
+   `border-collapse: separate; border-spacing: 0`; поднять z-index под паттерн `pmatrix`:
+   `.hm thead th` z-index `2 → 20`; `.hm thead th.cor` `4 → 30`; `.hm td.cult` (tbody sticky-колонка) `3 → 10`.
+Только CSS, без изменения TSX/логики. Проверка: шапка закреплена под контекст-полосой при вертикальном скролле,
+непрозрачна, горизонтальный скролл узкой таблицы работает через страницу.
+
 ## После задачи — обновление памяти (зона PM, не Claude Code)
 - TASKS.md: V1.1 «Сводка/Heatmap» → `[x]`.
 - CONTEXT-HANDOFF.md: PROJECT STATE / CURRENT IMPLEMENTATION += вид «Сводка»; снять из OPEN QUESTIONS
