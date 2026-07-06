@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Индикаторы дефицита (alerts v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+
+    /* deficit = amber (status «arrived» semantics from board B5-2) — информативный, НЕ алярм */
+    --amber-zone: #fff6e3;
+    --amber-badge: #ffefcf;
+    --amber-dot: #f5a623;
+    --amber-fg: #ab570a;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1120px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-head { margin-bottom: 8px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 12px 0 0; color: var(--body); font-size: 15px; line-height: 22px; max-width: 780px; letter-spacing: -0.01em; }
+  .doc-lead .amber { color: var(--amber-fg); font-weight: 500; }
+
+  .group { margin-top: 56px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 44px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 820px; }
+  .frame-desc b { color: var(--body); font-weight: 600; }
+
+  .stage {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+  }
+  .stage-pad { padding: 22px; background: var(--canvas-soft); }
+  .stage-note {
+    font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute);
+    padding: 9px 16px; border-top: 1px dashed var(--hairline); background: var(--canvas);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .stage-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 22px; background: var(--canvas-soft); }
+  .split-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .split-tag { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); display: flex; align-items: center; gap: 7px; }
+  .split-tag .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--hairline-strong); }
+  .split-tag.rec .pip { background: var(--ink); }
+  .split-tag.rec b { color: var(--ink); font-weight: 600; }
+
+  /* ===================== PAGE HEAD (context) ===================== */
+  .page-head {
+    padding: 18px 20px; background: var(--canvas);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+    flex-wrap: wrap; border-bottom: 1px solid var(--hairline);
+  }
+  .page-title { font-size: 20px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .page-sub { margin: 4px 0 0; color: var(--mute); font-size: 12px; max-width: 460px; line-height: 17px; }
+  .factory-sum { border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas); padding: 9px 14px; box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; }
+  .factory-sum .fs-label { font-size: 11px; color: var(--mute); margin-bottom: 5px; }
+  .factory-sum .fs-figs { display: flex; align-items: baseline; gap: 14px; }
+  .factory-sum .fig { display: flex; align-items: baseline; gap: 5px; }
+  .factory-sum .fig .n { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; }
+  .factory-sum .fig .u { font-size: 12px; color: var(--body); }
+
+  .ctx-body { padding: 18px 20px; background: var(--canvas); }
+
+  /* ===================== DEFICIT PANEL ===================== */
+  .dpanel {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas);
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; overflow: hidden;
+  }
+  .dpanel-head {
+    display: flex; align-items: center; gap: 10px; padding: 11px 15px;
+    border-bottom: 1px solid var(--hairline); background: var(--canvas);
+  }
+  .dp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--amber-dot); box-shadow: 0 0 0 3px #f5a62326; flex-shrink: 0; }
+  .dp-title { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+  .dp-count {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 6px;
+    background: var(--amber-badge); color: var(--amber-fg);
+    font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .dp-note { margin-left: auto; font-size: 12px; color: var(--mute); display: inline-flex; align-items: center; gap: 6px; }
+  .dp-note svg { width: 13px; height: 13px; opacity: .8; }
+
+  .dp-rows { display: flex; flex-direction: column; }
+  .drow {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center; gap: 16px; padding: 10px 15px;
+  }
+  .drow + .drow { border-top: 1px solid var(--hairline); }
+  .drow:hover { background: var(--canvas-soft); }
+
+  .drow-l { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .d-item { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; }
+  .d-sep { color: var(--hairline-strong); flex-shrink: 0; }
+  .d-farmer { font-size: 13px; color: var(--body); letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 2; min-width: 40px; }
+  .d-scope { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute);
+    border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+
+  .drow-r { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; white-space: nowrap; }
+  .d-bal { font-family: "Geist Mono", monospace; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .d-bal .thr { color: var(--mute); }
+  .d-bal .u { color: var(--mute); }
+  .d-def {
+    font-family: "Geist Mono", monospace; font-size: 13px; font-weight: 500;
+    font-variant-numeric: tabular-nums; color: var(--amber-fg);
+    min-width: 58px; text-align: right; display: inline-block;
+  }
+
+  .dp-foot {
+    padding: 9px 15px; border-top: 1px solid var(--hairline); background: var(--canvas-soft);
+    font-size: 11.5px; color: var(--mute); display: flex; align-items: center; gap: 8px; line-height: 16px;
+  }
+  .dp-foot svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* overflow variant */
+  .dp-rows.scroll { max-height: 214px; overflow-y: auto; }
+  .dp-showall {
+    width: 100%; border: 0; border-top: 1px solid var(--hairline); background: var(--canvas);
+    font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--body);
+    padding: 9px 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+    letter-spacing: -0.01em;
+  }
+  .dp-showall:hover { background: var(--canvas-soft); color: var(--ink); }
+  .dp-showall svg { width: 14px; height: 14px; }
+
+  /* «any farmer» rule group */
+  .drule { border-top: 1px solid var(--hairline); }
+  .drule:first-child { border-top: 0; }
+  .drule-head {
+    display: flex; align-items: center; gap: 9px; padding: 9px 15px 7px;
+    background: var(--canvas-soft); border-bottom: 1px solid var(--hairline);
+  }
+  .drule-item { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  .drule-scope { font-family: "Geist Mono", monospace; font-size: 10.5px; color: var(--amber-fg);
+    background: var(--amber-badge); border-radius: 4px; padding: 1px 6px; }
+  .drule-thr { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 11.5px; color: var(--mute); }
+  .drule .drow { grid-template-columns: minmax(0, 1fr) auto; padding-left: 27px; }
+  .drule .drow .d-item { color: var(--body); font-weight: 500; }
+
+  /* empty — quiet variant */
+  .dp-empty {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas);
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    display: flex; align-items: center; gap: 11px; padding: 12px 15px;
+  }
+  .dp-empty .chk {
+    width: 20px; height: 20px; border-radius: 50%; background: var(--canvas-soft-2);
+    display: grid; place-items: center; color: var(--hairline-strong); flex-shrink: 0;
+  }
+  .dp-empty .chk svg { width: 13px; height: 13px; }
+  .dp-empty .txt { font-size: 13px; color: var(--body); letter-spacing: -0.01em; }
+  .dp-empty .txt .g { color: var(--mute); }
+
+  /* ---------- matrix sliver (placement context) ---------- */
+  .msliver { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; opacity: .62; }
+  .msliver .mhint {
+    font-family: "Geist Mono", monospace; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--mute); padding: 8px 14px; background: var(--canvas-soft); border-bottom: 1px solid var(--hairline);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .msliver .mhint svg { width: 12px; height: 12px; }
+  table.msmatrix { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; background: var(--canvas); }
+  table.msmatrix th, table.msmatrix td { border-bottom: 1px solid var(--hairline); padding: 9px 14px; }
+  table.msmatrix thead th { background: var(--canvas-soft); font-weight: 500; font-size: 12px; color: var(--body); text-align: right; }
+  table.msmatrix thead th.loc { text-align: left; }
+  table.msmatrix tbody th { text-align: left; font-weight: 500; }
+  table.msmatrix tbody td { text-align: right; font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+  table.msmatrix tbody tr:last-child th, table.msmatrix tbody tr:last-child td { border-bottom: 0; }
+
+  /* ===================== SIDEBAR FRAGMENT ===================== */
+  .sbframe { display: flex; gap: 22px; padding: 24px; background: var(--canvas-soft); flex-wrap: wrap; }
+  .sbcol { display: flex; flex-direction: column; gap: 9px; }
+  .sbcol .sb-tag { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); }
+  .minisb {
+    width: 232px; background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 10px;
+    padding: 8px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px;
+    font-size: 14px; color: var(--body); text-decoration: none; letter-spacing: -0.02em; line-height: 20px;
+  }
+  .nav-item svg.ic { width: 16px; height: 16px; flex-shrink: 0; opacity: .85; }
+  .nav-item:hover { background: var(--canvas-soft-2); color: var(--ink); }
+  .nav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .nav-badge {
+    margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 6px;
+    background: var(--amber-badge); color: var(--amber-fg);
+    font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* ---------- decisions block ---------- */
+  .decisions { margin-top: 64px; border-top: 1px solid var(--hairline); padding-top: 30px; }
+  .decisions h2 { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); margin: 0 0 20px; }
+  .qitem { border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas); padding: 15px 17px; margin-bottom: 12px; max-width: 860px; }
+  .qitem .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 6px; display: flex; align-items: baseline; gap: 9px; }
+  .qitem .q .qn { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--amber-fg); background: var(--amber-badge); border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
+  .qitem .a { font-size: 13px; color: var(--body); line-height: 19px; margin: 0; }
+  .qitem .a b { color: var(--ink); font-weight: 600; }
+  .qitem .a .rec { color: var(--amber-fg); font-weight: 600; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="300" y="300" width="600" height="200" rx="18" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <circle cx="345" cy="345" r="9" fill="#f5a623"/>
+    <rect x="372" y="336" width="150" height="18" rx="6" fill="#171717"/>
+    <rect x="820" y="332" width="46" height="26" rx="7" fill="#ffefcf"/>
+    <rect x="330" y="400" width="300" height="12" rx="6" fill="#ebebeb"/>
+    <rect x="330" y="440" width="240" height="12" rx="6" fill="#ebebeb"/>
+    <text x="835" y="415" font-family="monospace" font-size="26" fill="#ab570a">−380</text>
+    <text x="835" y="455" font-family="monospace" font-size="26" fill="#ab570a">−110</text>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+  <div class="doc-head">
+    <p class="doc-eyebrow">VSMS · alerts v1 · прототип</p>
+    <h1 class="doc-title">Индикаторы дефицита.</h1>
+    <p class="doc-lead">Информационный индикатор нехватки: где годный баланс тары / остаток ингредиента упал ниже
+      порога (<span class="mono">AlertRule</span>). Три элемента — панель над матрицей на <span class="mono">/packaging</span>
+      и <span class="mono">/ingredients</span> + бейдж-счётчик в сайдбаре. Акцент — <span class="amber">янтарный</span>,
+      семантика та же, что у индикатора нехватки на доске B5-2. Дефицит ничего не блокирует — только показывает. Всё read-only.</p>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 1 · ПАНЕЛЬ ДЕФИЦИТА ТАРЫ                                 -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">01 · Панель «Дефицит тары» · /packaging</span><span class="gl-line"></span></div>
+
+    <!-- 01 — несколько нарушений, в контексте страницы -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">1.1</span>
+        <div>
+          <div class="frame-name">Несколько нарушений — в контексте страницы</div>
+          <div class="frame-desc">Панель встаёт <b>над матрицей балансов</b>, под шапкой страницы. Строки отсортированы по величине
+            дефицита — сначала худшее. Только <b>годный</b> баланс тары (лом дефицитом не считается). Число / порог — Geist&nbsp;Mono,
+            дефицит — янтарный. Счётчик в заголовке = число активных нарушений.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="1.1 · Дефицит тары — в контексте">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Тара</h1>
+            <p class="page-sub">Реальные остатки тары по локациям и типам. Только годная. Read-only · сезон 2026.</p>
+          </div>
+          <div class="factory-sum">
+            <div class="fs-label">На заводе · годная</div>
+            <div class="fs-figs">
+              <span class="fig"><span class="n mono tnum">1 480</span><span class="u">ящиков</span></span>
+              <span class="fig"><span class="n mono tnum">96</span><span class="u">бочек</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ctx-body">
+          <div class="dpanel">
+            <div class="dpanel-head">
+              <span class="dp-dot"></span>
+              <span class="dp-title">Дефицит тары</span>
+              <span class="dp-count tnum">4</span>
+              <span class="dp-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                ниже порога у 4 фермеров
+              </span>
+            </div>
+            <div class="dp-rows">
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Ковальчук А. П.</span></div>
+                <div class="drow-r"><span class="d-bal">120 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−380</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Гаспарян В. С.</span></div>
+                <div class="drow-r"><span class="d-bal">210 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−290</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Бочка 250 кг</span><span class="d-sep">·</span><span class="d-farmer">Мельник И. Д.</span></div>
+                <div class="drow-r"><span class="d-bal">6 <span class="thr">/ 30</span> <span class="u">шт</span></span><span class="d-def">−24</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Ткаченко Л. Н.</span></div>
+                <div class="drow-r"><span class="d-bal">480 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−20</span></div>
+              </div>
+            </div>
+            <div class="dp-foot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Индикатор не блокирует отгрузки. Порог: Настройки → Правила дефицита.
+            </div>
+          </div>
+
+          <!-- placement context: matrix below -->
+          <div class="msliver">
+            <div class="mhint">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+              матрица балансов ниже
+            </div>
+            <table class="msmatrix">
+              <thead><tr><th class="loc">Локация</th><th>Ящик овощной</th><th>Бочка 250 кг</th></tr></thead>
+              <tbody>
+                <tr><th>Завод</th><td>1 480</td><td>96</td></tr>
+                <tr><th>Ковальчук А. П.</th><td>120</td><td>18</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1.2 single + 1.3 empty side by side -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">1.2</span>
+        <div>
+          <div class="frame-name">Одно нарушение · и пустое состояние</div>
+          <div class="frame-desc">Одна строка — панель без изменений, счётчик «1». <b>Пусто:</b> рекомендуем <b>скрывать панель целиком</b>
+            (нет шума на здоровой странице). Тихая строка «Дефицита нет» — запасной вариант, если нужна явная отбивка «проверено».</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="1.2 · Одно нарушение и пусто">
+        <div class="split">
+          <div class="split-col">
+            <div class="split-tag"><span class="pip"></span>ОДНО НАРУШЕНИЕ</div>
+            <div class="dpanel">
+              <div class="dpanel-head">
+                <span class="dp-dot"></span>
+                <span class="dp-title">Дефицит тары</span>
+                <span class="dp-count tnum">1</span>
+              </div>
+              <div class="dp-rows">
+                <div class="drow">
+                  <div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Ковальчук А. П.</span></div>
+                  <div class="drow-r"><span class="d-bal">120 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−380</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="split-col">
+            <div class="split-tag rec"><span class="pip"></span>ПУСТО · <b>рекомендация: панель скрыта</b></div>
+            <div class="msliver" style="opacity:.62; margin-top:0">
+              <div class="mhint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+                панели нет — сразу матрица
+              </div>
+              <table class="msmatrix">
+                <thead><tr><th class="loc">Локация</th><th>Ящик овощной</th><th>Бочка</th></tr></thead>
+                <tbody>
+                  <tr><th>Завод</th><td>1 480</td><td>96</td></tr>
+                  <tr><th>Ковальчук А. П.</th><td>640</td><td>22</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="split-tag" style="margin-top:6px"><span class="pip"></span>ПУСТО · запасной вариант — тихая строка</div>
+            <div class="dp-empty">
+              <span class="chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <span class="txt">Дефицита нет <span class="g">· все позиции выше порога</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1.3 overflow -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">1.3</span>
+        <div>
+          <div class="frame-name">Много нарушений (8+) — overflow</div>
+          <div class="frame-desc">Панель не растёт бесконечно: список сжимается в <b>компактный скролл</b> (высота ≈ 5 строк), заголовок держит
+            полный счётчик. Кнопка «Показать все» разворачивает без скролла. Строки всё так же по величине дефицита.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="1.3 · Overflow 8+">
+        <div class="stage-pad">
+          <div class="dpanel">
+            <div class="dpanel-head">
+              <span class="dp-dot"></span>
+              <span class="dp-title">Дефицит тары</span>
+              <span class="dp-count tnum">9</span>
+              <span class="dp-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                прокрутите список
+              </span>
+            </div>
+            <div class="dp-rows scroll">
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Ковальчук А. П.</span></div><div class="drow-r"><span class="d-bal">120 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−380</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Гаспарян В. С.</span></div><div class="drow-r"><span class="d-bal">210 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−290</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Сидоренко Р. В.</span></div><div class="drow-r"><span class="d-bal">300 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−200</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Бочка 250 кг</span><span class="d-sep">·</span><span class="d-farmer">Бондаренко О. М.</span></div><div class="drow-r"><span class="d-bal">4 <span class="thr">/ 30</span> <span class="u">шт</span></span><span class="d-def">−26</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Бочка 250 кг</span><span class="d-sep">·</span><span class="d-farmer">Мельник И. Д.</span></div><div class="drow-r"><span class="d-bal">6 <span class="thr">/ 30</span> <span class="u">шт</span></span><span class="d-def">−24</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Гнатенко П. Р.</span></div><div class="drow-r"><span class="d-bal">340 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−160</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Лазарев К. О.</span></div><div class="drow-r"><span class="d-bal">380 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−120</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Бочка 250 кг</span><span class="d-sep">·</span><span class="d-farmer">Цой В. А.</span></div><div class="drow-r"><span class="d-bal">12 <span class="thr">/ 30</span> <span class="u">шт</span></span><span class="d-def">−18</span></div></div>
+              <div class="drow"><div class="drow-l"><span class="d-item">Ящик овощной</span><span class="d-sep">·</span><span class="d-farmer">Ткаченко Л. Н.</span></div><div class="drow-r"><span class="d-bal">480 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−20</span></div></div>
+            </div>
+            <button class="dp-showall">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              Показать все · 9
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 1.4 long names -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">1.4</span>
+        <div>
+          <div class="frame-name">Длинные имена — строка не ломается</div>
+          <div class="frame-desc">Тип тары и имя фермера обрезаются многоточием; число / порог и дефицит всегда прижаты вправо
+            и остаются на одной строке. Полное имя — в тултипе (idea).</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="1.4 · Длинные имена">
+        <div class="stage-pad">
+          <div class="dpanel">
+            <div class="dpanel-head">
+              <span class="dp-dot"></span>
+              <span class="dp-title">Дефицит тары</span>
+              <span class="dp-count tnum">2</span>
+            </div>
+            <div class="dp-rows">
+              <div class="drow">
+                <div class="drow-l"><span class="d-item" title="Ящик овощной универсальный 40×30×25, перфорированный">Ящик овощной универсальный 40×30×25, перфорированный</span><span class="d-sep">·</span><span class="d-farmer" title="КФХ «Приморский рассвет» — Иванов-Петровский Иннокентий Иннокентьевич">КФХ «Приморский рассвет» — Иванов-Петровский Иннокентий Иннокентьевич</span></div>
+                <div class="drow-r"><span class="d-bal">120 <span class="thr">/ 500</span> <span class="u">шт</span></span><span class="d-def">−380</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item" title="Бочка пластиковая пищевая 250 кг">Бочка пластиковая пищевая 250 кг</span><span class="d-sep">·</span><span class="d-farmer" title="Сельскохозяйственный производственный кооператив «Заречье»">Сельскохозяйственный производственный кооператив «Заречье»</span></div>
+                <div class="drow-r"><span class="d-bal">6 <span class="thr">/ 30</span> <span class="u">шт</span></span><span class="d-def">−24</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 2 · ПАНЕЛЬ ДЕФИЦИТА ИНГРЕДИЕНТОВ                         -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">02 · Панель «Дефицит ингредиентов» · /ingredients</span><span class="gl-line"></span></div>
+
+    <!-- 2.1 multi units -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">2.1</span>
+        <div>
+          <div class="frame-name">Несколько нарушений · единицы кг / л</div>
+          <div class="frame-desc">Та же панель, единицы берутся из ингредиента (<b>кг</b> или <b>л</b>) и печатаются в каждой строке.
+            Сортировка — по величине дефицита в единицах позиции.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="2.1 · Дефицит ингредиентов">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Ингредиенты</h1>
+            <p class="page-sub">Реальные остатки ингредиентов по локациям. Read-only · сезон 2026.</p>
+          </div>
+          <div class="factory-sum">
+            <div class="fs-label">На заводе</div>
+            <div class="fs-figs">
+              <span class="fig"><span class="n mono tnum">820</span><span class="u">Соль, кг</span></span>
+              <span class="fig"><span class="n mono tnum">140</span><span class="u">Масло, л</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="ctx-body">
+          <div class="dpanel">
+            <div class="dpanel-head">
+              <span class="dp-dot"></span>
+              <span class="dp-title">Дефицит ингредиентов</span>
+              <span class="dp-count tnum">3</span>
+              <span class="dp-note">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                ниже порога у 3 фермеров
+              </span>
+            </div>
+            <div class="dp-rows">
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Сахар-песок</span><span class="d-sep">·</span><span class="d-farmer">Сидоренко Р. В.</span></div>
+                <div class="drow-r"><span class="d-bal">220 <span class="thr">/ 600</span> <span class="u">кг</span></span><span class="d-def">−380</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Соль пищевая</span><span class="d-sep">·</span><span class="d-farmer">Петров А. Н.</span></div>
+                <div class="drow-r"><span class="d-bal">40 <span class="thr">/ 150</span> <span class="u">кг</span></span><span class="d-def">−110</span></div>
+              </div>
+              <div class="drow">
+                <div class="drow-l"><span class="d-item">Масло подсолнечное</span><span class="d-sep">·</span><span class="d-farmer">Ковальчук А. П.</span></div>
+                <div class="drow-r"><span class="d-bal">18 <span class="thr">/ 80</span> <span class="u">л</span></span><span class="d-def">−62</span></div>
+              </div>
+            </div>
+            <div class="dp-foot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Индикатор не блокирует. Кг и л не суммируются — учёт по каждому ингредиенту раздельный.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2.2 any-farmer expansion -->
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">2.2</span>
+        <div>
+          <div class="frame-name">Правило «у любого фермера» — разворот по фермерам</div>
+          <div class="frame-desc">Правило с областью <span class="mono">любой фермер</span> разворачивается в строки только по тем фермерам,
+            <b>у кого предмет реально присутствует</b> и баланс ниже порога. Фермеры без этого ингредиента (0 / нет позиции) —
+            не показываются. Провенанс правила виден чипом в шапке группы.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="2.2 · Разворот «любой фермер»">
+        <div class="stage-pad">
+          <div class="dpanel">
+            <div class="dpanel-head">
+              <span class="dp-dot"></span>
+              <span class="dp-title">Дефицит ингредиентов</span>
+              <span class="dp-count tnum">3</span>
+            </div>
+            <div class="dp-rows">
+              <div class="drule">
+                <div class="drule-head">
+                  <span class="drule-item">Соль пищевая</span>
+                  <span class="drule-scope">любой фермер</span>
+                  <span class="drule-thr">порог 150 кг</span>
+                </div>
+                <div class="drow">
+                  <div class="drow-l"><span class="d-item">Соль пищевая</span><span class="d-sep">·</span><span class="d-farmer">Петров А. Н.</span></div>
+                  <div class="drow-r"><span class="d-bal">40 <span class="thr">/ 150</span> <span class="u">кг</span></span><span class="d-def">−110</span></div>
+                </div>
+                <div class="drow">
+                  <div class="drow-l"><span class="d-item">Соль пищевая</span><span class="d-sep">·</span><span class="d-farmer">Кузнецов Д. С.</span></div>
+                  <div class="drow-r"><span class="d-bal">90 <span class="thr">/ 150</span> <span class="u">кг</span></span><span class="d-def">−60</span></div>
+                </div>
+              </div>
+              <div class="drule">
+                <div class="drule-head">
+                  <span class="drule-item">Масло подсолнечное</span>
+                  <span class="drule-scope">Ковальчук А. П.</span>
+                  <span class="drule-thr">порог 80 л</span>
+                </div>
+                <div class="drow">
+                  <div class="drow-l"><span class="d-item">Масло подсолнечное</span><span class="d-sep">·</span><span class="d-farmer">Ковальчук А. П.</span></div>
+                  <div class="drow-r"><span class="d-bal">18 <span class="thr">/ 80</span> <span class="u">л</span></span><span class="d-def">−62</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="dp-foot">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Соль есть ещё у 4 фермеров — все выше порога, поэтому в списке их нет.
+            </div>
+          </div>
+        </div>
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><circle cx="12" cy="12" r="4"/></svg>
+          idea · группировка по правилу — опциональна; плоский список (2.1) — базовый вид. Развилка вынесена в «Решения».
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- GROUP 3 · БЕЙДЖ В САЙДБАРЕ                                     -->
+  <!-- ============================================================= -->
+  <div class="group">
+    <div class="group-label"><span class="gl-txt">03 · Бейдж-счётчик в сайдбаре</span><span class="gl-line"></span></div>
+
+    <section class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">3.1</span>
+        <div>
+          <div class="frame-name">Бейдж на пунктах «Тара» и «Ингредиенты»</div>
+          <div class="frame-desc">Янтарная пилюля с числом активных нарушений, прижата вправо у пункта меню. Радиус 6px, те же токены,
+            что у счётчика в панели. <b>0 → бейджа нет</b> (пункт без хвоста).</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="3.1 · Бейдж в сайдбаре">
+        <div class="sbframe">
+          <div class="sbcol">
+            <span class="sb-tag">ЕСТЬ НАРУШЕНИЯ</span>
+            <div class="minisb">
+              <a class="nav-item" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Планировщик
+              </a>
+              <a class="nav-item active" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+                Тара
+                <span class="nav-badge tnum">4</span>
+              </a>
+              <a class="nav-item" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+                Ингредиенты
+                <span class="nav-badge tnum">3</span>
+              </a>
+            </div>
+          </div>
+          <div class="sbcol">
+            <span class="sb-tag">НАРУШЕНИЙ НЕТ · 0 → БЕЗ БЕЙДЖА</span>
+            <div class="minisb">
+              <a class="nav-item" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Планировщик
+              </a>
+              <a class="nav-item" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+                Тара
+              </a>
+              <a class="nav-item" href="#">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+                Ингредиенты
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- DECISIONS / QUESTIONS                                         -->
+  <!-- ============================================================= -->
+  <div class="decisions">
+    <h2>Решения / вопросы</h2>
+
+    <div class="qitem">
+      <p class="q"><span class="qn">Р1</span>Пустое состояние — скрывать панель</p>
+      <p class="a"><span class="rec">Рекомендация: панель скрыта целиком</span>, когда нарушений нет — здоровая страница без шума.
+        Тихая строка «Дефицита нет» показана как запасной вариант (1.2), если продукту нужна явная отбивка «проверено».
+        <b>Вопрос:</b> нужна ли отбивка, или скрываем молча?</p>
+    </div>
+
+    <div class="qitem">
+      <p class="q"><span class="qn">Р2</span>Overflow при 8+ строках</p>
+      <p class="a"><span class="rec">Рекомендация: компактный скролл</span> (≈5 строк) + «Показать все» (1.3). Панель не выдавливает матрицу
+        вниз экрана. <b>Альтернатива:</b> сворачивать в «показать все» сразу от N&gt;5 без скролла. Выберите порог сворачивания.</p>
+    </div>
+
+    <div class="qitem">
+      <p class="q"><span class="qn">Р3</span>Сортировка при разных единицах</p>
+      <p class="a">Сейчас — по абсолютной величине дефицита внутри общего списка (−380 шт выше −24 шт). При смешении тары/бочек
+        и кг/л «величина» несравнима между типами. <b>Вопрос:</b> сортировать глобально по числу, или группировать по позиции,
+        а внутри — по дефициту? (см. 2.2 как группировку.)</p>
+    </div>
+
+    <div class="qitem">
+      <p class="q"><span class="qn">Р4</span>Группировка «любой фермер» — плоско или в группы</p>
+      <p class="a">Правило «любой фермер» даёт несколько строк одной позиции. Базовый вид (2.1) — плоский список, где эти строки
+        просто идут подряд. Группировка с шапкой правила (2.2) — опция для читаемости провенанса. <b>Вопрос:</b> нужен ли режим группировки в v1?</p>
+    </div>
+
+    <div class="qitem">
+      <p class="q"><span class="qn">Р5</span>Клик по строке — переход в матрицу</p>
+      <p class="a"><b>Idea, не обязательна к проработке:</b> клик по строке скроллит/подсвечивает ячейку фермер×тип в матрице ниже.
+        Read-only, никаких действий. Помечаю как кандидата на v2.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Прототип статичный. «Показать все» просто снимает ограничение высоты — демонстрация overflow-развилки.
+  document.querySelectorAll('.dp-showall').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var rows = btn.parentElement.querySelector('.dp-rows');
+      if (!rows) return;
+      var expanded = rows.classList.toggle('scroll') === false;
+      btn.lastChild.textContent = expanded ? ' Свернуть' : ' Показать все · 9';
+      var note = btn.parentElement.querySelector('.dp-note');
+      if (note) note.lastChild.textContent = expanded ? ' весь список' : ' прокрутите список';
+    });
+  });
+</script>
+</body>
+</html>

@@ -843,6 +843,81 @@ table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
 .deficit-tip .dt-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
 .deficit-tip .dt-row .tnum { font-variant-numeric: tabular-nums; font-weight: 600; }
 
+/* V1.1: панель "Дефицит тары/ингредиентов" (/packaging, /ingredients) + бейдж в
+   сайдбаре. Порт docs/prototypes/alerts-v1.html — амбер те же хексы, что у
+   .deficit-chip выше (B5-2): #ffefcf/#ab570a/#f5a623. Информационно, не алярм. */
+.dpanel {
+  border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas);
+  box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; overflow: hidden;
+}
+.dpanel-head {
+  display: flex; align-items: center; gap: 10px; padding: 11px 15px;
+  border-bottom: 1px solid var(--hairline); background: var(--canvas);
+}
+.dp-dot { width: 8px; height: 8px; border-radius: 50%; background: #f5a623; box-shadow: 0 0 0 3px #f5a62326; flex-shrink: 0; }
+.dp-title { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; }
+.dp-count {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 6px;
+  background: #ffefcf; color: #ab570a;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.dp-note { margin-left: auto; font-size: 12px; color: var(--mute); display: inline-flex; align-items: center; gap: 6px; }
+.dp-note svg { width: 13px; height: 13px; opacity: .8; }
+
+.dp-rows { display: flex; flex-direction: column; }
+.drow {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 16px; padding: 10px 15px;
+}
+.drow + .drow { border-top: 1px solid var(--hairline); }
+.drow:hover { background: var(--canvas-soft); }
+
+.drow-l { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.d-item {
+  font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1;
+}
+.d-sep { color: var(--hairline-strong); flex-shrink: 0; }
+.d-farmer {
+  font-size: 13px; color: var(--body); letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 2; min-width: 40px;
+}
+
+.drow-r { display: flex; align-items: baseline; gap: 12px; flex-shrink: 0; white-space: nowrap; }
+.d-bal { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.d-bal .thr { color: var(--mute); }
+.d-bal .u { color: var(--mute); }
+.d-def {
+  font-family: var(--font-mono), "Geist Mono", monospace; font-size: 13px; font-weight: 500;
+  font-variant-numeric: tabular-nums; color: #ab570a;
+  min-width: 58px; text-align: right; display: inline-block;
+}
+
+.dp-foot {
+  padding: 9px 15px; border-top: 1px solid var(--hairline); background: var(--canvas-soft);
+  font-size: 11.5px; color: var(--mute); display: flex; align-items: center; gap: 8px; line-height: 16px;
+}
+.dp-foot svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+/* overflow: >6 строк → скролл ~5 строк + "Показать все" (toggle в DeficitPanel.tsx) */
+.dp-rows.scroll { max-height: 214px; overflow-y: auto; }
+.dp-showall {
+  width: 100%; border: 0; border-top: 1px solid var(--hairline); background: var(--canvas);
+  font-family: inherit; font-size: 12.5px; font-weight: 500; color: var(--body);
+  padding: 9px 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+  letter-spacing: -0.01em;
+}
+.dp-showall:hover { background: var(--canvas-soft); color: var(--ink); }
+.dp-showall svg { width: 14px; height: 14px; }
+
+/* бейдж-счётчик в сайдбаре (components/layout/Sidebar.tsx) */
+.nav-badge {
+  margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 6px;
+  background: #ffefcf; color: #ab570a;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
 /* drag / lock affordance */
 .card.draggable:hover { box-shadow: 0 1px 1px #00000005, 0 4px 10px -2px #0000001c; border-color: var(--hairline-strong); }
 .card.dragging { opacity: .5; box-shadow: 0 8px 20px -4px #00000026; }

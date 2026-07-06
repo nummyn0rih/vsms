@@ -1,6 +1,9 @@
 import { INGREDIENT_UNIT_LABELS } from "@/server/ingredients/schema";
+import { listAlertRules } from "@/server/alert-rules/actions";
+import { computeIngredientAlerts } from "@/server/alert-rules/alerts";
 import { getIngredientBalances } from "@/server/inventory/balances";
 import { FACTORY_LOCATION_ID } from "@/server/shipments/packaging";
+import { DeficitPanel } from "@/components/inventory/DeficitPanel";
 import { IngredientBalanceMatrix } from "./_components/IngredientBalanceMatrix";
 
 // Decimal-форматирование для сводки завода (как в матрице): без округления, без
@@ -12,7 +15,8 @@ function fmtQty(v: number): string {
 }
 
 export default async function IngredientsPage() {
-  const data = await getIngredientBalances();
+  const [data, rules] = await Promise.all([getIngredientBalances(), listAlertRules()]);
+  const alerts = computeIngredientAlerts(rules, data);
 
   // Сводка завода (остаток по ингредиентам) — статична, считаем из cells.
   const factory = data.columns.map((c) => {
@@ -60,7 +64,12 @@ export default async function IngredientsPage() {
         )}
       </div>
 
-      <div className="pt-4">
+      <div className="pt-4 space-y-4">
+        <DeficitPanel
+          title="Дефицит ингредиентов"
+          rows={alerts}
+          footerNote="Индикатор не блокирует. Кг и л не суммируются — учёт по каждому ингредиенту раздельный."
+        />
         <IngredientBalanceMatrix data={data} />
       </div>
     </div>

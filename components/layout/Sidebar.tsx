@@ -21,9 +21,11 @@ function isActive(pathname: string, href: string) {
 export function Sidebar({
   role,
   userLabel,
+  badges,
 }: {
   role: Role;
   userLabel: string;
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -87,6 +89,9 @@ export function Sidebar({
               >
                 <Icon className="size-4 shrink-0" />
                 {!collapsed && item.label}
+                {!collapsed && (badges?.[item.href] ?? 0) > 0 && (
+                  <span className="nav-badge tnum">{badges![item.href]}</span>
+                )}
               </Link>
 
               {showChildren && (

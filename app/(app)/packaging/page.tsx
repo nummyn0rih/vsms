@@ -1,9 +1,13 @@
+import { listAlertRules } from "@/server/alert-rules/actions";
+import { computePackagingAlerts } from "@/server/alert-rules/alerts";
 import { getTareBalances } from "@/server/inventory/balances";
 import { FACTORY_LOCATION_ID } from "@/server/shipments/packaging";
+import { DeficitPanel } from "@/components/inventory/DeficitPanel";
 import { TareBalanceMatrix } from "./_components/TareBalanceMatrix";
 
 export default async function PackagingPage() {
-  const data = await getTareBalances();
+  const [data, rules] = await Promise.all([getTareBalances(), listAlertRules()]);
+  const alerts = computePackagingAlerts(rules, data);
 
   // Сводка завода (целая тара по типам) — статична, считаем на сервере из cells.
   const factory = data.types.map((t) => {
@@ -50,7 +54,12 @@ export default async function PackagingPage() {
         </div>
       </div>
 
-      <div className="pt-4">
+      <div className="pt-4 space-y-4">
+        <DeficitPanel
+          title="Дефицит тары"
+          rows={alerts}
+          footerNote="Индикатор не блокирует отгрузки. Порог: Настройки → Правила дефицита."
+        />
         <TareBalanceMatrix data={data} />
       </div>
     </div>
