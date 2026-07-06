@@ -6,7 +6,7 @@
 
 **Текущий фокус:** A–E, D2-ops, D3-2, transfer, **B5 (доска-планировщик)**, shipment-revert,
 **acceptance auto-date**, **Сводка/Heatmap** (вид на /shipments) — ЗАКРЫТЫ. Идёт **V1.1**, порядок срезов:
-Сводка ✓ → **AlertRule-алерты** (текущий) → карточка поставщика → фильтры. Промпты — `docs/prompts/PROMPTS-*.md`.
+Сводка ✓ → AlertRule-алерты ✓ → **карточка поставщика** (текущий) → фильтры. Промпты — `docs/prompts/PROMPTS-*.md`.
 
 ---
 
@@ -218,9 +218,10 @@
 
 - [x] acceptance auto-date — приёмка: фактическая дата прибытия. `markArrived` += диалог выбора «датой отгрузки / сегодня» (умный дефолт: план в прошлом → дата отгрузки), `setActualWeight` ставит сегодня молча на первой перевеске; ChangeLog `arrival_date`. Без миграции. Коммит `88c4c68`. (`server/acceptance/{schema,actions}.ts`, `AcceptanceActions.tsx`, `AcceptanceBoard.tsx`)
 - [x] V1.1 · Сводка/Heatmap — вид «Сводка» на /shipments (heatmap культуры×дни за неделю, эфф. вес, итоги по культуре; источник `getPlanWeek`, read-only). Прототип `summary-v1.html`, спека `PROMPTS-SUMMARY.md`. Коммиты `05fc1e0` + `574f56c` (fix sticky-шапки).
-- [ ] V1.1 · AlertRule-алерты — сравнение порогов `AlertRule.threshold` с балансом → индикатор дефицита (текущий срез).
-- [ ] V1.1 · карточка поставщика (все вкладки) — после алертов.
+- [x] V1.1 · AlertRule-алерты — `getActiveAlerts` (сравнение порогов с балансом из существующих loaders, null-scope по присутствующим фермерам, good-баланс), панели «Дефицит» на /packaging и /ingredients (сортировка по относительной просадке, пусто→скрыта, overflow→скролл+«Показать все») + бейдж в сайдбаре. Прототип `alerts-v1.html`, спека `PROMPTS-ALERTS.md`. Коммит `35e10bf`.
+- [ ] V1.1 · карточка поставщика (все вкладки) — ТЕКУЩИЙ.
 - [ ] V1.1 · фильтры везде — после карточки.
+- [ ] тех-долг: `getActiveAlerts` в `(app)/layout.tsx` = 3 доп. запроса на КАЖДУЮ навигацию сегмента (не только /packaging|/ingredients). Осознанная цена read-only V1.1 без кэша. Дешёвые фиксы: guard «0 правил → skip», агрегировать балансы только по item/location из правил, `cache()`/короткий TTL для дедупа layout+page.
 - [ ] B5-bulk-2 (опц.) — копипаст карточек по дням; тонкий/overlay-скроллбар в «Плане».
 - [ ] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg`.
 
