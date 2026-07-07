@@ -16,7 +16,7 @@ import {
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
-import { FilterCombo } from "./FilterCombo";
+import { FilterCombo } from "@/components/filters/FilterCombo";
 import { weekKey, formatWeekRange } from "./week-format";
 import { SummaryView } from "./SummaryView";
 import { usePlanWeek } from "@/app/(app)/planner/_components/usePlanWeek";

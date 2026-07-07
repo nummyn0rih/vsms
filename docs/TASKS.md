@@ -6,7 +6,7 @@
 
 **Текущий фокус:** A–E, D2-ops, D3-2, transfer, **B5 (доска-планировщик)**, shipment-revert,
 **acceptance auto-date**, **Сводка/Heatmap** (вид на /shipments) — ЗАКРЫТЫ. Идёт **V1.1**, порядок срезов:
-Сводка ✓ → AlertRule-алерты ✓ → **карточка поставщика** (текущий) → фильтры. Промпты — `docs/prompts/PROMPTS-*.md`.
+Сводка ✓ → AlertRule-алерты ✓ → карточка поставщика ✓ → **фильтры везде** (текущий, последний срез V1.1). Промпты — `docs/prompts/PROMPTS-*.md`.
 
 ---
 
@@ -219,8 +219,8 @@
 - [x] acceptance auto-date — приёмка: фактическая дата прибытия. `markArrived` += диалог выбора «датой отгрузки / сегодня» (умный дефолт: план в прошлом → дата отгрузки), `setActualWeight` ставит сегодня молча на первой перевеске; ChangeLog `arrival_date`. Без миграции. Коммит `88c4c68`. (`server/acceptance/{schema,actions}.ts`, `AcceptanceActions.tsx`, `AcceptanceBoard.tsx`)
 - [x] V1.1 · Сводка/Heatmap — вид «Сводка» на /shipments (heatmap культуры×дни за неделю, эфф. вес, итоги по культуре; источник `getPlanWeek`, read-only). Прототип `summary-v1.html`, спека `PROMPTS-SUMMARY.md`. Коммиты `05fc1e0` + `574f56c` (fix sticky-шапки).
 - [x] V1.1 · AlertRule-алерты — `getActiveAlerts` (сравнение порогов с балансом из существующих loaders, null-scope по присутствующим фермерам, good-баланс), панели «Дефицит» на /packaging и /ingredients (сортировка по относительной просадке, пусто→скрыта, overflow→скролл+«Показать все») + бейдж в сайдбаре. Прототип `alerts-v1.html`, спека `PROMPTS-ALERTS.md`. Коммит `35e10bf`.
-- [ ] V1.1 · карточка поставщика (все вкладки) — ТЕКУЩИЙ.
-- [ ] V1.1 · фильтры везде — после карточки.
+- [x] V1.1 · карточка поставщика — страница `/reference/farmers/[id]`, 4 вкладки (Основное+Контакты · Контракты · Отгрузки · Тара/ингр.), Качество/Аналитика disabled «скоро». Агрегатор `server/farmers/card.ts` на переиспользовании (`getContractExecution` — единый источник выполнения; balances с фильтром по фермеру; транзит per-farmer отдельными выборками — исходящий из леджера, не пересчётом нормы; `computeAcceptedKg`). Вкладка в URL `?tab=`. Прототип `farmer-card-v1.html`, спека `PROMPTS-FARMER-CARD.md`. Коммит `5ebb946`.
+- [ ] V1.1 · фильтры везде — ТЕКУЩИЙ (последний срез V1.1).
 - [ ] тех-долг: `getActiveAlerts` в `(app)/layout.tsx` = 3 доп. запроса на КАЖДУЮ навигацию сегмента (не только /packaging|/ingredients). Осознанная цена read-only V1.1 без кэша. Дешёвые фиксы: guard «0 правил → skip», агрегировать балансы только по item/location из правил, `cache()`/короткий TTL для дедупа layout+page.
 - [ ] B5-bulk-2 (опц.) — копипаст карточек по дням; тонкий/overlay-скроллбар в «Плане».
 - [ ] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg`.

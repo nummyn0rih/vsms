@@ -61,6 +61,35 @@ export type MaterialFeed = {
   weeks: MaterialWeek[];
 };
 
+// --- Клиентская фильтрация ленты (D-filters). Чистая функция, переиспользуемая
+// компонентом ленты. Рейс атомарен: виден, если по каждому измерению либо ничего
+// не выбрано, либо ∃ позиция в выбранном множестве (farmer/kind) / derivedStatus ∈
+// выбранных. И между измерениями. Подытоги пересчитываются из видимых рейсов. ---
+
+export type MaterialFilters = {
+  farmerIds: Set<number>;
+  kinds: Set<"packaging" | "ingredient">;
+  statuses: Set<MaterialTrip["derivedStatus"]>;
+  query: string; // уже trimmed + lowercased; "" = поиска нет
+};
+
+export function tripVisible(t: MaterialTrip, f: MaterialFilters): boolean {
+  if (f.statuses.size && !f.statuses.has(t.derivedStatus)) return false;
+  if (f.farmerIds.size && !t.items.some((it) => f.farmerIds.has(it.farmerId)))
+    return false;
+  if (f.kinds.size && !t.items.some((it) => f.kinds.has(it.itemKind)))
+    return false;
+  if (f.query) {
+    const q = f.query;
+    const hit =
+      t.code.toLowerCase().includes(q) ||
+      (t.driverName?.toLowerCase().includes(q) ?? false) ||
+      t.items.some((it) => it.farmerName.toLowerCase().includes(q));
+    if (!hit) return false;
+  }
+  return true;
+}
+
 // --- Подытоги по типам тары (динамические, без зашитых «ящики/бочки») ---
 
 export type TypeTotal = {

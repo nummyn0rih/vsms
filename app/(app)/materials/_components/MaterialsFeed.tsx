@@ -1,29 +1,45 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 
-import type { MaterialFeed, MaterialWeek } from "@/server/materials/feed";
+import type {
+  MaterialFeed,
+  MaterialFilters,
+  MaterialWeek,
+} from "@/server/materials/feed";
+import { tripVisible } from "@/server/materials/feed";
 import type { MaterialOptions } from "@/server/materials/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { FilterCombo } from "@/components/filters/FilterCombo";
 import { MaterialFormDialog } from "./MaterialFormDialog";
 import { MaterialWeekBlock } from "./MaterialWeekBlock";
 import type { DisplayStatus } from "./material-status";
 
-const STATUS_LABEL: Record<DisplayStatus, string> = {
-  planned: "Плановый",
-  sent: "Отправлен",
-  partial: "Частично",
-  arrived: "Прибыл",
-};
+type ItemKind = "packaging" | "ingredient";
+
+// Порядок статусов фильтра (жизненный цикл + производный «Частично»).
+const STATUS_OPTIONS: ReadonlyArray<readonly [DisplayStatus, string]> = [
+  ["planned", "Плановый"],
+  ["sent", "Отправлен"],
+  ["partial", "Частично"],
+  ["arrived", "Прибыл"],
+];
+
+// Вид позиции — два статичных значения (тара / ингредиент).
+const KIND_OPTIONS: ReadonlyArray<readonly [ItemKind, string]> = [
+  ["packaging", "Тара"],
+  ["ingredient", "Ингредиент"],
+];
+
+// Иконка кнопки «Фермер» (тот же stroke-путь, что «Поставщик» в Ленте).
+const farmerIcon = (
+  <>
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </>
+);
 
 function weekKey(w: { isoYear: number; isoWeek: number }): string {
   return `${w.isoYear}-${w.isoWeek}`;
@@ -36,9 +52,11 @@ export function MaterialsFeed({
   feed: MaterialFeed;
   options: MaterialOptions;
 }) {
+  // --- Состояние фильтров (React state, без localStorage; как Лента) ---
   const [search, setSearch] = useState("");
-  const [statusSel, setStatusSel] = useState<"all" | DisplayStatus>("all");
-  const [farmerSel, setFarmerSel] = useState<"all" | string>("all");
+  const [farmerSel, setFarmerSel] = useState<Set<number>>(new Set());
+  const [kindSel, setKindSel] = useState<Set<ItemKind>>(new Set());
+  const [statusSel, setStatusSel] = useState<Set<DisplayStatus>>(new Set());
 
   // Свёрнутость недель: прошлые свёрнуты по умолчанию (React-state, без localStorage).
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
@@ -55,37 +73,72 @@ export function MaterialsFeed({
     });
   }
 
-  const anyFilter = search.trim() !== "" || statusSel !== "all" || farmerSel !== "all";
+  const anyFilter =
+    search.trim() !== "" ||
+    farmerSel.size > 0 ||
+    kindSel.size > 0 ||
+    statusSel.size > 0;
 
-  // Клиентская фильтрация поверх дерева. Рейс атомарен (И между фильтрами);
-  // пустые недели после фильтра скрываются.
+  const resetAll = useCallback(() => {
+    setSearch("");
+    setFarmerSel(new Set());
+    setKindSel(new Set());
+    setStatusSel(new Set());
+  }, []);
+
+  // Тоггл значения в Set (иммутабельно).
+  function toggleIn<T>(
+    setSet: React.Dispatch<React.SetStateAction<Set<T>>>,
+    value: T,
+  ) {
+    setSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }
+
+  // Клиентская фильтрация поверх дерева через чистую tripVisible. Рейс атомарен
+  // (И между фильтрами); пустые недели после фильтра скрываются. Подытоги в шапках
+  // недель считаются из week.trips → пересчитываются из видимого набора автоматически.
   const visibleWeeks = useMemo<MaterialWeek[]>(() => {
     if (!anyFilter) return feed.weeks;
-    const q = search.trim().toLowerCase();
-    const farmerId = farmerSel === "all" ? null : Number(farmerSel);
+    const filters: MaterialFilters = {
+      farmerIds: farmerSel,
+      kinds: kindSel,
+      statuses: statusSel,
+      query: search.trim().toLowerCase(),
+    };
     return feed.weeks
-      .map((w) => ({
-        ...w,
-        trips: w.trips.filter((t) => {
-          if (statusSel !== "all" && t.derivedStatus !== statusSel) return false;
-          if (farmerId != null && !t.items.some((it) => it.farmerId === farmerId))
-            return false;
-          if (q) {
-            const hit =
-              t.code.toLowerCase().includes(q) ||
-              (t.driverName?.toLowerCase().includes(q) ?? false) ||
-              t.items.some((it) => it.farmerName.toLowerCase().includes(q));
-            if (!hit) return false;
-          }
-          return true;
-        }),
-      }))
+      .map((w) => ({ ...w, trips: w.trips.filter((t) => tripVisible(t, filters)) }))
       .filter((w) => w.trips.length > 0);
-  }, [feed.weeks, anyFilter, search, statusSel, farmerSel]);
+  }, [feed.weeks, anyFilter, search, farmerSel, kindSel, statusSel]);
+
+  // Счётчики опций (.ct): число рейсов сезона с этим фермером/видом/статусом.
+  // По полному дереву — стабильны независимо от текущих фильтров.
+  const counts = useMemo(() => {
+    const farmer = new Map<number, number>();
+    const kind = new Map<ItemKind, number>();
+    const status = new Map<DisplayStatus, number>();
+    for (const w of feed.weeks)
+      for (const t of w.trips) {
+        status.set(t.derivedStatus, (status.get(t.derivedStatus) ?? 0) + 1);
+        const fset = new Set<number>();
+        const kset = new Set<ItemKind>();
+        for (const it of t.items) {
+          fset.add(it.farmerId);
+          kset.add(it.itemKind);
+        }
+        for (const id of fset) farmer.set(id, (farmer.get(id) ?? 0) + 1);
+        for (const k of kset) kind.set(k, (kind.get(k) ?? 0) + 1);
+      }
+    return { farmer, kind, status };
+  }, [feed.weeks]);
 
   return (
     <div>
-      {/* Тулбар: создание + поиск + фильтры (лёгкий, без week-nav/scrollspy). */}
+      {/* Тулбар: создание + поиск + фильтры-комбобоксы (лёгкий, без week-nav/scrollspy). */}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <RoleGate allow={["admin"]}>
           <MaterialFormDialog mode="create" options={options} />
@@ -103,36 +156,64 @@ export function MaterialsFeed({
           />
         </div>
 
-        <Select value={farmerSel} onValueChange={setFarmerSel}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Фермер" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все фермеры</SelectItem>
-            {options.farmers.map((f) => (
-              <SelectItem key={f.id} value={String(f.id)}>
-                {f.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterCombo
+          kind="icon"
+          label="Фермер"
+          icon={farmerIcon}
+          options={options.farmers.map((f) => ({
+            id: f.id,
+            name: f.name,
+            count: counts.farmer.get(f.id) ?? 0,
+          }))}
+          selected={farmerSel}
+          onToggle={(id) => toggleIn(setFarmerSel, id as number)}
+          onClear={() => setFarmerSel(new Set())}
+          searchable
+          searchPlaceholder="Найти фермера…"
+        />
 
-        <Select
-          value={statusSel}
-          onValueChange={(v) => setStatusSel(v as "all" | DisplayStatus)}
-        >
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="Статус" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Все статусы</SelectItem>
-            {(Object.keys(STATUS_LABEL) as DisplayStatus[]).map((s) => (
-              <SelectItem key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FilterCombo
+          kind="status"
+          label="Вид"
+          options={KIND_OPTIONS.map(([id, name]) => ({
+            id,
+            name,
+            count: counts.kind.get(id) ?? 0,
+          }))}
+          selected={kindSel}
+          onToggle={(id) => toggleIn(setKindSel, id as ItemKind)}
+          onClear={() => setKindSel(new Set())}
+        />
+
+        <FilterCombo
+          kind="status"
+          label="Статус"
+          options={STATUS_OPTIONS.map(([id, name]) => ({
+            id,
+            name,
+            count: counts.status.get(id) ?? 0,
+          }))}
+          selected={statusSel}
+          onToggle={(id) => toggleIn(setStatusSel, id as DisplayStatus)}
+          onClear={() => setStatusSel(new Set())}
+        />
+
+        {anyFilter && (
+          <button type="button" className="btn" onClick={resetAll}>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 2v6h6" />
+              <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
+            </svg>
+            Сбросить
+          </button>
+        )}
       </div>
 
       {feed.weeks.length === 0 ? (
