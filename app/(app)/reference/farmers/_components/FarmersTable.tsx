@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { RotateCcw, Trash2 } from "lucide-react";
@@ -132,7 +133,11 @@ export function FarmersTable({ farmers }: { farmers: Farmer[] }) {
         )}
         {farmers.map((farmer) => (
           <TableRow key={farmer.id}>
-            <TableCell className="font-medium">{farmer.name}</TableCell>
+            <TableCell className="font-medium">
+              <Link href={`/reference/farmers/${farmer.id}`} className="hover:underline">
+                {farmer.name}
+              </Link>
+            </TableCell>
             <TableCell>
               <ContactsCell farmer={farmer} />
             </TableCell>

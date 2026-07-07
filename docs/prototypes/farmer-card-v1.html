@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Карточка поставщика</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+    --cyan-deep: #29bc9b;
+    --error: #ee0000;
+
+    /* status left-zone / badge fills — canonical */
+    --st-planned-bg: #f5f5f5;  --st-planned-fg: #888888;
+    --st-sent-bg: #eaf2ff;     --st-sent-fg: #0761d1;
+    --st-arrived-bg: #fff6e3;  --st-arrived-fg: #ab570a;
+    --st-accepted-bg: #ddfff7; --st-accepted-fg: #1d8e75;
+
+    /* culture example colors (в проде — Culture.color) */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+
+    --scrap: #9a5a12; /* приглушённый янтарь для лома/дефицита */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1180px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 12px 0 0; color: var(--body); font-size: 15px; line-height: 23px; max-width: 820px; letter-spacing: -0.01em; }
+  .doc-lead b { color: var(--ink); font-weight: 600; }
+
+  .group { margin-top: 54px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 40px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 860px; }
+  .frame-desc b { color: var(--body); font-weight: 600; }
+
+  .stage {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+  }
+  .stage-note {
+    font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute);
+    padding: 9px 16px; border-top: 1px dashed var(--hairline); background: var(--canvas-soft);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .stage-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* ===================== CARD CHROME ===================== */
+  /* breadcrumb / topbar */
+  .cardtop {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px; border-bottom: 1px solid var(--hairline);
+    background: color-mix(in srgb, var(--canvas) 92%, transparent);
+  }
+  .crumb { font-size: 13px; color: var(--mute); display: flex; align-items: center; gap: 7px; letter-spacing: -0.01em; }
+  .crumb a { color: var(--mute); }
+  .crumb a:hover { color: var(--ink); text-decoration: none; }
+  .crumb .sep { color: var(--hairline-strong); }
+  .crumb .cur { color: var(--body); }
+  .cardtop .spacer { flex: 1; }
+  .btn {
+    height: 32px; padding: 0 12px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn svg { width: 14px; height: 14px; }
+  .btn:hover { background: var(--canvas-soft); }
+
+  /* header block */
+  .fhead { padding: 20px 24px 4px; }
+  .fhead-top { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+  .fname { font-size: 26px; font-weight: 600; letter-spacing: -0.04em; line-height: 30px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px; height: 24px; padding: 0 10px;
+    border-radius: 6px; font-size: 12px; font-weight: 500; letter-spacing: -0.01em; margin-top: 3px;
+    border: 1px solid var(--hairline); background: var(--canvas-soft);
+  }
+  .status .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status.active { color: var(--st-accepted-fg); background: #eafaf5; border-color: #cdeee4; }
+  .status.active .dot { background: var(--cyan-deep); }
+  .status.archived { color: var(--mute); background: var(--canvas-soft-2); border-color: var(--hairline); }
+  .status.archived .dot { background: var(--hairline-strong); }
+
+  /* quick contacts */
+  .contacts-row { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; margin-top: 14px; }
+  .qc { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--body); letter-spacing: -0.02em; }
+  .qc svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
+  .qc .phone { font-size: 15px; font-weight: 500; color: var(--link); }
+  .qc .phone:hover { color: var(--link-deep); }
+  .qc b { color: var(--ink); font-weight: 500; }
+  .qc-sep { width: 1px; height: 16px; background: var(--hairline); }
+
+  /* mini-summary */
+  .summary { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 4px; }
+  .kpi {
+    flex: 1 1 150px; min-width: 140px;
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft);
+    padding: 11px 14px;
+  }
+  .kpi .k { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); }
+  .kpi .v { font-size: 22px; font-weight: 600; letter-spacing: -0.035em; margin-top: 5px; display: flex; align-items: baseline; gap: 4px; }
+  .kpi .v .u { font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: -0.01em; }
+  .kpi .sub { font-size: 12px; color: var(--mute); margin-top: 2px; letter-spacing: -0.01em; }
+
+  /* ===================== TABS (shadcn segment) ===================== */
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 6px 24px 0; margin-top: 14px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+  .tab {
+    position: relative; border: 0; background: transparent; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute);
+    padding: 9px 13px 13px; border-radius: 6px 6px 0 0; display: inline-flex; align-items: center; gap: 7px;
+  }
+  .tab:hover { color: var(--ink); background: var(--canvas-soft); }
+  .tab.active { color: var(--ink); }
+  .tab.active::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: -1px; height: 2px; background: var(--ink); border-radius: 2px; }
+  .tab.disabled { color: color-mix(in srgb, var(--mute) 60%, transparent); cursor: not-allowed; }
+  .tab.disabled:hover { background: transparent; color: color-mix(in srgb, var(--mute) 60%, transparent); }
+  .tab .soon {
+    font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.03em; text-transform: uppercase;
+    color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; background: var(--canvas-soft);
+  }
+
+  /* ===================== PANELS ===================== */
+  .panel { padding: 22px 24px 26px; display: none; }
+  .panel.show { display: block; }
+  .panel-static { padding: 22px 24px 26px; } /* for empty-state frames */
+
+  .sec-label { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .sec-label .ln { flex: 1; height: 1px; background: var(--hairline); }
+
+  /* form-view (Основное) */
+  .fv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px 40px; }
+  .fv-col { display: flex; flex-direction: column; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field .k { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); }
+  .field .v { font-size: 14px; color: var(--ink); letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+  .field .v.empty { color: var(--mute); font-style: italic; }
+  .field .v a { font-weight: 500; }
+  .field .v svg { width: 14px; height: 14px; color: var(--mute); }
+  .notes { background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 8px; padding: 13px 15px; font-size: 13.5px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .readonly-hint { display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; font-size: 12px; color: var(--mute); letter-spacing: -0.01em; }
+  .readonly-hint svg { width: 13px; height: 13px; opacity: .8; }
+  .readonly-hint a { font-weight: 500; }
+
+  /* ===================== CONTRACTS ===================== */
+  .contract { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; }
+  .contract + .contract { margin-top: 16px; }
+  .contract-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); flex-wrap: wrap; }
+  .contract-no { font-family: "Geist Mono", monospace; font-size: 13px; font-weight: 500; color: var(--ink); }
+  .contract-title { font-size: 14px; color: var(--body); letter-spacing: -0.02em; }
+  .contract-head .spacer { flex: 1; }
+  .contract-link { font-size: 12.5px; color: var(--link); display: inline-flex; align-items: center; gap: 5px; }
+  .contract-link svg { width: 13px; height: 13px; }
+
+  .ctbl { width: 100%; border-collapse: collapse; }
+  .ctbl thead th {
+    font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase;
+    color: var(--mute); font-weight: 400; text-align: right; padding: 9px 14px; border-bottom: 1px solid var(--hairline);
+    background: var(--canvas); white-space: nowrap;
+  }
+  .ctbl thead th.l { text-align: left; }
+  .ctbl tbody td { padding: 11px 14px; border-bottom: 1px solid var(--hairline); font-size: 13.5px; text-align: right; letter-spacing: -0.01em; vertical-align: middle; }
+  .ctbl tbody tr:hover { background: var(--canvas-soft); }
+  .ctbl .cult-cell { text-align: left; }
+  .cult { display: inline-flex; align-items: center; gap: 9px; font-weight: 500; letter-spacing: -0.02em; }
+  .cult .sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .num { font-variant-numeric: tabular-nums; }
+  .muted-u { color: var(--mute); font-size: 12px; font-weight: 400; margin-left: 2px; }
+
+  /* execution progress cell */
+  .exec { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+  .exec .bar { width: 84px; height: 6px; border-radius: 3px; background: var(--canvas-soft-2); position: relative; overflow: hidden; flex-shrink: 0; }
+  .exec .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); border-radius: 3px; }
+  .exec .bar.over .fill { background: var(--cyan-deep); }
+  .exec .pct { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; min-width: 38px; text-align: right; }
+  .exec .pct.over { color: var(--st-accepted-fg); }
+
+  .ctbl tfoot td { padding: 11px 14px; font-size: 13.5px; text-align: right; font-weight: 600; letter-spacing: -0.02em; background: var(--canvas-soft); border-top: 1px solid var(--hairline); }
+  .ctbl tfoot td.l { text-align: left; color: var(--body); font-weight: 500; }
+  .ctbl tfoot .num { font-variant-numeric: tabular-nums; }
+
+  .farmer-total {
+    display: flex; align-items: center; gap: 16px; margin-top: 16px; padding: 14px 16px;
+    border: 1px solid var(--hairline); border-radius: 10px; background: var(--canvas-soft); flex-wrap: wrap;
+  }
+  .farmer-total .ft-label { font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
+  .farmer-total .spacer { flex: 1; }
+  .farmer-total .ft-fig { display: flex; align-items: baseline; gap: 6px; }
+  .farmer-total .ft-fig .k { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; }
+  .farmer-total .ft-fig .v { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+
+  /* ===================== SHIPMENTS ===================== */
+  .ship-week { margin-bottom: 18px; }
+  .ship-week:last-child { margin-bottom: 0; }
+  .swk-head { display: flex; align-items: center; gap: 12px; padding: 8px 4px 8px 2px; }
+  .swk-num { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; letter-spacing: 0; }
+  .swk-title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
+  .swk-title .meta { color: var(--mute); font-weight: 400; }
+  .swk-head .spacer { flex: 1; }
+  .swk-tot { font-size: 12.5px; color: var(--mute); white-space: nowrap; }
+  .swk-tot b { color: var(--body); font-weight: 600; }
+
+  .ship-tbl { width: 100%; border-collapse: collapse; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; table-layout: fixed; }
+  /* shared column widths — every week's table lines up */
+  .ship-tbl th:nth-child(1), .ship-tbl td:nth-child(1) { width: 82px; }   /* Дата */
+  .ship-tbl th:nth-child(2), .ship-tbl td:nth-child(2) { width: 84px; }   /* Машина */
+  .ship-tbl th:nth-child(3), .ship-tbl td:nth-child(3) { width: 130px; overflow: visible; }  /* Статус — не клипать бейдж */
+  .ship-tbl th:nth-child(4), .ship-tbl td:nth-child(4) { width: auto; }   /* Культура — absorbs */
+  .ship-tbl th:nth-child(5), .ship-tbl td:nth-child(5) { width: 92px; }   /* План */
+  .ship-tbl th:nth-child(6), .ship-tbl td:nth-child(6) { width: 92px; }   /* Факт */
+  .ship-tbl th:nth-child(7), .ship-tbl td:nth-child(7) { width: 100px; }  /* Принято */
+  .ship-tbl td { overflow: hidden; text-overflow: ellipsis; }
+  .ship-tbl thead th {
+    font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase;
+    color: var(--mute); font-weight: 400; text-align: right; padding: 8px 12px; border-bottom: 1px solid var(--hairline);
+    background: var(--canvas-soft); white-space: nowrap;
+  }
+  .ship-tbl thead th.l { text-align: left; }
+  .ship-tbl tbody td { padding: 9px 12px; border-bottom: 1px solid var(--hairline); font-size: 13px; text-align: right; letter-spacing: -0.01em; vertical-align: middle; }
+  .ship-tbl tbody tr:last-child td { border-bottom: 0; }
+  .ship-tbl tbody tr:hover { background: var(--canvas-soft); }
+  .ship-tbl td.l { text-align: left; }
+  .ship-date { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--body); }
+  .ship-mach { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--link); }
+  .ship-mach:hover { text-decoration: underline; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    height: 22px; padding: 0 9px; border-radius: 6px;
+    font-size: 12px; font-weight: 500; letter-spacing: -0.01em; line-height: 1;
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge.s-planned { background: #ededed; color: var(--st-planned-fg); }
+  .badge.s-planned .dot { background: #b3b3b3; }
+  .badge.s-sent { background: var(--link-bg-soft); color: var(--st-sent-fg); }
+  .badge.s-sent .dot { background: var(--link); }
+  .badge.s-arrived { background: var(--warning-soft); color: var(--st-arrived-fg); }
+  .badge.s-arrived .dot { background: var(--warning); }
+  .badge.s-accepted { background: #c7f6ea; color: var(--st-accepted-fg); }
+  .badge.s-accepted .dot { background: var(--cyan-deep); }
+  .wcell { display: inline-flex; align-items: baseline; gap: 2px; }
+  .wcell .u { color: var(--mute); font-size: 11px; margin-left: 1px; }
+  .dash { color: var(--hairline-strong); }
+
+  /* ===================== BALANCES ===================== */
+  .bmatrix { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; }
+  .bmatrix + .bmatrix { margin-top: 18px; }
+  .bm-head { display: flex; align-items: center; gap: 10px; padding: 10px 15px; border-bottom: 1px solid var(--hairline); background: var(--canvas-soft); }
+  .bm-head svg { width: 15px; height: 15px; color: var(--mute); }
+  .bm-title { font-size: 13.5px; font-weight: 600; letter-spacing: -0.02em; }
+  .bm-head .spacer { flex: 1; }
+  .bm-note { font-size: 12px; color: var(--mute); }
+
+  .btbl { width: 100%; border-collapse: collapse; }
+  .btbl thead th { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--mute); font-weight: 400; text-align: right; padding: 8px 15px; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+  .btbl thead th.l { text-align: left; }
+  .btbl tbody td { padding: 11px 15px; border-bottom: 1px solid var(--hairline); font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .btbl tbody tr:last-child td { border-bottom: 0; }
+  .btbl tbody tr:hover { background: var(--canvas-soft); }
+  .btbl td.l { text-align: left; }
+  .btype { display: inline-flex; align-items: center; gap: 9px; font-weight: 500; letter-spacing: -0.02em; }
+  .btype .ic { width: 22px; height: 22px; border-radius: 6px; background: var(--canvas-soft-2); border: 1px solid var(--hairline); display: grid; place-items: center; flex-shrink: 0; }
+  .btype .ic svg { width: 13px; height: 13px; color: var(--body); }
+  .bval-good { color: var(--ink); font-weight: 500; }
+  .bval-scrap { color: var(--scrap); }
+  .bval-zero { color: var(--hairline-strong); }
+  .bunit { color: var(--mute); font-size: 11px; font-weight: 400; }
+  .transit-row td { background: var(--canvas-soft); }
+  .transit-chip { display: inline-flex; align-items: center; gap: 6px; font-family: "Geist Mono", monospace; font-size: 10.5px; color: var(--mute); border: 1px dashed var(--hairline-strong); border-radius: 4px; padding: 1px 7px; letter-spacing: 0; }
+  .transit-chip svg { width: 11px; height: 11px; }
+
+  /* ===================== EMPTY STATE ===================== */
+  .empty {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 46px 24px; gap: 6px;
+  }
+  .empty .ec-ic { width: 44px; height: 44px; border-radius: 10px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; margin-bottom: 6px; }
+  .empty .ec-ic svg { width: 20px; height: 20px; color: var(--hairline-strong); }
+  .empty .et { font-size: 15px; font-weight: 600; letter-spacing: -0.03em; }
+  .empty .ed { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; max-width: 380px; line-height: 19px; }
+
+  /* long list scroll wrapper */
+  .scroll-wrap { max-height: 340px; overflow-y: auto; padding: 22px 24px; position: relative; }
+  .scroll-wrap::-webkit-scrollbar { width: 10px; }
+  .scroll-wrap::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 6px; border: 3px solid var(--canvas); }
+
+  /* ===================== DECISIONS ===================== */
+  .decisions { margin-top: 54px; border-top: 1px solid var(--hairline); padding-top: 28px; }
+  .dec-title { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .dec-sub { font-size: 13px; color: var(--mute); margin: 0 0 20px; letter-spacing: -0.01em; }
+  .dec { border-left: 2px solid var(--hairline); padding: 0 0 0 16px; margin-bottom: 20px; }
+  .dec .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+  .dec .a { font-size: 13.5px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <circle cx="270" cy="250" r="60" fill="#ffffff" stroke="#171717" stroke-width="5"/>
+    <path d="M180 400 a90 90 0 0 1 180 0Z" fill="#ffffff" stroke="#171717" stroke-width="5"/>
+    <rect x="470" y="200" width="120" height="34" rx="8" fill="#ededed"/>
+    <rect x="610" y="200" width="120" height="34" rx="8" fill="#d3e5ff"/>
+    <rect x="750" y="200" width="120" height="34" rx="8" fill="#ffefcf"/>
+    <rect x="470" y="290" width="400" height="14" rx="7" fill="#ebebeb"/>
+    <rect x="470" y="330" width="300" height="14" rx="7" fill="#ebebeb"/>
+    <rect x="180" y="520" width="700" height="10" rx="5" fill="#171717"/>
+    <rect x="180" y="520" width="470" height="10" rx="5" fill="#29bc9b"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Справочники · Экран 4 · v1</p>
+    <h1 class="doc-title">Карточка поставщика</h1>
+    <p class="doc-lead">Сводный read-only экран по одному фермеру — открывается из строки справочника <b>/reference/farmers</b>. Отдельная страница <span class="mono">/reference/farmers/[id]</span>, активная вкладка — в URL (<span class="mono">?tab=</span>). Правка данных — в справочнике; здесь только просмотр, tel:-ссылки и переходы. Агрегаты (выполнение, стоимость, принятый вес, балансы) считаются на лету. Числа иллюстративные.</p>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- GROUP A — основной вид, интерактивные вкладки                -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">A · Основной вид — фермер с полными данными</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">A0</span>
+        <div>
+          <div class="frame-name">Полная карточка · 4 активные вкладки + 2 «скоро»</div>
+          <div class="frame-desc">Шапка (имя + статус, быстрые контакты, мини-сводка) держится над вкладками. <b>Вкладки кликабельны</b> — переключают контент и пишут <span class="mono">?tab=</span> в URL. Качество и Аналитика показаны как каркас v2 — disabled с меткой «скоро».</div>
+        </div>
+      </div>
+
+      <div class="stage" id="card-main" data-screen-label="Карточка поставщика">
+        <div class="cardtop">
+          <div class="crumb">
+            <a href="#">Справочники</a><span class="sep">/</span><a href="#">Фермеры</a><span class="sep">/</span><span class="cur">КФХ Бондаренко</span>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            К списку
+          </button>
+        </div>
+
+        <div class="fhead">
+          <div class="fhead-top">
+            <span class="fname">КФХ Бондаренко</span>
+            <span class="status active"><span class="dot"></span>Активен</span>
+          </div>
+          <div class="contacts-row">
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <a class="phone mono" href="tel:+79184452210">+7 918 445-22-10</a>
+            </span>
+            <span class="qc-sep"></span>
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <b>Бондаренко Сергей Петрович</b>
+            </span>
+            <span class="qc-sep"></span>
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              Telegram <a href="#">@bondarenko_kfh</a>
+            </span>
+            <span class="qc-sep"></span>
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+              <a href="/cdn-cgi/l/email-protection#65164b070a0b010417000b0e0a250402170a4b1710"><span class="__cf_email__" data-cfemail="f281dc909d9c969380979c999db29395809ddc8087">[email&#160;protected]</span></a>
+            </span>
+          </div>
+
+          <div class="summary">
+            <div class="kpi">
+              <div class="k">Активных контрактов</div>
+              <div class="v"><span class="tnum">2</span></div>
+              <div class="sub">сезон 2026</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Выполнение сезона</div>
+              <div class="v"><span class="tnum">65</span><span class="u">%</span></div>
+              <div class="sub">принято 55,3 из 85 т</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Тара на балансе</div>
+              <div class="v"><span class="tnum">222</span><span class="u">ед.</span></div>
+              <div class="sub">210 ящиков · 12 бочек</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Стоимость сезона</div>
+              <div class="v"><span class="tnum">1,24</span><span class="u">млн ₽</span></div>
+              <div class="sub">по принятому весу</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-tab="main">Основное + контакты</button>
+          <button class="tab" data-tab="contracts">Контракты</button>
+          <button class="tab" data-tab="shipments">Отгрузки</button>
+          <button class="tab" data-tab="tare">Тара / ингредиенты</button>
+          <button class="tab disabled" title="Появится в v2" disabled>Качество <span class="soon">скоро</span></button>
+          <button class="tab disabled" title="Появится в v2" disabled>Аналитика <span class="soon">скоро</span></button>
+        </div>
+
+        <!-- PANEL: Основное -->
+        <div class="panel show" data-panel="main">
+          <div class="fv-grid">
+            <div class="fv-col">
+              <p class="sec-label">Контакты <span class="ln"></span></p>
+              <div class="field">
+                <span class="k">Телефон</span>
+                <span class="v"><a class="phone mono" href="tel:+79184452210">+7 918 445-22-10</a></span>
+              </div>
+              <div class="field">
+                <span class="k">Контактное лицо</span>
+                <span class="v">Бондаренко Сергей Петрович</span>
+              </div>
+              <div class="field">
+                <span class="k">Мессенджер</span>
+                <span class="v">Telegram · <a href="#">@bondarenko_kfh</a></span>
+              </div>
+              <div class="field">
+                <span class="k">Email</span>
+                <span class="v"><a href="/cdn-cgi/l/email-protection#11623f737e7f757063747f7a7e517076637e3f6364"><span class="__cf_email__" data-cfemail="47346925282923263522292c280726203528693532">[email&#160;protected]</span></a></span>
+              </div>
+            </div>
+            <div class="fv-col">
+              <p class="sec-label">Основное <span class="ln"></span></p>
+              <div class="field">
+                <span class="k">Статус</span>
+                <span class="v"><span class="status active" style="margin-top:0"><span class="dot"></span>Активен</span></span>
+              </div>
+              <div class="field">
+                <span class="k">Сезон</span>
+                <span class="v mono">2026</span>
+              </div>
+              <div class="field">
+                <span class="k">Заметки</span>
+                <span class="v" style="display:block"><span class="notes">Своя логистика — 2 машины, тару возвращает исправно. Пик по томату — третья декада июля. По перцу просит согласовывать день заранее (нет холодильника).</span></span>
+              </div>
+              <div class="readonly-hint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Просмотр. Правка — в <a href="#">справочнике фермеров</a>.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PANEL: Контракты -->
+        <div class="panel" data-panel="contracts">
+          <div class="contract">
+            <div class="contract-head">
+              <span class="contract-no">К-2026-014</span>
+              <span class="contract-title">Овощи · основной сезон</span>
+              <span class="spacer"></span>
+              <a class="contract-link" href="#">Открыть контракт
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+              </a>
+            </div>
+            <table class="ctbl">
+              <thead>
+                <tr>
+                  <th class="l">Культура</th>
+                  <th>План, т</th>
+                  <th>Принято, т</th>
+                  <th>Выполнение</th>
+                  <th>Цена, ₽/кг</th>
+                  <th>Стоимость, ₽</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cult-cell"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td>
+                  <td class="num">40,0</td>
+                  <td class="num">27,2</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:68%"></span></span><span class="pct">68%</span></div></td>
+                  <td class="num">18,00</td>
+                  <td class="num">489 600</td>
+                </tr>
+                <tr>
+                  <td class="cult-cell"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td>
+                  <td class="num">25,0</td>
+                  <td class="num">18,5</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:74%"></span></span><span class="pct">74%</span></div></td>
+                  <td class="num">22,00</td>
+                  <td class="num">407 000</td>
+                </tr>
+                <tr>
+                  <td class="cult-cell"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td>
+                  <td class="num">12,0</td>
+                  <td class="num">6,0</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:50%"></span></span><span class="pct">50%</span></div></td>
+                  <td class="num">35,00</td>
+                  <td class="num">210 000</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="l">Итого по контракту</td>
+                  <td class="num">77,0</td>
+                  <td class="num">51,7</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:67%"></span></span><span class="pct">67%</span></div></td>
+                  <td></td>
+                  <td class="num">1 106 600</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="contract">
+            <div class="contract-head">
+              <span class="contract-no">К-2026-031</span>
+              <span class="contract-title">Перец · поздний</span>
+              <span class="spacer"></span>
+              <a class="contract-link" href="#">Открыть контракт
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+              </a>
+            </div>
+            <table class="ctbl">
+              <thead>
+                <tr>
+                  <th class="l">Культура</th>
+                  <th>План, т</th>
+                  <th>Принято, т</th>
+                  <th>Выполнение</th>
+                  <th>Цена, ₽/кг</th>
+                  <th>Стоимость, ₽</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="cult-cell"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td>
+                  <td class="num">8,0</td>
+                  <td class="num">3,6</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:45%"></span></span><span class="pct">45%</span></div></td>
+                  <td class="num">38,00</td>
+                  <td class="num">136 800</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="l">Итого по контракту</td>
+                  <td class="num">8,0</td>
+                  <td class="num">3,6</td>
+                  <td><div class="exec"><span class="bar"><span class="fill" style="width:45%"></span></span><span class="pct">45%</span></div></td>
+                  <td></td>
+                  <td class="num">136 800</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div class="farmer-total">
+            <span class="ft-label">Итого по фермеру · сезон 2026</span>
+            <span class="spacer"></span>
+            <span class="ft-fig"><span class="k">план</span><span class="v tnum">85,0 т</span></span>
+            <span class="ft-fig"><span class="k">принято</span><span class="v tnum">55,3 т</span></span>
+            <span class="ft-fig"><span class="k">выполнение</span><span class="v tnum">65%</span></span>
+            <span class="ft-fig"><span class="k">стоимость</span><span class="v tnum">1 243 400 ₽</span></span>
+          </div>
+        </div>
+
+        <!-- PANEL: Отгрузки -->
+        <div class="panel" data-panel="shipments">
+          <div class="ship-week">
+            <div class="swk-head">
+              <span class="swk-num">W24</span>
+              <span class="swk-title">Неделя 24 <span class="meta">· 8–13 июня 2026</span></span>
+              <span class="spacer"></span>
+              <span class="swk-tot"><b class="tnum">1</b> машина · <b class="tnum">7,3 т</b></span>
+            </div>
+            <table class="ship-tbl">
+              <thead>
+                <tr>
+                  <th class="l">Дата</th>
+                  <th class="l">Машина</th>
+                  <th class="l">Статус</th>
+                  <th class="l">Культура</th>
+                  <th>План, кг</th>
+                  <th>Факт, кг</th>
+                  <th>Принято, кг</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="l ship-date">10 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-142</a></td>
+                  <td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td>
+                  <td class="num">3 000</td>
+                  <td class="num">3 100</td>
+                  <td><span class="dash">— приёмка</span></td>
+                </tr>
+                <tr>
+                  <td class="l ship-date">10 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-142</a></td>
+                  <td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td>
+                  <td class="num">2 500</td>
+                  <td class="num">2 700</td>
+                  <td><span class="dash">— приёмка</span></td>
+                </tr>
+                <tr>
+                  <td class="l ship-date">10 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-142</a></td>
+                  <td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td>
+                  <td class="num">1 500</td>
+                  <td class="num">1 500</td>
+                  <td><span class="dash">— приёмка</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="ship-week">
+            <div class="swk-head">
+              <span class="swk-num">W23</span>
+              <span class="swk-title">Неделя 23 <span class="meta">· 1–6 июня 2026</span></span>
+              <span class="spacer"></span>
+              <span class="swk-tot"><b class="tnum">2</b> машины · <b class="tnum">7,3 т</b> принято <b class="tnum">6,7 т</b></span>
+            </div>
+            <table class="ship-tbl">
+              <thead>
+                <tr>
+                  <th class="l">Дата</th>
+                  <th class="l">Машина</th>
+                  <th class="l">Статус</th>
+                  <th class="l">Культура</th>
+                  <th>План, кг</th>
+                  <th>Факт, кг</th>
+                  <th>Принято, кг</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="l ship-date">3 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-118</a></td>
+                  <td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td>
+                  <td class="num">2 800</td>
+                  <td class="num">2 860</td>
+                  <td class="num">2 790</td>
+                </tr>
+                <tr>
+                  <td class="l ship-date">3 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-118</a></td>
+                  <td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td>
+                  <td class="num">2 500</td>
+                  <td class="num">2 480</td>
+                  <td class="num">2 455</td>
+                </tr>
+                <tr>
+                  <td class="l ship-date">5 июня</td>
+                  <td class="l"><a class="ship-mach" href="#">М-127</a></td>
+                  <td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td>
+                  <td class="l"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td>
+                  <td class="num">1 500</td>
+                  <td class="num">1 470</td>
+                  <td class="num">1 440</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- PANEL: Тара / ингредиенты -->
+        <div class="panel" data-panel="tare">
+          <div class="bmatrix">
+            <div class="bm-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg>
+              <span class="bm-title">Тара у поставщика</span>
+              <span class="spacer"></span>
+              <span class="bm-note">на балансе локации · сезон 2026</span>
+            </div>
+            <table class="btbl">
+              <thead>
+                <tr>
+                  <th class="l">Тип тары</th>
+                  <th>Годная</th>
+                  <th>Лом</th>
+                  <th>Всего</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="l"><span class="btype"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="1"/><path d="M3 11h18"/></svg></span>Ящик овощной</span></td>
+                  <td class="bval-good">210 <span class="bunit">шт</span></td>
+                  <td class="bval-scrap">6 <span class="bunit">шт</span></td>
+                  <td class="bval-good">216 <span class="bunit">шт</span></td>
+                </tr>
+                <tr>
+                  <td class="l"><span class="btype"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="2.5"/><path d="M4 5v14a8 2.5 0 0 0 16 0V5"/></svg></span>Бочка 250 л</span></td>
+                  <td class="bval-good">12 <span class="bunit">шт</span></td>
+                  <td class="bval-zero">0</td>
+                  <td class="bval-good">12 <span class="bunit">шт</span></td>
+                </tr>
+                <tr class="transit-row">
+                  <td class="l"><span class="transit-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>в пути · завод → фермер</span> Ящик овощной</td>
+                  <td class="bval-zero">—</td>
+                  <td class="bval-zero">—</td>
+                  <td class="bval-good">155 <span class="bunit">шт</span></td>
+                </tr>
+                <tr class="transit-row">
+                  <td class="l"><span class="transit-chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>в пути · фермер → завод</span> Ящик овощной</td>
+                  <td class="bval-zero">—</td>
+                  <td class="bval-zero">—</td>
+                  <td class="bval-good">48 <span class="bunit">шт</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="bmatrix">
+            <div class="bm-head">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>
+              <span class="bm-title">Ингредиенты у поставщика</span>
+              <span class="spacer"></span>
+              <span class="bm-note">выдано под сезон · ед. из позиции</span>
+            </div>
+            <table class="btbl">
+              <thead>
+                <tr>
+                  <th class="l">Позиция</th>
+                  <th>Остаток</th>
+                  <th>Ед.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="l"><span class="btype"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 7v10l8 5 8-5V7z"/></svg></span>Соль пищевая</span></td>
+                  <td class="bval-good">40</td>
+                  <td class="bunit" style="text-align:right">кг</td>
+                </tr>
+                <tr>
+                  <td class="l"><span class="btype"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6"/><path d="M10 2v5l-5 9a3 3 0 0 0 3 4h8a3 3 0 0 0 3-4l-5-9V2"/></svg></span>Уксусная кислота 70%</span></td>
+                  <td class="bval-good">20</td>
+                  <td class="bunit" style="text-align:right">л</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+          Кликните вкладки — контент переключается, активная пишется в <span class="mono">?tab=</span> (без localStorage). Телефон открывает tel:.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- GROUP B — пустые состояния                                    -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">B · Пустые состояния вкладок</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B1</span>
+        <div>
+          <div class="frame-name">Контракты — нет контрактов</div>
+          <div class="frame-desc">Фермер без контрактов в сезоне. Нейтральное пустое состояние, без статусных цветов и тревоги.</div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="panel-static">
+          <div class="empty">
+            <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+            <div class="et">Нет контрактов</div>
+            <div class="ed">У поставщика нет контрактов в сезоне 2026. Контракты заводятся в разделе «Контракты».</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B2</span>
+        <div>
+          <div class="frame-name">Отгрузки — нет отгрузок</div>
+          <div class="frame-desc">История пуста: ни одной отгрузки за сезон.</div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="panel-static">
+          <div class="empty">
+            <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></span>
+            <div class="et">Нет отгрузок</div>
+            <div class="ed">По этому поставщику ещё не было отгрузок в сезоне 2026.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B3</span>
+        <div>
+          <div class="frame-name">Тара / ингредиенты — нулевые балансы</div>
+          <div class="frame-desc">Ни тары, ни ингредиентов на балансе локации. Нет строк «в пути».</div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="panel-static">
+          <div class="empty">
+            <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/></svg></span>
+            <div class="et">Нулевые балансы</div>
+            <div class="ed">У поставщика нет тары и ингредиентов на балансе. Строки появятся после первой отгрузки или выдачи материалов.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- GROUP C — краевые случаи                                      -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">C · Краевые случаи</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C1</span>
+        <div>
+          <div class="frame-name">Архивный фермер</div>
+          <div class="frame-desc"><b>active = false</b>: серый бейдж «Архивный», но карточка доступна — история сохраняется и читается. Шапка приглушена, вкладки работают как обычно.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Карточка · архивный">
+        <div class="cardtop">
+          <div class="crumb">
+            <a href="#">Справочники</a><span class="sep">/</span><a href="#">Фермеры</a><span class="sep">/</span><span class="cur">ООО «Зелёный Дол»</span>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            К списку
+          </button>
+        </div>
+        <div class="fhead">
+          <div class="fhead-top">
+            <span class="fname">ООО «Зелёный Дол»</span>
+            <span class="status archived"><span class="dot"></span>Архивный</span>
+          </div>
+          <div class="contacts-row">
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              <a class="phone mono" href="tel:+79287771205">+7 928 777-12-05</a>
+            </span>
+            <span class="qc-sep"></span>
+            <span class="qc">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <b>Ткаченко Ольга</b>
+            </span>
+          </div>
+          <div class="summary">
+            <div class="kpi">
+              <div class="k">Контрактов в сезоне</div>
+              <div class="v"><span class="tnum">0</span></div>
+              <div class="sub">архив с 2025</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Выполнение сезона</div>
+              <div class="v"><span class="tnum">—</span></div>
+              <div class="sub">нет активных контрактов</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Тара на балансе</div>
+              <div class="v"><span class="tnum">0</span></div>
+              <div class="sub">возвращена полностью</div>
+            </div>
+            <div class="kpi">
+              <div class="k">Последняя отгрузка</div>
+              <div class="v"><span class="tnum">2025</span></div>
+              <div class="sub">18 сентября</div>
+            </div>
+          </div>
+        </div>
+        <div class="tabs">
+          <button class="tab active" disabled>Основное + контакты</button>
+          <button class="tab" disabled>Контракты</button>
+          <button class="tab" disabled>Отгрузки</button>
+          <button class="tab" disabled>Тара / ингредиенты</button>
+          <button class="tab disabled" disabled>Качество <span class="soon">скоро</span></button>
+          <button class="tab disabled" disabled>Аналитика <span class="soon">скоро</span></button>
+        </div>
+        <div class="panel-static">
+          <div class="fv-grid">
+            <div class="fv-col">
+              <p class="sec-label">Контакты <span class="ln"></span></p>
+              <div class="field"><span class="k">Телефон</span><span class="v"><a class="phone mono" href="tel:+79287771205">+7 928 777-12-05</a></span></div>
+              <div class="field"><span class="k">Контактное лицо</span><span class="v">Ткаченко Ольга Ивановна</span></div>
+              <div class="field"><span class="k">Мессенджер</span><span class="v empty">не указан</span></div>
+              <div class="field"><span class="k">Email</span><span class="v empty">не указан</span></div>
+            </div>
+            <div class="fv-col">
+              <p class="sec-label">Основное <span class="ln"></span></p>
+              <div class="field"><span class="k">Статус</span><span class="v"><span class="status archived" style="margin-top:0"><span class="dot"></span>Архивный</span></span></div>
+              <div class="field"><span class="k">Сезон</span><span class="v mono">2026</span></div>
+              <div class="field"><span class="k">Заметки</span><span class="v" style="display:block"><span class="notes">Прекратили сотрудничество после сезона 2025 — перешли на прямые поставки в сеть. Данные сохранены для истории отгрузок.</span></span></div>
+              <div class="readonly-hint">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Карточка read-only. Восстановить из архива — в <a href="#">справочнике</a>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C2</span>
+        <div>
+          <div class="frame-name">Длинная история отгрузок — скролл + группировка по неделям</div>
+          <div class="frame-desc">Много недель: контент вкладки уходит в <b>вертикальный скролл</b> (высота ≈ 6 строк), заголовки недель остаются якорями. Шапка карточки и вкладки при этом не скроллятся.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Отгрузки · длинный список">
+        <div class="tabs" style="margin-top:0">
+          <button class="tab" disabled>Основное + контакты</button>
+          <button class="tab" disabled>Контракты</button>
+          <button class="tab active" disabled>Отгрузки</button>
+          <button class="tab" disabled>Тара / ингредиенты</button>
+        </div>
+        <div class="scroll-wrap">
+          <div class="ship-week">
+            <div class="swk-head">
+              <span class="swk-num">W25</span>
+              <span class="swk-title">Неделя 25 <span class="meta">· 15–20 июня 2026</span></span>
+              <span class="spacer"></span>
+              <span class="swk-tot"><b class="tnum">1</b> машина</span>
+            </div>
+            <table class="ship-tbl">
+              <thead><tr><th class="l">Дата</th><th class="l">Машина</th><th class="l">Статус</th><th class="l">Культура</th><th>План, кг</th><th>Факт, кг</th><th>Принято, кг</th></tr></thead>
+              <tbody>
+                <tr><td class="l ship-date">16 июня</td><td class="l"><a class="ship-mach" href="#">М-151</a></td><td class="l"><span class="badge s-sent"><span class="dot"></span>Отправлена</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td><td class="num">3 200</td><td class="dash">—</td><td class="dash">—</td></tr>
+                <tr><td class="l ship-date">16 июня</td><td class="l"><a class="ship-mach" href="#">М-151</a></td><td class="l"><span class="badge s-planned"><span class="dot"></span>Плановая</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td><td class="num">2 400</td><td class="dash">—</td><td class="dash">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ship-week">
+            <div class="swk-head">
+              <span class="swk-num">W24</span>
+              <span class="swk-title">Неделя 24 <span class="meta">· 8–13 июня 2026</span></span>
+              <span class="spacer"></span>
+              <span class="swk-tot"><b class="tnum">1</b> машина · <b class="tnum">7,3 т</b></span>
+            </div>
+            <table class="ship-tbl">
+              <thead><tr><th class="l">Дата</th><th class="l">Машина</th><th class="l">Статус</th><th class="l">Культура</th><th>План, кг</th><th>Факт, кг</th><th>Принято, кг</th></tr></thead>
+              <tbody>
+                <tr><td class="l ship-date">10 июня</td><td class="l"><a class="ship-mach" href="#">М-142</a></td><td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td><td class="num">3 000</td><td class="num">3 100</td><td class="dash">— приёмка</td></tr>
+                <tr><td class="l ship-date">10 июня</td><td class="l"><a class="ship-mach" href="#">М-142</a></td><td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td><td class="num">2 500</td><td class="num">2 700</td><td class="dash">— приёмка</td></tr>
+                <tr><td class="l ship-date">10 июня</td><td class="l"><a class="ship-mach" href="#">М-142</a></td><td class="l"><span class="badge s-arrived"><span class="dot"></span>Прибыла</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td><td class="num">1 500</td><td class="num">1 500</td><td class="dash">— приёмка</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ship-week">
+            <div class="swk-head">
+              <span class="swk-num">W23</span>
+              <span class="swk-title">Неделя 23 <span class="meta">· 1–6 июня 2026</span></span>
+              <span class="spacer"></span>
+              <span class="swk-tot"><b class="tnum">2</b> машины · принято <b class="tnum">6,7 т</b></span>
+            </div>
+            <table class="ship-tbl">
+              <thead><tr><th class="l">Дата</th><th class="l">Машина</th><th class="l">Статус</th><th class="l">Культура</th><th>План, кг</th><th>Факт, кг</th><th>Принято, кг</th></tr></thead>
+              <tbody>
+                <tr><td class="l ship-date">3 июня</td><td class="l"><a class="ship-mach" href="#">М-118</a></td><td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-tomato)"></span>Томаты</span></td><td class="num">2 800</td><td class="num">2 860</td><td class="num">2 790</td></tr>
+                <tr><td class="l ship-date">3 июня</td><td class="l"><a class="ship-mach" href="#">М-118</a></td><td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-cucumber)"></span>Огурцы</span></td><td class="num">2 500</td><td class="num">2 480</td><td class="num">2 455</td></tr>
+                <tr><td class="l ship-date">5 июня</td><td class="l"><a class="ship-mach" href="#">М-127</a></td><td class="l"><span class="badge s-accepted"><span class="dot"></span>Принята</span></td><td class="l"><span class="cult"><span class="sq" style="background:var(--cult-pepper)"></span>Перец сладкий</span></td><td class="num">1 500</td><td class="num">1 470</td><td class="num">1 440</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><polyline points="19 12 12 19 5 12"/></svg>
+          Прокрутите список — недели листаются внутри панели, шапка и вкладки закреплены.
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C3</span>
+        <div>
+          <div class="frame-name">Disabled-вкладки «скоро» — тултип</div>
+          <div class="frame-desc">Качество и Аналитика видны в каркасе, но неактивны: приглушены, курсор not-allowed, тултип «Появится в v2». Показывают полный набор ~6 вкладок, но объём v1 читается явно.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Вкладки · disabled">
+        <div class="tabs" style="margin-top:0">
+          <button class="tab" disabled>Основное + контакты</button>
+          <button class="tab" disabled>Контракты</button>
+          <button class="tab" disabled>Отгрузки</button>
+          <button class="tab" disabled>Тара / ингредиенты</button>
+          <button class="tab disabled" title="Появится в v2" disabled>Качество <span class="soon">скоро</span></button>
+          <button class="tab disabled" title="Появится в v2" disabled>Аналитика <span class="soon">скоро</span></button>
+        </div>
+        <div class="panel-static">
+          <div class="empty">
+            <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <div class="et">Качество · Аналитика — в разработке</div>
+            <div class="ed">Вкладки зарезервированы под v2 (брак по приёмкам, аналитика по фермеру). Каркас виден, наполнения в v1 нет.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- DECISIONS / QUESTIONS                                         -->
+  <!-- ============================================================ -->
+  <section class="decisions">
+    <h2 class="dec-title">Решения / вопросы</h2>
+    <p class="dec-sub">Зафиксировано на ревью v1 (PM + пользователь) — учтено в этой ревизии.</p>
+
+    <div class="dec">
+      <div class="q">Группировка отгрузок — по неделям + машина в строке</div>
+      <div class="a"><span class="tag">решено</span>v1 — плоские строки-позиции по ISO-неделям (W##): дата · № машины · статус · культура · план/факт/принято, машина повторяется на каждой позиции. Сворачивание позиций одной машины — <b>бэклог</b>, не в v1.</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Глубина истории отгрузок</div>
+      <div class="a"><span class="tag">решено</span>v1 — текущий сезон целиком; переключатель сезона — <b>бэклог</b>. Для архивного фермера достаточно «последней отгрузки» в мини-сводке.</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">«Принято» до приёмки</div>
+      <div class="a"><span class="tag">решено</span>Оставлено: <span class="mono">— приёмка</span> для sent/arrived, <span class="mono">—</span> для planned. Принятый вес не хранится, считается на лету только после акта.</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Выполнение сезона в мини-сводке vs. итог по контрактам</div>
+      <div class="a"><span class="tag">решено</span><b>Один источник</b> (<span class="mono">getContractExecution</span>) и одно округление. Расхождения 64/65% быть не должно — шапочный KPI считается из того же агрегата, что и итог вкладки. Исправлено: и шапка, и итог по фермеру = <b>65%</b>, стоимость = <b>1,24 млн ₽</b>.</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Тара «в пути» — направление и адресность</div>
+      <div class="a"><span class="tag">решено</span>Транзит показан консистентно с дашбордом <span class="mono">/packaging</span>: те же направления и сентинелы — <b>завод → фермер</b> (тара едет к фермеру) и <b>фермер → завод</b> (едет с сырьём обратно), пунктирный чип с иконкой рейса, число в колонке «Всего». Своя логика не вводится.</div>
+    </div>
+  </section>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+(function () {
+  var card = document.getElementById('card-main');
+  if (!card) return;
+  var tabs = card.querySelectorAll('.tab[data-tab]');
+  var panels = card.querySelectorAll('.panel[data-panel]');
+  var valid = ['main', 'contracts', 'shipments', 'tare'];
+
+  function activate(name, push) {
+    if (valid.indexOf(name) === -1) name = 'main';
+    tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
+    panels.forEach(function (p) { p.classList.toggle('show', p.dataset.panel === name); });
+    if (push) {
+      try {
+        var u = new URL(window.location.href);
+        u.searchParams.set('tab', name);
+        history.replaceState(null, '', u);
+      } catch (e) {}
+    }
+  }
+
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () { activate(t.dataset.tab, true); });
+  });
+
+  var initial = 'main';
+  try {
+    var q = new URL(window.location.href).searchParams.get('tab');
+    if (q) initial = q;
+  } catch (e) {}
+  activate(initial, false);
+})();
+</script>
+</body>
+</html>
