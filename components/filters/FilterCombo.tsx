@@ -60,6 +60,9 @@ type FilterComboProps = {
   onClear: () => void;
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Сторона раскрытия дропдауна. "start" (по умолч.) — от левого края кнопки;
+   * "end" — от правого (для фильтров у правого края тулбара, чтобы не вылезать за вьюпорт). */
+  align?: "start" | "end";
 };
 
 export function FilterCombo({
@@ -72,6 +75,7 @@ export function FilterCombo({
   onClear,
   searchable = false,
   searchPlaceholder,
+  align = "start",
 }: FilterComboProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -139,7 +143,7 @@ export function FilterCombo({
       </button>
 
       {open && (
-        <div className="combo" id={listId}>
+        <div className={`combo${align === "end" ? " combo-end" : ""}`} id={listId}>
           {searchable && (
             <div className="combo-search">
               <Svg>{searchIcon}</Svg>

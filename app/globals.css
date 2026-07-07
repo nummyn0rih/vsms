@@ -289,6 +289,8 @@
   border: 1px solid var(--hairline-strong); border-radius: 6px; overflow: hidden; background: var(--canvas);
   box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #00000014;
 }
+/* Раскрытие от правого края кнопки — для фильтров у правого края тулбара (align="end"). */
+.combo.combo-end { left: auto; right: 0; }
 .combo-search { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--hairline); }
 .combo-search svg { width: 15px; height: 15px; color: var(--mute); flex-shrink: 0; }
 .combo-search input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 14px; color: var(--ink); width: 100%; letter-spacing: -0.02em; }

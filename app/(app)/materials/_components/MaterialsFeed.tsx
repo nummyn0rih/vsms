@@ -170,6 +170,7 @@ export function MaterialsFeed({
           onClear={() => setFarmerSel(new Set())}
           searchable
           searchPlaceholder="Найти фермера…"
+          align="end"
         />
 
         <FilterCombo
@@ -183,6 +184,7 @@ export function MaterialsFeed({
           selected={kindSel}
           onToggle={(id) => toggleIn(setKindSel, id as ItemKind)}
           onClear={() => setKindSel(new Set())}
+          align="end"
         />
 
         <FilterCombo
@@ -196,6 +198,7 @@ export function MaterialsFeed({
           selected={statusSel}
           onToggle={(id) => toggleIn(setStatusSel, id as DisplayStatus)}
           onClear={() => setStatusSel(new Set())}
+          align="end"
         />
 
         {anyFilter && (
