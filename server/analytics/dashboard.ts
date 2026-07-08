@@ -26,9 +26,10 @@ export type SeasonAnalytics = {
     tripsTotal: number;
     tripsVeg: number;
     tripsMaterial: number;
-    remainingMachines: number | null; // null = недобора нет / нет норм рейса
+    remainingMachines: number | null; // null = недобора нет / нет базы рейса
     remainingTons: number | null;
-    avgTripTons: number | null;
+    avgActualTripWeightT: number | null; // факт средний вес рейса (null = нет взвешенных)
+    plannedTripWeightT: number | null; // план из норм (fallback базы оценки)
   };
   completionByCulture: {
     cultureId: number;
@@ -51,6 +52,27 @@ export type SeasonAnalytics = {
 
 function weekLabel(week: number): string {
   return `W${String(week).padStart(2, "0")}`;
+}
+
+// Средний фактический вес овощного рейса за сезон (BR-14, §5). Вход — по одной записи
+// на овощную машину (arrived/accepted, уже отфильтрованную по сезону): список
+// actual_weight_kg её позиций (null = не взвешена). Позиции без факта не считаются нулём;
+// машина исключается целиком, только если факта нет ни у одной позиции. Чистая — тестируема.
+export function aggregateActualTripWeight(
+  trips: { itemActualsKg: (number | null)[] }[],
+): { avgActualTripWeightT: number | null; weighedTripsCount: number } {
+  let sumKg = 0;
+  let count = 0;
+  for (const t of trips) {
+    const weighed = t.itemActualsKg.filter((w): w is number => w != null);
+    if (weighed.length === 0) continue; // машина без перевески — исключаем
+    sumKg += weighed.reduce((s, w) => s + w, 0); // tripWeight = Σ факт позиций
+    count += 1;
+  }
+  return {
+    avgActualTripWeightT: count > 0 ? sumKg / count / KG_PER_TON : null,
+    weighedTripsCount: count,
+  };
 }
 
 // Следующая ISO-неделя (через дату — корректно на границе года).
@@ -232,6 +254,7 @@ export async function getSeasonAnalytics({
       arrival_date: true,
       departure_date: true,
       driver: { select: { transportCompany: { select: { name: true } } } },
+      items: { select: { actual_weight_kg: true } }, // + для факт. веса рейса
     },
   });
   // Материальные: MaterialShipment с завода (source_farmer_id=null, исключаем
@@ -251,10 +274,17 @@ export async function getSeasonAnalytics({
   const tcMap = new Map<string, { veg: number; material: number }>();
   let tripsVeg = 0;
   let tripsMaterial = 0;
+  // Вход для факт. среднего веса рейса — только овощные, прошедшие фильтр сезона (BR-14).
+  const vegTripsForWeight: { itemActualsKg: (number | null)[] }[] = [];
 
   for (const s of vegShipments) {
     const arrival = s.arrival_date ?? s.departure_date;
     if (!arrival || seasonYearOf(arrival) !== season) continue;
+    vegTripsForWeight.push({
+      itemActualsKg: s.items.map((it) =>
+        it.actual_weight_kg ? it.actual_weight_kg.toNumber() : null,
+      ),
+    });
     const name = s.driver?.transportCompany.name;
     if (!name) continue;
     const e = tcMap.get(name) ?? { veg: 0, material: 0 };
@@ -277,19 +307,29 @@ export async function getSeasonAnalytics({
     .map(([tcName, v]) => ({ tcName, veg: v.veg, material: v.material }))
     .sort((a, b) => b.veg + b.material - (a.veg + a.material));
 
-  // === 4) Осталось ~N машин (§5): (target − accepted) / средняя норма рейса ===
+  // === 4) Осталось ~N машин (§5): (target − accepted) / вес рейса ===
+  // База оценки — факт средний вес рейса, если есть взвешенные рейсы; иначе плановая
+  // норма (fallback). Материальные рейсы в среднее НЕ входят (BR-14).
+  const { avgActualTripWeightT, weighedTripsCount } =
+    aggregateActualTripWeight(vegTripsForWeight);
+
   const norms = await prisma.tripWeightNorm.findMany({
     select: { planned_trip_weight_kg: true },
   });
-  const avgTripWeightKg =
+  const plannedTripWeightKg =
     norms.length > 0
       ? norms.reduce((s, n) => s + n.planned_trip_weight_kg.toNumber(), 0) / norms.length
       : null;
 
+  const baseTripWeightKg =
+    weighedTripsCount > 0 && avgActualTripWeightT != null
+      ? avgActualTripWeightT * KG_PER_TON
+      : plannedTripWeightKg;
+
   const remainingKg = totalTargetKg - totalAcceptedKg;
-  const hasRemaining = remainingKg > 0 && avgTripWeightKg != null && avgTripWeightKg > 0;
+  const hasRemaining = remainingKg > 0 && baseTripWeightKg != null && baseTripWeightKg > 0;
   const remainingMachines = hasRemaining
-    ? Math.ceil(remainingKg / avgTripWeightKg!)
+    ? Math.ceil(remainingKg / baseTripWeightKg!)
     : null;
 
   // === 5) Список сезонов для селектора ===
@@ -312,7 +352,8 @@ export async function getSeasonAnalytics({
       tripsMaterial,
       remainingMachines,
       remainingTons: hasRemaining ? remainingKg / KG_PER_TON : null,
-      avgTripTons: avgTripWeightKg != null ? avgTripWeightKg / KG_PER_TON : null,
+      avgActualTripWeightT,
+      plannedTripWeightT: plannedTripWeightKg != null ? plannedTripWeightKg / KG_PER_TON : null,
     },
     completionByCulture,
     acceptanceByWeek,

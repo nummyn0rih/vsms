@@ -93,8 +93,17 @@ export default async function AnalyticsPage({
             </div>
             <div className="sub">
               {kpi.remainingMachines != null && kpi.remainingTons != null
-                ? `${fmtTons(kpi.remainingTons)} т недобора · ≈${kpi.avgTripTons != null ? fmtTons(kpi.avgTripTons) : "—"} т/рейс`
-                : kpi.avgTripTons == null
+                ? `${fmtTons(kpi.remainingTons)} т недобора · ${[
+                    kpi.avgActualTripWeightT != null
+                      ? `факт ≈${fmtTons(kpi.avgActualTripWeightT)}`
+                      : null,
+                    kpi.plannedTripWeightT != null
+                      ? `план ≈${fmtTons(kpi.plannedTripWeightT)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")} т/рейс`
+                : kpi.avgActualTripWeightT == null && kpi.plannedTripWeightT == null
                   ? "нет норм рейса"
                   : "план сезона закрыт"}
             </div>
