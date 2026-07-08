@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Аналитика — дашборд сезона (v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+
+    /* culture colors — в проде из Culture.color */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+
+    /* нейтральные метрики (недели, ТК) — графитовая шкала, НЕ статусные цвета */
+    --graf-1: #2f2f2f;   /* тёмная серия (овощные / линия) */
+    --graf-2: #bdbdbd;   /* светлая серия (материальные) */
+    --grid: #ebebeb;     /* сетка / оси — hairline */
+    --track: #f0f0f0;    /* трек бара выполнения */
+
+    /* брак — нейтральный янтарь, НЕ алярм-красный */
+    --brak: #cf9a3e;
+    --brak-deep: #9a6a12;
+    --brak-soft: #f6ecd6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1320px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-head { margin-bottom: 44px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 12px 0 0; color: var(--body); font-size: 15px; line-height: 23px; max-width: 840px; letter-spacing: -0.01em; }
+  .doc-lead b { color: var(--ink); font-weight: 600; }
+
+  .group { margin-top: 54px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 40px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 860px; }
+  .frame-desc b { color: var(--body); font-weight: 600; }
+
+  .stage {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+  }
+
+  /* ---------------- page head (analytics) ---------------- */
+  .phead { padding: 22px 26px 20px; border-bottom: 1px solid var(--hairline); display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+  .phead-l { min-width: 0; }
+  .ptitle { font-size: 24px; font-weight: 600; letter-spacing: -0.04em; line-height: 30px; }
+  .psub { margin-top: 5px; font-size: 13px; color: var(--mute); letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .psub .ro { display: inline-flex; align-items: center; gap: 6px; }
+  .psub .ro svg { width: 12px; height: 12px; opacity: .8; }
+  .psub .sep { width: 1px; height: 12px; background: var(--hairline); }
+  .phead .spacer { flex: 1; }
+
+  /* season selector */
+  .seasonsel { position: relative; }
+  .season-btn {
+    height: 38px; padding: 0 12px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .season-btn:hover { background: var(--canvas-soft); }
+  .season-btn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cult-cucumber); }
+  .season-btn .lab { font-family: "Geist Mono", monospace; letter-spacing: 0; color: var(--body); }
+  .season-btn svg { width: 15px; height: 15px; color: var(--mute); }
+  .season-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 8px;
+    box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #0000000f;
+    padding: 5px; min-width: 190px;
+  }
+  .season-menu .opt { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px; font-size: 14px; letter-spacing: -0.02em; cursor: pointer; color: var(--ink); }
+  .season-menu .opt:hover { background: var(--canvas-soft); }
+  .season-menu .opt .mono { color: var(--mute); margin-left: auto; font-size: 12px; }
+  .season-menu .opt.cur { font-weight: 500; }
+  .season-menu .opt.cur svg { width: 15px; height: 15px; color: var(--ink); }
+  .season-menu .opt .tick-slot { width: 15px; display: inline-flex; }
+  .season-menu .mnote { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); padding: 7px 10px 4px; border-top: 1px solid var(--hairline); margin-top: 4px; line-height: 14px; }
+
+  /* ---------------- KPI strip ---------------- */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 20px 26px; }
+  .kpi {
+    border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft);
+    padding: 13px 15px; min-width: 0;
+  }
+  .kpi .k { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); line-height: 14px; }
+  .kpi .v { font-size: 26px; font-weight: 600; letter-spacing: -0.04em; margin-top: 7px; display: flex; align-items: baseline; gap: 4px; line-height: 1; }
+  .kpi .v .u { font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: -0.01em; }
+  .kpi .sub { font-size: 12px; color: var(--mute); margin-top: 6px; letter-spacing: -0.01em; }
+  .kpi .sub b { color: var(--body); font-weight: 500; }
+  .kpi.muted .v { color: var(--hairline-strong); }
+
+  /* ---------------- chart grid ---------------- */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 6px 26px 26px; }
+  @media (max-width: 980px) { .charts { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .card {
+    border: 1px solid var(--hairline); border-radius: 10px; background: var(--canvas); overflow: hidden;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    display: flex; flex-direction: column;
+  }
+  .card-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--hairline); }
+  .card-title { font-size: 14px; font-weight: 600; letter-spacing: -0.025em; display: flex; align-items: center; gap: 8px; }
+  .card-unit { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); margin-top: 4px; letter-spacing: 0; }
+  .card-body { padding: 16px 18px 18px; flex: 1; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--body); letter-spacing: -0.01em; }
+  .legend .sw { width: 20px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  /* completion horizontal bars (HTML/CSS) */
+  .cbars { display: flex; flex-direction: column; gap: 15px; }
+  .cbar { display: grid; grid-template-columns: 130px 1fr 52px; align-items: center; gap: 14px; }
+  .cbar-name { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 500; letter-spacing: -0.02em; min-width: 0; }
+  .cbar-name .chip { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .cbar-mid { min-width: 0; }
+  .cbar-track { position: relative; height: 9px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .cbar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .cbar-cap { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); margin-top: 6px; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+  .cbar-cap b { color: var(--body); font-weight: 500; }
+  .cbar-pct { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* svg chart primitives */
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .chart-svg text { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+  .ax-lbl { font-size: 10.5px; fill: var(--mute); }
+  .ax-lbl.x { font-family: "Geist", sans-serif; letter-spacing: -0.02em; }
+  .val-lbl { font-size: 10.5px; fill: var(--body); font-weight: 500; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--hairline-strong); stroke-width: 1; opacity: .55; }
+
+  /* empty chart states */
+  .chart-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 34px 16px; min-height: 150px; gap: 8px; }
+  .chart-empty .ic { width: 38px; height: 38px; border-radius: 9px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--hairline-strong); }
+  .chart-empty .ic svg { width: 18px; height: 18px; }
+  .chart-empty .t { font-size: 13.5px; font-weight: 500; letter-spacing: -0.02em; color: var(--body); }
+  .chart-empty .d { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; max-width: 260px; line-height: 17px; }
+
+  /* stage note */
+  .stage-note {
+    font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute);
+    padding: 9px 18px; border-top: 1px dashed var(--hairline); background: var(--canvas-soft);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .stage-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* ---------------- decisions ---------------- */
+  .decisions { margin-top: 54px; border-top: 1px solid var(--hairline); padding-top: 28px; }
+  .dec-title { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .dec-sub { font-size: 13px; color: var(--mute); margin: 0 0 20px; letter-spacing: -0.01em; }
+  .dec { border-left: 2px solid var(--hairline); padding: 0 0 0 16px; margin-bottom: 20px; }
+  .dec .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+  .dec .a { font-size: 13.5px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+  .dec .tag.open { color: var(--brak-deep); border-color: var(--brak); background: var(--brak-soft); }
+
+  .endnote { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+  .endnote .mono { color: var(--body); }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="180" y="150" width="180" height="90" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="380" y="150" width="180" height="90" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="580" y="150" width="180" height="90" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="180" y="290" width="380" height="240" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="580" y="290" width="440" height="240" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="220" y="340" width="180" height="12" rx="6" fill="#e5484d"/>
+    <rect x="220" y="380" width="140" height="12" rx="6" fill="#30a46c"/>
+    <rect x="220" y="420" width="90" height="12" rx="6" fill="#f76b15"/>
+    <polyline points="620,480 700,420 780,440 860,360 940,400" fill="none" stroke="#2f2f2f" stroke-width="4"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Аналитика · /analytics · v1</p>
+    <h1 class="doc-title">Дашборд сезона</h1>
+    <p class="doc-lead">Сводный read-only экран по <b>текущему сезону</b> — заменяет плейсхолдер <span class="mono">/analytics</span>. KPI-полоса + сетка из 4 графиков; агрегаты считаются на лету из отгрузок / приёмок / контрактов (не хранятся). Год-к-году в этот срез не входит — истории пока нет. Токены наследуются из системы: hairline&nbsp;#ebebeb, Geist + Geist Mono <span class="mono">tabular-nums</span>; серии культур — из <span class="mono">Culture.color</span>, нейтральные метрики (недели, ТК) — графитовая шкала, брак — нейтральный янтарь. Числа иллюстративные; в проде графики — Recharts, селектор сезона — URL <span class="mono">?season=</span>.</p>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- GROUP A — основной вид                                        -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">A · Основной вид — полный сезон с данными</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">A0</span>
+        <div>
+          <div class="frame-name">Дашборд · шапка + KPI + сетка 4 графиков</div>
+          <div class="frame-desc">Шапка (заголовок + селектор сезона), KPI-полоса из 5 плиток, сетка 2×2: выполнение по культурам (гориз. бар), динамика приёмки по неделям (area), % брака по культурам (верт. бар), рейсы ТК (сгруппированные бары — овощные и материальные раздельно, BR-14). Селектор сезона <b>кликабелен</b> — открывает меню.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика · дашборд сезона">
+        <!-- page head -->
+        <div class="phead">
+          <div class="phead-l">
+            <div class="ptitle">Аналитика</div>
+            <div class="psub">
+              <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+              <span class="sep"></span>
+              <span>дашборд текущего сезона · агрегаты на лету</span>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="seasonsel">
+            <button class="season-btn" id="seasonBtn">
+              <span class="dot"></span>Сезон <span class="lab">2026</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="season-menu" id="seasonMenu" style="display:none">
+              <div class="opt cur"><span class="tick-slot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Сезон 2026 <span class="mono">текущий</span></div>
+              <div class="opt"><span class="tick-slot"></span>Сезон 2025 <span class="mono">архив</span></div>
+              <div class="opt"><span class="tick-slot"></span>Сезон 2024 <span class="mono">архив</span></div>
+              <div class="mnote">в проде — URL ?season=, без localStorage</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI strip -->
+        <div class="kpis">
+          <div class="kpi">
+            <div class="k">Принято</div>
+            <div class="v"><span class="tnum">342</span><span class="u">т</span></div>
+            <div class="sub">из <b>516&nbsp;т</b> плана</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Выполнение сезона</div>
+            <div class="v"><span class="tnum">66</span><span class="u">%</span></div>
+            <div class="sub">принято / план по контрактам</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Средний брак</div>
+            <div class="v"><span class="tnum">4,0</span><span class="u">%</span></div>
+            <div class="sub">взвешенный по весу</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Рейсов ТК</div>
+            <div class="v"><span class="tnum">128</span></div>
+            <div class="sub"><b>94</b> овощных · <b>34</b> материальных</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Осталось</div>
+            <div class="v"><span class="tnum">~48</span><span class="u">машин</span></div>
+            <div class="sub">174&nbsp;т недобора · ≈3,6&nbsp;т/рейс</div>
+          </div>
+        </div>
+
+        <!-- chart grid -->
+        <div class="charts">
+
+          <!-- 1 · Выполнение по культурам -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Выполнение по культурам</div>
+              <div class="card-unit">принято / план · т · % справа</div>
+            </div>
+            <div class="card-body">
+              <div class="cbars">
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:68%;background:var(--cult-tomato)"></span></div>
+                    <div class="cbar-cap"><b>142</b> / 210 т</div>
+                  </div>
+                  <span class="cbar-pct">68%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:70%;background:var(--cult-cucumber)"></span></div>
+                    <div class="cbar-cap"><b>98</b> / 140 т</div>
+                  </div>
+                  <span class="cbar-pct">70%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:56%;background:var(--cult-pepper)"></span></div>
+                    <div class="cbar-cap"><b>54</b> / 96 т</div>
+                  </div>
+                  <span class="cbar-pct">56%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:69%;background:var(--cult-squash)"></span></div>
+                    <div class="cbar-cap"><b>48</b> / 70 т</div>
+                  </div>
+                  <span class="cbar-pct">69%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2 · Динамика приёмки по неделям -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Динамика приёмки по неделям</div>
+              <div class="card-unit">суммарно · т эффективного веса · ISO-недели</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика приёмки по неделям">
+                <!-- gridlines + y labels -->
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">60</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">45</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">15</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- area + line -->
+                <path d="M44,185.9 L114,140.1 L184,100.9 L254,78.1 L324,42.1 L394,22.5 L464,58.5 L534,32.3 L604,130.3 L604,212 L44,212 Z" fill="var(--ink)" fill-opacity="0.06"/>
+                <path d="M44,185.9 L114,140.1 L184,100.9 L254,78.1 L324,42.1 L394,22.5 L464,58.5 L534,32.3 L604,130.3" fill="none" stroke="var(--graf-1)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>
+                <!-- point dots -->
+                <g fill="var(--canvas)" stroke="var(--graf-1)" stroke-width="1.5">
+                  <circle cx="44" cy="185.9" r="2.6"/><circle cx="114" cy="140.1" r="2.6"/><circle cx="184" cy="100.9" r="2.6"/><circle cx="254" cy="78.1" r="2.6"/><circle cx="324" cy="42.1" r="2.6"/><circle cx="394" cy="22.5" r="2.6"/><circle cx="464" cy="58.5" r="2.6"/><circle cx="534" cy="32.3" r="2.6"/><circle cx="604" cy="130.3" r="2.6"/>
+                </g>
+                <!-- x labels -->
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="114" y="230" text-anchor="middle">W21</text>
+                <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="254" y="230" text-anchor="middle">W23</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="394" y="230" text-anchor="middle">W25</text>
+                <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="534" y="230" text-anchor="middle">W27</text>
+                <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+              </svg>
+              <div class="legend"><span><span class="sw" style="background:var(--graf-1)"></span>приёмка, суммарно по всем культурам</span></div>
+            </div>
+          </div>
+
+          <!-- 3 · % брака по культурам -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">% брака по культурам</div>
+              <div class="card-unit">брак / принято · % · нейтральный янтарь</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Процент брака по культурам">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">8</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">6</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">4</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">2</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- bars -->
+                <rect x="86" y="118.9" width="56" height="93.1" rx="2" fill="var(--brak)"/>
+                <rect x="226" y="140.95" width="56" height="71.05" rx="2" fill="var(--brak)"/>
+                <rect x="366" y="62.55" width="56" height="149.45" rx="2" fill="var(--brak)"/>
+                <rect x="506" y="104.2" width="56" height="107.8" rx="2" fill="var(--brak)"/>
+                <!-- value labels -->
+                <text class="val-lbl" x="114" y="110" text-anchor="middle">3,8</text>
+                <text class="val-lbl" x="254" y="132" text-anchor="middle">2,9</text>
+                <text class="val-lbl" x="394" y="54" text-anchor="middle">6,1</text>
+                <text class="val-lbl" x="534" y="96" text-anchor="middle">4,4</text>
+                <!-- culture chips + names -->
+                <g>
+                  <rect x="105" y="222" width="9" height="9" rx="2" fill="var(--cult-tomato)"/><text class="ax-lbl x" x="119" y="230" text-anchor="start">Томаты</text>
+                  <rect x="238" y="222" width="9" height="9" rx="2" fill="var(--cult-cucumber)"/><text class="ax-lbl x" x="252" y="230" text-anchor="start">Огурцы</text>
+                  <rect x="382" y="222" width="9" height="9" rx="2" fill="var(--cult-pepper)"/><text class="ax-lbl x" x="396" y="230" text-anchor="start">Перец</text>
+                  <rect x="504" y="222" width="9" height="9" rx="2" fill="var(--cult-squash)"/><text class="ax-lbl x" x="518" y="230" text-anchor="start">Патиссоны</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 4 · Рейсы ТК -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Рейсы транспортных компаний</div>
+              <div class="card-unit">число рейсов · овощные и материальные раздельно (BR-14)</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Рейсы транспортных компаний">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">50</text>
+                <line class="gridline" x1="44" y1="55.2" x2="604" y2="55.2"/><text class="ax-lbl" x="38" y="59" text-anchor="end">40</text>
+                <line class="gridline" x1="44" y1="94.4" x2="604" y2="94.4"/><text class="ax-lbl" x="38" y="98" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="133.6" x2="604" y2="133.6"/><text class="ax-lbl" x="38" y="137" text-anchor="end">20</text>
+                <line class="gridline" x1="44" y1="172.8" x2="604" y2="172.8"/><text class="ax-lbl" x="38" y="176" text-anchor="end">10</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- Юг-Логистик -->
+                <rect x="76" y="47.4" width="34" height="164.6" rx="2" fill="var(--graf-1)"/><rect x="118" y="164.96" width="34" height="47.04" rx="2" fill="var(--graf-2)"/>
+                <text class="val-lbl" x="93" y="40" text-anchor="middle">42</text><text class="val-lbl" x="135" y="158" text-anchor="middle">12</text>
+                <!-- Дон-Транс -->
+                <rect x="216" y="102.2" width="34" height="109.8" rx="2" fill="var(--graf-1)"/><rect x="258" y="180.64" width="34" height="31.36" rx="2" fill="var(--graf-2)"/>
+                <text class="val-lbl" x="233" y="95" text-anchor="middle">28</text><text class="val-lbl" x="275" y="174" text-anchor="middle">8</text>
+                <!-- Кубань-Авто -->
+                <rect x="356" y="141.4" width="34" height="70.6" rx="2" fill="var(--graf-1)"/><rect x="398" y="188.48" width="34" height="23.52" rx="2" fill="var(--graf-2)"/>
+                <text class="val-lbl" x="373" y="134" text-anchor="middle">18</text><text class="val-lbl" x="415" y="182" text-anchor="middle">6</text>
+                <!-- Свой автопарк -->
+                <rect x="496" y="188.48" width="34" height="23.52" rx="2" fill="var(--graf-1)"/><rect x="538" y="180.64" width="34" height="31.36" rx="2" fill="var(--graf-2)"/>
+                <text class="val-lbl" x="513" y="182" text-anchor="middle">6</text><text class="val-lbl" x="555" y="174" text-anchor="middle">8</text>
+                <!-- x labels -->
+                <text class="ax-lbl x" x="114" y="230" text-anchor="middle">Юг-Логистик</text>
+                <text class="ax-lbl x" x="254" y="230" text-anchor="middle">Дон-Транс</text>
+                <text class="ax-lbl x" x="394" y="230" text-anchor="middle">Кубань-Авто</text>
+                <text class="ax-lbl x" x="534" y="230" text-anchor="middle">Свой автопарк</text>
+              </svg>
+              <div class="legend">
+                <span><span class="sw" style="background:var(--graf-1)"></span>овощные рейсы</span>
+                <span><span class="sw" style="background:var(--graf-2)"></span>материальные рейсы</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Кликните селектор сезона — открывается меню. Всё read-only; агрегаты не хранятся. Прод: графики — Recharts, сезон — URL <span class="mono">?season=</span>.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- GROUP B — состояния данных                                    -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">B · Состояния данных</span><span class="gl-line"></span></div>
+
+    <!-- B1 · пустой / ранний сезон -->
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B1</span>
+        <div>
+          <div class="frame-name">Пустой / ранний сезон — данных почти нет</div>
+          <div class="frame-desc">Сезон только стартовал (W20, первые приёмки). KPI показывают то, что есть, недостающие — прочерк «—» вместо сломанных нулей. Графики держат оси и подписи, но вместо серий — аккуратное «данных пока нет». Ничего не разваливается.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика · ранний сезон">
+        <div class="phead">
+          <div class="phead-l">
+            <div class="ptitle">Аналитика</div>
+            <div class="psub">
+              <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+              <span class="sep"></span>
+              <span>сезон только начался · W20</span>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="seasonsel">
+            <button class="season-btn">
+              <span class="dot"></span>Сезон <span class="lab">2026</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <div class="k">Принято</div>
+            <div class="v"><span class="tnum">8</span><span class="u">т</span></div>
+            <div class="sub">из <b>516&nbsp;т</b> плана</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Выполнение сезона</div>
+            <div class="v"><span class="tnum">2</span><span class="u">%</span></div>
+            <div class="sub">первые приёмки</div>
+          </div>
+          <div class="kpi muted">
+            <div class="k">Средний брак</div>
+            <div class="v"><span class="tnum">—</span></div>
+            <div class="sub">нет завершённых актов</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Рейсов ТК</div>
+            <div class="v"><span class="tnum">3</span></div>
+            <div class="sub"><b>3</b> овощных · <b>0</b> материальных</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Осталось</div>
+            <div class="v"><span class="tnum">~141</span><span class="u">машин</span></div>
+            <div class="sub">508&nbsp;т недобора · ≈3,6&nbsp;т/рейс</div>
+          </div>
+        </div>
+
+        <div class="charts">
+          <!-- completion — one thin bar, rest empty -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Выполнение по культурам</div>
+              <div class="card-unit">принято / план · т · % справа</div>
+            </div>
+            <div class="card-body">
+              <div class="cbars">
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:4%;background:var(--cult-tomato)"></span></div>
+                    <div class="cbar-cap"><b>8</b> / 210 т</div>
+                  </div>
+                  <span class="cbar-pct">4%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"></div>
+                    <div class="cbar-cap">0 / 140 т</div>
+                  </div>
+                  <span class="cbar-pct" style="color:var(--hairline-strong)">0%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-pepper)"></span>Перец</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"></div>
+                    <div class="cbar-cap">0 / 96 т</div>
+                  </div>
+                  <span class="cbar-pct" style="color:var(--hairline-strong)">0%</span>
+                </div>
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"></div>
+                    <div class="cbar-cap">0 / 70 т</div>
+                  </div>
+                  <span class="cbar-pct" style="color:var(--hairline-strong)">0%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- dynamics — axes held, empty -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Динамика приёмки по неделям</div>
+              <div class="card-unit">суммарно · т эффективного веса · ISO-недели</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика — данных пока нет">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">60</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">45</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">15</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <circle cx="44" cy="185.9" r="2.6" fill="var(--graf-1)"/>
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text x="324" y="118" text-anchor="middle" style="font-family:Geist,sans-serif;font-size:13px;fill:var(--mute);letter-spacing:-0.02em">Данных пока нет — приёмки только начались</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- brak — empty -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">% брака по культурам</div>
+              <div class="card-unit">брак / принято · % · нейтральный янтарь</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-empty">
+                <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                <div class="t">Данных пока нет</div>
+                <div class="d">Брак считается по завершённым актам приёмки — их ещё нет в этом сезоне.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- trips — one small veg bar -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Рейсы транспортных компаний</div>
+              <div class="card-unit">число рейсов · овощные и материальные раздельно (BR-14)</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Рейсы — ранний сезон">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">50</text>
+                <line class="gridline" x1="44" y1="55.2" x2="604" y2="55.2"/><text class="ax-lbl" x="38" y="59" text-anchor="end">40</text>
+                <line class="gridline" x1="44" y1="94.4" x2="604" y2="94.4"/><text class="ax-lbl" x="38" y="98" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="133.6" x2="604" y2="133.6"/><text class="ax-lbl" x="38" y="137" text-anchor="end">20</text>
+                <line class="gridline" x1="44" y1="172.8" x2="604" y2="172.8"/><text class="ax-lbl" x="38" y="176" text-anchor="end">10</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <rect x="76" y="200.24" width="34" height="11.76" rx="2" fill="var(--graf-1)"/>
+                <text class="val-lbl" x="93" y="194" text-anchor="middle">3</text>
+                <text class="ax-lbl x" x="114" y="230" text-anchor="middle">Юг-Логистик</text>
+                <text x="380" y="118" text-anchor="middle" style="font-family:Geist,sans-serif;font-size:13px;fill:var(--mute);letter-spacing:-0.02em">Материальных рейсов ещё не было</text>
+              </svg>
+              <div class="legend">
+                <span><span class="sw" style="background:var(--graf-1)"></span>овощные рейсы</span>
+                <span><span class="sw" style="background:var(--graf-2)"></span>материальные рейсы</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B2 · single culture / single TC -->
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B2</span>
+        <div>
+          <div class="frame-name">Одна культура / один ТК — графики не разваливаются</div>
+          <div class="frame-desc">Узкий сезон: одна культура в контрактах, один перевозчик. Бары не растягиваются на всю ширину и не «прилипают» к краям — единичная серия центрируется, сохраняя нормальную ширину столбца. Оси и подписи те же.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика · одна культура / один ТК">
+        <div class="charts" style="padding-top:22px">
+          <!-- single-culture completion -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Выполнение по культурам</div>
+              <div class="card-unit">принято / план · т · % справа</div>
+            </div>
+            <div class="card-body">
+              <div class="cbars">
+                <div class="cbar">
+                  <span class="cbar-name"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                  <div class="cbar-mid">
+                    <div class="cbar-track"><span class="cbar-fill" style="width:72%;background:var(--cult-tomato)"></span></div>
+                    <div class="cbar-cap"><b>151</b> / 210 т</div>
+                  </div>
+                  <span class="cbar-pct">72%</span>
+                </div>
+              </div>
+              <div class="legend"><span style="color:var(--mute)">единственная культура сезона — одна строка, полная ширина трека</span></div>
+            </div>
+          </div>
+
+          <!-- single-culture brak — one bar, centered -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">% брака по культурам</div>
+              <div class="card-unit">брак / принято · % · нейтральный янтарь</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Брак — одна культура">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">8</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">6</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">4</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">2</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- one bar centered with fixed width -->
+                <rect x="296" y="118.9" width="56" height="93.1" rx="2" fill="var(--brak)"/>
+                <text class="val-lbl" x="324" y="110" text-anchor="middle">3,8</text>
+                <rect x="315" y="222" width="9" height="9" rx="2" fill="var(--cult-tomato)"/><text class="ax-lbl x" x="329" y="230" text-anchor="start">Томаты</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- single-TC trips — one group centered -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Рейсы транспортных компаний</div>
+              <div class="card-unit">число рейсов · овощные и материальные раздельно (BR-14)</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Рейсы — один ТК">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">50</text>
+                <line class="gridline" x1="44" y1="55.2" x2="604" y2="55.2"/><text class="ax-lbl" x="38" y="59" text-anchor="end">40</text>
+                <line class="gridline" x1="44" y1="94.4" x2="604" y2="94.4"/><text class="ax-lbl" x="38" y="98" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="133.6" x2="604" y2="133.6"/><text class="ax-lbl" x="38" y="137" text-anchor="end">20</text>
+                <line class="gridline" x1="44" y1="172.8" x2="604" y2="172.8"/><text class="ax-lbl" x="38" y="176" text-anchor="end">10</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <rect x="286" y="55.2" width="34" height="156.8" rx="2" fill="var(--graf-1)"/><rect x="328" y="172.8" width="34" height="39.2" rx="2" fill="var(--graf-2)"/>
+                <text class="val-lbl" x="303" y="48" text-anchor="middle">40</text><text class="val-lbl" x="345" y="166" text-anchor="middle">10</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">Юг-Логистик</text>
+              </svg>
+              <div class="legend">
+                <span><span class="sw" style="background:var(--graf-1)"></span>овощные рейсы</span>
+                <span><span class="sw" style="background:var(--graf-2)"></span>материальные рейсы</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- single-culture dynamics — line still fine -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Динамика приёмки по неделям</div>
+              <div class="card-unit">суммарно · т эффективного веса · ISO-недели</div>
+            </div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика — одна культура">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">60</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">45</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">15</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <path d="M44,192 L114,150 L184,120 L254,96 L324,72 L394,90 L464,66 L534,84 L604,140 L604,212 L44,212 Z" fill="var(--ink)" fill-opacity="0.06"/>
+                <path d="M44,192 L114,150 L184,120 L254,96 L324,72 L394,90 L464,66 L534,84 L604,140" fill="none" stroke="var(--graf-1)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+              </svg>
+              <div class="legend"><span><span class="sw" style="background:var(--graf-1)"></span>приёмка, суммарно (одна культура)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- GROUP C — селектор сезона                                     -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">C · Переключение сезона</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C1</span>
+        <div>
+          <div class="frame-name">Селектор сезона — меню открыто</div>
+          <div class="frame-desc">По умолчанию — текущий сезон (галочка). Архивные сезоны переключают весь дашборд. В проде состояние живёт в URL (<span class="mono">?season=</span>) — не в localStorage, чтобы ссылка на срез сезона была шарабельной.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика · селектор сезона" style="overflow:visible">
+        <div class="phead">
+          <div class="phead-l">
+            <div class="ptitle">Аналитика</div>
+            <div class="psub">
+              <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+              <span class="sep"></span>
+              <span>дашборд текущего сезона · агрегаты на лету</span>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="seasonsel">
+            <button class="season-btn">
+              <span class="dot"></span>Сезон <span class="lab">2026</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="season-menu" style="position:static;margin-top:8px;box-shadow:0 1px 1px #00000005,0 2px 2px #0000000a">
+              <div class="opt cur"><span class="tick-slot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Сезон 2026 <span class="mono">текущий</span></div>
+              <div class="opt"><span class="tick-slot"></span>Сезон 2025 <span class="mono">архив</span></div>
+              <div class="opt"><span class="tick-slot"></span>Сезон 2024 <span class="mono">архив</span></div>
+              <div class="mnote">в проде — URL ?season=, без localStorage</div>
+            </div>
+          </div>
+        </div>
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Меню показано открытым для наглядности. Выбор сезона пересчитывает KPI и все графики из данных выбранного сезона.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- DECISIONS / QUESTIONS                                         -->
+  <!-- ============================================================ -->
+  <section class="decisions">
+    <h2 class="dec-title">Решения / вопросы</h2>
+    <p class="dec-sub">Открыто на ревью раскладки v1 — до кода на Recharts.</p>
+
+    <div class="dec">
+      <div class="q">Линия динамики — суммарная или по культурам?</div>
+      <div class="a"><span class="tag open">вопрос</span>v1 — <b>одна суммарная</b> линия/area (принято по всем культурам). Разрез по культурам (несколько линий, серии из <span class="mono">Culture.color</span>) — вероятный v2: при 4+ культурах график читается хуже, нужен тумблер «сумма / по культурам». Утвердить: достаточно ли суммарной для первого релиза?</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Выполнение по культурам — горизонтальные бары</div>
+      <div class="a"><span class="tag">склоняемся</span>Горизонтальные: длинные названия культур читаются в строку, % и «принято / план» встают справа без поворота подписей. Вертикальные оставлены для метрик с короткими подписями (брак, рейсы).</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Брак — разрез по фермерам, а не только культурам?</div>
+      <div class="a"><span class="tag open">вопрос</span>v1 — брак по <b>культурам</b> (доля брака от принятого). Разрез «брак по фермерам» полезен для претензий, но это отдельный таб/дровилл — не на обзорный дашборд. Нужен ли drill-down «культура → фермеры» в v1 или в карточку фермера (v2)?</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">«Осталось ~N машин» — как считать средний вес рейса?</div>
+      <div class="a"><span class="tag">решено</span>v1 — грубая оценка: недобор&nbsp;/&nbsp;плановый вес рейса из норм (≈3,6&nbsp;т). Фактический средний вес рейса как отдельная метрика — <b>не в этом срезе</b> (уводит от плана). Подпись явно помечает оценку («≈»).</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Рейсы ТК — сгруппированные бары или две серии стопкой?</div>
+      <div class="a"><span class="tag">склоняемся</span>Сгруппированные (овощные + материальные рядом): раздельный счёт по BR-14 читается сразу, стопка бы прятала соотношение. Графит вместо статусных цветов — ТК не про статус отгрузки.</div>
+    </div>
+  </section>
+
+  <p class="endnote">VSMS · инструмент снабженца. Статичный макет дашборда <span class="mono">/analytics</span> (v1) — раскладка, оси и цвета до кода на Recharts. Read-only, все роли (аналитика — R). Год-к-году, печатные формы и фактический средний вес рейса — вне этого среза. Серии культур — <span class="mono">Culture.color</span>; недели и ТК — графитовая шкала; брак — нейтральный янтарь, не алярм-красный.</p>
+
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('seasonBtn');
+  var menu = document.getElementById('seasonMenu');
+  if (!btn || !menu) return;
+  function close() { menu.style.display = 'none'; document.removeEventListener('click', onDoc); }
+  function onDoc(e) { if (!menu.contains(e.target) && e.target !== btn) close(); }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (menu.style.display === 'none') {
+      menu.style.display = 'block';
+      setTimeout(function () { document.addEventListener('click', onDoc); }, 0);
+    } else { close(); }
+  });
+})();
+</script>
+</body>
+</html>

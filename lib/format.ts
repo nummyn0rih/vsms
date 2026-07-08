@@ -3,3 +3,13 @@
 export function fmtTons(n: number): string {
   return n.toFixed(1).replace(/\.0$/, "").replace(".", ",");
 }
+
+// Процент с одним знаком, запятая (4→«4,0», 6.13→«6,1»). Для брака.
+export function fmtPct1(n: number): string {
+  return n.toFixed(1).replace(".", ",");
+}
+
+// Целое с разрядами (пробел-разделитель, ru): 1284→«1 284».
+export function fmtInt(n: number): string {
+  return Math.round(n).toLocaleString("ru-RU");
+}
