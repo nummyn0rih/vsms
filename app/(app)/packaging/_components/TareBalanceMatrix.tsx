@@ -13,6 +13,7 @@ import {
 } from "@/server/inventory/balances";
 import { scrapTare, disposeTare } from "@/server/inventory/operations";
 import { RoleGate } from "@/components/auth/RoleGate";
+import { fmtInt } from "@/lib/format";
 
 // D4b: матрица остатков тары локация × тип. Read-only. Баланс приходит плоским
 // списком cells (Σ движений считается на сервере); здесь — лукап-Map, тоталы,
@@ -20,11 +21,6 @@ import { RoleGate } from "@/components/auth/RoleGate";
 
 const OUTFLOW = "#9a5a12"; // приглушённый amber для отрицательных (зазор учёта)
 const LOCATION_COL_W = 220; // ширина колонки «Локация»; остальные делят остаток поровну
-
-// Целые штуки с разделением тысяч: ru-RU даёт неразрывный пробел → «50 000».
-function fmtInt(n: number): string {
-  return n.toLocaleString("ru-RU");
-}
 
 type Props = { data: TareBalances };
 

@@ -100,6 +100,9 @@ UI
 
 ---
 
+> Пост-ревью правки — отдельным самодостаточным промптом `docs/prompts/PROMPTS-ANALYTICS-FIX.md`
+> (подписи оси X в графике брака + консолидация `fmtInt`).
+
 ## После задачи — обновление памяти (зона PM, не Claude Code)
 - TASKS.md: F/V2 · аналитический дашборд → `[x]`.
 - CONTEXT-HANDOFF.md: PROJECT STATE / CURRENT IMPLEMENTATION += дашборд аналитики (Recharts введён);

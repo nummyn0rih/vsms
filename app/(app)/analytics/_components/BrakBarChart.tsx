@@ -4,6 +4,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   ResponsiveContainer,
   XAxis,
@@ -33,35 +34,35 @@ export function BrakBarChart({ data }: { data: Row[] }) {
   }
 
   return (
-    <>
-      <ResponsiveContainer width="100%" height={200}>
-        <BarChart data={data} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid vertical={false} stroke="#ebebeb" />
-          <XAxis dataKey="cultureName" hide />
-          <YAxis
-            width={34}
-            tickLine={false}
-            axisLine={false}
-            tick={{ fontSize: 10.5, fill: "#888888" }}
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 16, right: 8, bottom: 4, left: 0 }}>
+        <CartesianGrid vertical={false} stroke="#ebebeb" />
+        <XAxis
+          dataKey="cultureName"
+          interval={0}
+          tickLine={false}
+          axisLine={{ stroke: "#ebebeb" }}
+          tickMargin={8}
+          tick={{ fontSize: 10.5, fill: "#888888" }}
+        />
+        <YAxis
+          width={34}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fontSize: 10.5, fill: "#888888" }}
+        />
+        <Bar dataKey="pct" radius={[2, 2, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+          {data.map((d) => (
+            <Cell key={d.cultureId} fill={d.color} />
+          ))}
+          <LabelList
+            dataKey="pct"
+            position="top"
+            formatter={(value) => fmtPct1(Number(value))}
+            style={{ fontSize: 10.5, fill: "#4d4d4d", fontWeight: 500 }}
           />
-          <Bar dataKey="pct" fill="#cf9a3e" radius={[2, 2, 0, 0]} maxBarSize={56} isAnimationActive={false}>
-            <LabelList
-              dataKey="pct"
-              position="top"
-              formatter={(value) => fmtPct1(Number(value))}
-              style={{ fontSize: 10.5, fill: "#4d4d4d", fontWeight: 500 }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="an-brak-cats">
-        {data.map((d) => (
-          <span key={d.cultureId} className="cat">
-            <span className="chip" style={{ background: d.color }} />
-            <span className="nm">{d.cultureName}</span>
-          </span>
-        ))}
-      </div>
-    </>
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
