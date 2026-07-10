@@ -35,6 +35,26 @@ export function calibreRangeLabel(
   return fallbackLabel;
 }
 
+// Смарт-дефолт даты прибытия (BR-24б): плановая в прошлом → берём её (отгрузка
+// задним числом); иначе сегодня. Общий хелпер — зовут десктопная MarkArrivedButton
+// и мобильный MobileArrivalSheet, без дублирования расчёта.
+export function arrivalDateDefault(plannedArrivalDate: string | null): {
+  today: string;
+  planned: string | null;
+  plannedIsPast: boolean;
+  defaultChoice: "planned" | "today";
+} {
+  const today = new Date().toISOString().slice(0, 10);
+  const planned = plannedArrivalDate ?? null;
+  const plannedIsPast = planned != null && planned < today;
+  return {
+    today,
+    planned,
+    plannedIsPast,
+    defaultChoice: plannedIsPast ? "planned" : "today",
+  };
+}
+
 // № акта в рамках сезона (BR-9): хранится с префиксом года сезона «{season}-{введённое}».
 // Глобальный @unique на act_number => уникум по паре (сезон, введённое) без миграции.
 export function withSeasonPrefix(input: string, season: number): string {

@@ -78,6 +78,7 @@ export type ActContext = {
   driverName: string | null;
   transportCompanyName: string | null;
   machineStatus: "sent" | "arrived" | "accepted";
+  arrivalDate: string | null; // факт прибытия машины (read-only показ в акте, BR-24)
   actualKg: number | null;
   contractLines: ActContractLine[];
   autoLineId: number | null; // строк ровно одна — привязка авто (BR-8)

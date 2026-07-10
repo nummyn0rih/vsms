@@ -142,6 +142,7 @@ export async function getActContext({
     driverName: item.shipment.driver?.full_name ?? null,
     transportCompanyName: item.shipment.driver?.transportCompany.name ?? null,
     machineStatus: item.shipment.status as "sent" | "arrived" | "accepted",
+    arrivalDate: toDateStr(item.shipment.arrival_date),
     actualKg:
       item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
     contractLines: lines.map((l) => ({

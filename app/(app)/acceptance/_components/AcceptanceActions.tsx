@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { markArrived } from "@/server/acceptance/actions";
+import { arrivalDateDefault } from "@/server/acceptance/accepted";
 
 // Формат даты как в ленте (день + месяц прописью), UTC чтобы date-only не плыл по TZ.
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -41,13 +42,8 @@ export function MarkArrivedButton({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const planned = arrivalDate ?? null;
-  // Умный дефолт: плановая в прошлом → берём её (отгрузка задним числом); иначе сегодня.
-  const plannedIsPast = planned != null && planned < today;
-  const [choice, setChoice] = useState<"planned" | "today">(
-    plannedIsPast ? "planned" : "today",
-  );
+  const { today, planned, defaultChoice } = arrivalDateDefault(arrivalDate ?? null);
+  const [choice, setChoice] = useState<"planned" | "today">(defaultChoice);
 
   async function confirm() {
     const chosen = choice === "planned" && planned ? planned : today;
