@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { TransportCompanyOption } from "@/server/drivers/schema";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -15,8 +16,16 @@ import {
 const ALL = "all";
 
 // Фильтр списка водителей по ТК. Состояние в URL (?company=<id>), как и
-// остальные фильтры тулбара. Комбинируется с поиском по фамилии.
-export function CompanyFilter({ options }: { options: TransportCompanyOption[] }) {
+// остальные фильтры тулбара. Комбинируется с поиском по фамилии. className —
+// для мобильного узкого триггера (MobileDriversList), десктоп не передаёт →
+// ширина остаётся w-52.
+export function CompanyFilter({
+  options,
+  className,
+}: {
+  options: TransportCompanyOption[];
+  className?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -32,7 +41,7 @@ export function CompanyFilter({ options }: { options: TransportCompanyOption[] }
 
   return (
     <Select value={current} onValueChange={onChange}>
-      <SelectTrigger className="w-52">
+      <SelectTrigger className={cn("w-52", className)}>
         <SelectValue placeholder="Все компании" />
       </SelectTrigger>
       <SelectContent>
