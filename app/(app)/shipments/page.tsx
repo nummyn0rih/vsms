@@ -2,6 +2,7 @@ import { getFeed } from "@/server/shipments/feed-loader";
 import { parseWeekParam } from "@/server/shipments/workdays";
 import { listShipmentOptions } from "@/server/shipments/actions";
 import { ShipmentsFeed } from "./_components/ShipmentsFeed";
+import { MobileShipmentsFeed } from "./_components/MobileShipmentsFeed";
 
 export default async function ShipmentsPage({
   searchParams,
@@ -18,7 +19,7 @@ export default async function ShipmentsPage({
 
   return (
     <div className="mx-auto w-full max-w-[1880px]">
-      <div className="mb-4">
+      <div className="mb-4 hidden md:block">
         <h1 className="text-2xl font-semibold tracking-tight">Лента отгрузок</h1>
         <p className="text-sm text-muted-foreground">
           Овощное сырьё на завод · сезон {initialWeek.seasonYear}
@@ -26,12 +27,18 @@ export default async function ShipmentsPage({
       </div>
 
       {/* Тулбар (+ Отгрузка / неделя / фильтры) — внутри ленты (FeedToolbar). */}
-      <ShipmentsFeed
-        feed={feed}
-        options={options}
-        initialWeek={initialWeek}
-        initialView={initialView}
-      />
+      <div className="hidden md:block">
+        <ShipmentsFeed
+          feed={feed}
+          options={options}
+          initialWeek={initialWeek}
+          initialView={initialView}
+        />
+      </div>
+
+      <div className="md:hidden">
+        <MobileShipmentsFeed feed={feed} options={options} initialWeek={initialWeek} />
+      </div>
     </div>
   );
 }

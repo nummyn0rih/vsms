@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Feed, FeedShipment, FeedWeek } from "@/server/shipments/feed";
+import {
+  filterFeedWeeks,
+  feedOptionCounts,
+  type Feed,
+  type FeedShipment,
+  type FeedWeek,
+} from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
 import {
@@ -17,11 +23,11 @@ import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
 import { FilterCombo } from "@/components/filters/FilterCombo";
-import { weekKey, formatWeekRange } from "./week-format";
+import { weekKey, formatWeekRange, writeUrlParam } from "./week-format";
 import { SummaryView } from "./SummaryView";
 import { usePlanWeek } from "@/app/(app)/planner/_components/usePlanWeek";
 
-type Week = { seasonYear: number; isoYear: number; isoWeek: number };
+export type Week = { seasonYear: number; isoYear: number; isoWeek: number };
 type View = "lenta" | "summary";
 
 // Виды /shipments (B5-nav): Лента (быв. Таблица) + Сводка (быв. Heatmap,
@@ -30,14 +36,6 @@ const VIEWS = [
   { key: "lenta", label: "Лента" },
   { key: "summary", label: "Сводка" },
 ];
-
-// Запись параметра в URL без ре-рендера сервера (B5-nav): неделя/вид делятся с
-// /planner и переживают перезагрузку. Остальные параметры сохраняются.
-function writeUrlParam(key: string, value: string) {
-  const sp = new URLSearchParams(window.location.search);
-  sp.set(key, value);
-  window.history.replaceState(null, "", `?${sp.toString()}`);
-}
 
 // Диапазон недели для метки тулбара (ISO Пн–Вс): «8 июня – 14 июня».
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -181,61 +179,16 @@ export function ShipmentsFeed({
     });
   }
 
-  // Видимые недели: фильтрация — клиентская, поверх загруженного дерева. Машина
-  // атомарна (И между фильтрами); пустые дни/недели после фильтра скрываются.
-  const visibleWeeks = useMemo<FeedWeek[]>(() => {
-    if (!anyFilterActive) return weeks;
-    const q = search.trim().toLowerCase();
-    const machineVisible = (m: FeedShipment): boolean => {
-      if (statusSel.size && !statusSel.has(m.status)) return false;
-      if (hidePlanned && m.status === "planned") return false;
-      if (supplierSel.size && !m.items.some((it) => supplierSel.has(it.farmerId)))
-        return false;
-      if (cultureSel.size && !m.items.some((it) => cultureSel.has(it.cultureId)))
-        return false;
-      if (q) {
-        const hit =
-          m.code.toLowerCase().includes(q) ||
-          m.items.some(
-            (it) =>
-              it.farmerName.toLowerCase().includes(q) ||
-              it.cultureName.toLowerCase().includes(q),
-          );
-        if (!hit) return false;
-      }
-      return true;
-    };
-    return weeks
-      .map((w) => ({
-        ...w,
-        days: w.days
-          .map((d) => ({ ...d, shipments: d.shipments.filter(machineVisible) }))
-          .filter((d) => d.shipments.length > 0),
-      }))
-      .filter((w) => w.days.length > 0);
-  }, [weeks, anyFilterActive, search, supplierSel, cultureSel, statusSel, hidePlanned]);
+  // Видимые недели: фильтрация — клиентская, поверх загруженного дерева (feed.ts,
+  // делит с мобильным фидом).
+  const visibleWeeks = useMemo<FeedWeek[]>(
+    () =>
+      filterFeedWeeks(weeks, { search, supplierSel, cultureSel, statusSel, hidePlanned }),
+    [weeks, search, supplierSel, cultureSel, statusSel, hidePlanned],
+  );
 
-  // Счётчики опций (.ct): число машин сезона с этой культурой/фермером/статусом.
-  // По полному дереву — стабильны независимо от текущих фильтров.
-  const counts = useMemo(() => {
-    const farmer = new Map<number, number>();
-    const culture = new Map<number, number>();
-    const status = new Map<Status, number>();
-    for (const w of weeks)
-      for (const d of w.days)
-        for (const m of d.shipments) {
-          status.set(m.status, (status.get(m.status) ?? 0) + 1);
-          const fset = new Set<number>();
-          const cset = new Set<number>();
-          for (const it of m.items) {
-            fset.add(it.farmerId);
-            cset.add(it.cultureId);
-          }
-          for (const id of fset) farmer.set(id, (farmer.get(id) ?? 0) + 1);
-          for (const id of cset) culture.set(id, (culture.get(id) ?? 0) + 1);
-        }
-    return { farmer, culture, status };
-  }, [weeks]);
+  // Счётчики опций (.ct) — feed.ts, делит с мобильным фидом.
+  const counts = useMemo(() => feedOptionCounts(weeks), [weeks]);
 
   // Свёрнутость недель в React-state (НЕ localStorage). Прошлые свёрнуты,
   // текущая и будущие развёрнуты (DESIGN §2).

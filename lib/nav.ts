@@ -75,3 +75,18 @@ export const SETTINGS_TABS =
 export function navForRole(role: Role | undefined): NavItem[] {
   return NAV.filter((i) => !i.roles || (role && i.roles.includes(role)));
 }
+
+// Активность пункта меню по текущему маршруту (Sidebar + мобильный шелл).
+export function isActive(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
+// Доступность href (топ-уровень или дочерний, напр. /reference/drivers) для роли —
+// по roles родительского пункта NAV. Мобильный таб-бар/drawer (mobile-1) кажут
+// отдельные дочерние ссылки как «полевые» ярлыки — та же ролевая модель, что Sidebar.
+export function isHrefAllowedForRole(href: string, role: Role | undefined): boolean {
+  const owner = NAV.find((i) => i.href === href || i.children?.some((c) => c.href === href));
+  if (!owner) return true;
+  return !owner.roles || (!!role && owner.roles.includes(role));
+}

@@ -190,6 +190,85 @@ export function buildSendPreview(items: FeedItem[]): SendPreview {
   };
 }
 
+// --- Фильтрация ленты (чистая, делят десктоп ShipmentsFeed и мобильный фид) ---
+
+export type FeedFilters = {
+  search: string;
+  supplierSel: Set<number>;
+  cultureSel: Set<number>;
+  statusSel: Set<FeedShipment["status"]>;
+  hidePlanned: boolean;
+};
+
+// Видимые недели после фильтров: машина атомарна (И между фильтрами); пустые
+// дни/недели после фильтра скрываются. Мобильный фид не использует search/
+// hidePlanned (их нет в bottom-sheet v1) — передаёт search:"", hidePlanned:false.
+export function filterFeedWeeks(weeks: FeedWeek[], filters: FeedFilters): FeedWeek[] {
+  const { search, supplierSel, cultureSel, statusSel, hidePlanned } = filters;
+  const anyFilterActive =
+    search.trim() !== "" ||
+    supplierSel.size > 0 ||
+    cultureSel.size > 0 ||
+    statusSel.size > 0 ||
+    hidePlanned;
+  if (!anyFilterActive) return weeks;
+
+  const q = search.trim().toLowerCase();
+  const machineVisible = (m: FeedShipment): boolean => {
+    if (statusSel.size && !statusSel.has(m.status)) return false;
+    if (hidePlanned && m.status === "planned") return false;
+    if (supplierSel.size && !m.items.some((it) => supplierSel.has(it.farmerId)))
+      return false;
+    if (cultureSel.size && !m.items.some((it) => cultureSel.has(it.cultureId)))
+      return false;
+    if (q) {
+      const hit =
+        m.code.toLowerCase().includes(q) ||
+        m.items.some(
+          (it) =>
+            it.farmerName.toLowerCase().includes(q) ||
+            it.cultureName.toLowerCase().includes(q),
+        );
+      if (!hit) return false;
+    }
+    return true;
+  };
+  return weeks
+    .map((w) => ({
+      ...w,
+      days: w.days
+        .map((d) => ({ ...d, shipments: d.shipments.filter(machineVisible) }))
+        .filter((d) => d.shipments.length > 0),
+    }))
+    .filter((w) => w.days.length > 0);
+}
+
+// Счётчики опций (.ct): число машин сезона с этой культурой/фермером/статусом.
+// По полному дереву — стабильны независимо от текущих фильтров.
+export function feedOptionCounts(weeks: FeedWeek[]): {
+  farmer: Map<number, number>;
+  culture: Map<number, number>;
+  status: Map<FeedShipment["status"], number>;
+} {
+  const farmer = new Map<number, number>();
+  const culture = new Map<number, number>();
+  const status = new Map<FeedShipment["status"], number>();
+  for (const w of weeks)
+    for (const d of w.days)
+      for (const m of d.shipments) {
+        status.set(m.status, (status.get(m.status) ?? 0) + 1);
+        const fset = new Set<number>();
+        const cset = new Set<number>();
+        for (const it of m.items) {
+          fset.add(it.farmerId);
+          cset.add(it.cultureId);
+        }
+        for (const id of fset) farmer.set(id, (farmer.get(id) ?? 0) + 1);
+        for (const id of cset) culture.set(id, (culture.get(id) ?? 0) + 1);
+      }
+  return { farmer, culture, status };
+}
+
 export function weekSummary(week: FeedWeek): {
   cultures: CultureTotal[];
   totalKg: number;

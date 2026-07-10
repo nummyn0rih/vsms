@@ -5,6 +5,14 @@ export function weekKey(w: { isoYear: number; isoWeek: number }): string {
   return `${w.isoYear}-${w.isoWeek}`;
 }
 
+// Запись параметра в URL без ре-рендера сервера (B5-nav): неделя/вид делятся между
+// /shipments (десктоп+мобильный фид) и /planner. Остальные параметры сохраняются.
+export function writeUrlParam(key: string, value: string) {
+  const sp = new URLSearchParams(window.location.search);
+  sp.set(key, value);
+  window.history.replaceState(null, "", `?${sp.toString()}`);
+}
+
 const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", timeZone: "UTC" });
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",

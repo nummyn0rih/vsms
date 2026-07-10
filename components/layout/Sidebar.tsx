@@ -5,16 +5,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut, PanelLeft, PanelLeftClose } from "lucide-react";
 
-import { navForRole } from "@/lib/nav";
+import { navForRole, isActive } from "@/lib/nav";
 import type { Role } from "@/lib/generated/prisma/client";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useNavCollapse } from "@/components/layout/sidebar-collapse";
-
-function isActive(pathname: string, href: string) {
-  if (href === "/") return pathname === "/";
-  return pathname === href || pathname.startsWith(href + "/");
-}
 
 // Меню считаем здесь (на клиенте): icon-компоненты lucide нельзя передавать
 // через границу server→client. Сервер шлёт только роль.

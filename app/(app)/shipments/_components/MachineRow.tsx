@@ -30,13 +30,13 @@ function monthOf(s: string): number {
 }
 
 // Тип тары в строке выводим со строчной первой буквы («Ящик» → «ящик»).
-function lcFirst(s: string): string {
+export function lcFirst(s: string): string {
   return s.charAt(0).toLowerCase() + s.slice(1);
 }
 
 // «{отправление} → {прибытие}»: полные месяцы; если месяц совпадает — у отправления
 // только день, у прибытия «день месяц». Акцент (weight 600) на прибытии (DESIGN §2).
-function TripDates({
+export function TripDates({
   departure,
   arrival,
 }: {
@@ -76,7 +76,7 @@ function TripDates({
 
 // Статус приёмки ПО ПОЗИЦИИ (BR-13, DESIGN §2), независимо от статуса машины. Числа —
 // целые (информативная зона; точные — в статистике). «К оплате» = accepted_weight.
-function ActCell({
+export function ActCell({
   status,
   item,
 }: {
