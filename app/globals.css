@@ -1255,6 +1255,60 @@ table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
 .wtotal-fig .pctv { color: var(--body); margin-left: 8px; }
 .wtotal .pbar { margin-top: 12px; height: 8px; }
 
+/* ---- План (мобиле, mobile-5): read-only карточки прогресса по культурам ----
+   Переиспользуют .pbar/.bf/.btick, .wk-badge, .wtotal*, .m-empty, .tnum, .wdelta.* */
+.ro-hint { display: flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 12px; color: var(--mute); background: var(--canvas-soft); border-bottom: 1px solid var(--hairline); letter-spacing: -0.01em; }
+.ro-hint svg { width: 14px; height: 14px; flex-shrink: 0; opacity: .8; }
+.ro-hint b { color: var(--body); font-weight: 500; }
+
+.pcards { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+.pcard { border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 3px #0000000a; }
+.pcard-main { padding: 13px 14px 14px; }
+.pcard-top { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+.pcard-cult { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; letter-spacing: -0.025em; min-width: 0; }
+.pcard-cult .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.pcard-cult .wk-badge { margin-left: 2px; }
+.pcard-fig { margin-left: auto; text-align: right; white-space: nowrap; }
+.pcard-fig .val { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+.pcard-fig .val .goal { color: var(--mute); font-weight: 400; }
+.pcard-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
+.pcard-pct { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--body); }
+.pcard-pct.zero { color: var(--mute); }
+.wdelta.na { color: var(--mute); background: transparent; border: 1px dashed var(--hairline-strong); }
+
+.pcard-days-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 14px; border: 0; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; color: var(--body); cursor: pointer; text-align: left; }
+.pcard-days-toggle:active { background: var(--canvas-soft-2); }
+.pcard-days-toggle .peek { color: var(--mute); font-weight: 400; font-family: var(--font-mono), "Geist Mono", monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.pcard-days-toggle .chev { margin-left: auto; display: grid; place-items: center; transition: transform .18s; color: var(--mute); }
+.pcard-days-toggle .chev svg { width: 15px; height: 15px; display: block; }
+.pcard.open .pcard-days-toggle .chev { transform: rotate(180deg); }
+
+.pcard-days { padding: 4px 14px 14px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); }
+.dstrip { display: grid; gap: 7px; padding-top: 12px; }
+.dcol { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: center; }
+.dcol .dlbl { font-size: 11px; font-weight: 500; color: var(--body); letter-spacing: -0.02em; }
+.dmini { position: relative; height: 46px; border-radius: 5px; background: var(--bar-track); overflow: hidden; display: flex; flex-direction: column-reverse; }
+.dmini .df { width: 100%; }
+.dmini .df.actual { background: var(--bar-actual); }
+.dmini .df.plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+.dmini .df.over { background: var(--bar-accent); }
+.dmini .dtick { position: absolute; left: 0; right: 0; height: 2px; background: var(--bar-tick); z-index: 1; }
+.dmini.met .dtick { background: var(--bar-accent); }
+.dcol .dval { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.dcol .dval.zero { color: var(--hairline-strong); }
+.dcol .dgoal { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 9.5px; color: var(--mute); margin-top: -3px; }
+
+.pcard-wknote { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; }
+.pcard-wknote svg { width: 14px; height: 14px; flex-shrink: 0; opacity: .8; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 16px 20px; font-size: 11.5px; color: var(--body); letter-spacing: -0.01em; }
+.legend > span { display: inline-flex; align-items: center; gap: 7px; }
+.legend .lg-sw { width: 22px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+.legend .lg-sw.actual { background: var(--bar-actual); }
+.legend .lg-sw.plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+.legend .lg-sw.over { background: var(--bar-accent); }
+.legend .lg-tick { width: 2px; height: 13px; background: var(--bar-tick); border-radius: 1px; flex-shrink: 0; margin: 0 9px; }
+
 /* ---- overlays: drawer + bottom-sheet (fixed — во весь вьюпорт) ---- */
 .ov-scrim { position: fixed; inset: 0; background: #17171766; z-index: 40; }
 
@@ -1268,6 +1322,7 @@ table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
 .dnav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
 .dnav-item.mobile-off { opacity: .45; }
 .dnav-item .soon { margin-left: auto; font-family: var(--font-mono), "Geist Mono", monospace; font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; }
+.dnav-item .ro { margin-left: auto; font-family: var(--font-mono), "Geist Mono", monospace; font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--body); background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; }
 .dnav-sep { height: 1px; background: var(--hairline); margin: 8px 6px; }
 .dnav-lab { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); padding: 6px 12px 4px; }
 .drawer-foot { border-top: 1px solid var(--hairline); padding: 14px 18px; padding-bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--mute); }

@@ -1,6 +1,7 @@
 import { listShipmentOptions } from "@/server/shipments/actions";
 import { parseWeekParam } from "@/server/shipments/workdays";
 import { PlannerShell } from "./_components/PlannerShell";
+import { MobilePlanView } from "./_components/MobilePlanView";
 
 export default async function PlannerPage({
   searchParams,
@@ -16,14 +17,22 @@ export default async function PlannerPage({
 
   return (
     <div className="mx-auto w-full max-w-[1880px]">
-      <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Планировщик</h1>
-        <p className="text-sm text-muted-foreground">
-          Планы по культурам и доска отгрузок · сезон {week.seasonYear}
-        </p>
+      {/* Десктоп: полный планировщик (Доска|План + правка целей). */}
+      <div className="hidden md:block">
+        <div className="mb-4">
+          <h1 className="text-2xl font-semibold tracking-tight">Планировщик</h1>
+          <p className="text-sm text-muted-foreground">
+            Планы по культурам и доска отгрузок · сезон {week.seasonYear}
+          </p>
+        </div>
+
+        <PlannerShell initialWeek={week} initialView={view} options={options} />
       </div>
 
-      <PlannerShell initialWeek={week} initialView={view} options={options} />
+      {/* Мобиле (<md): read-only «План» карточками; «Доска» и правка целей — десктоп. */}
+      <div className="md:hidden">
+        <MobilePlanView initialWeek={week} />
+      </div>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import {
   LayoutList,
   ClipboardCheck,
+  CalendarRange,
   User,
   X,
   LogOut,
@@ -47,7 +48,10 @@ export function MobileNavDrawer({
 
   if (!drawerOpen) return null;
 
-  const deskItems = navForRole(role).filter((i) => !FIELD_HREFS.has(i.href));
+  // /planner — read-only мобильный «План» (mobile-5): активная ссылка (не desktop-off).
+  const deskItems = navForRole(role).filter(
+    (i) => !FIELD_HREFS.has(i.href) && i.href !== "/planner",
+  );
   const fieldItems = FIELD_TABS.filter((t) => isHrefAllowedForRole(t.href, role));
 
   return (
@@ -78,6 +82,18 @@ export function MobileNavDrawer({
               </Link>
             );
           })}
+
+          <div className="dnav-sep" />
+          <div className="dnav-lab">Обзор</div>
+          <Link
+            href="/planner"
+            className={`dnav-item${isActive(pathname, "/planner") ? " active" : ""}`}
+            onClick={closeDrawer}
+          >
+            <CalendarRange />
+            Планировщик
+            <span className="ro">RO</span>
+          </Link>
 
           <div className="dnav-sep" />
           <div className="dnav-lab">Только десктоп</div>
