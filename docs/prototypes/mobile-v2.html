@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Мобильная версия v2 — План / Сводка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --link-bg-soft: #d3e5ff;
+    --warning: #f5a623;
+    --warning-soft: #ffefcf;
+    --warning-deep: #ab570a;
+
+    /* culture colors (Culture.color в проде) — канон мобильной v1 */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+
+    /* plan progress — нейтральный домен, БЕЗ статусных цветов отгрузок */
+    --bar-track: #f0f0f0;
+    --bar-actual: #9a9a9a;   /* перевешено (факт) */
+    --bar-plan-a: #d6d6d6;   /* план — тёмная штриха */
+    --bar-plan-b: #ededed;   /* план — светлая штриха */
+    --bar-tick: #b0b0b0;     /* цель — риска (нейтраль) */
+    --bar-accent: #171717;   /* единственный акцент: достигнуто / перелёт */
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1320px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 12px 0 0; color: var(--body); font-size: 15px; line-height: 23px; max-width: 920px; letter-spacing: -0.01em; }
+  .doc-lead b { color: var(--ink); font-weight: 600; }
+  .doc-lead .mono { font-size: 13.5px; }
+
+  .group { margin-top: 60px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+  .group-note { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin: 0 0 26px; max-width: 860px; line-height: 19px; }
+  .group-note .mono { font-size: 12px; }
+
+  /* frame row — phones side by side */
+  .frames { display: flex; flex-wrap: wrap; gap: 34px 30px; align-items: flex-start; }
+  .frame { width: 390px; }
+  .frame-cap { margin-bottom: 14px; }
+  .frame-tag { display: flex; align-items: baseline; gap: 10px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); flex-shrink: 0; }
+  .frame-name { font-size: 14.5px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 12.5px; color: var(--mute); letter-spacing: -0.01em; margin-top: 4px; line-height: 17px; }
+  .frame-desc b { color: var(--body); font-weight: 600; }
+
+  /* ---------------- phone bezel ---------------- */
+  .phone {
+    width: 390px; border-radius: 44px; background: #0b0b0b;
+    padding: 10px; box-shadow: 0 1px 1px #00000010, 0 12px 28px -10px #00000030, 0 2px 8px -2px #0000001a;
+  }
+  .phone-screen {
+    position: relative; border-radius: 35px; overflow: hidden; background: var(--canvas);
+    height: 800px; display: flex; flex-direction: column;
+  }
+  .phone.tall .phone-screen { height: 872px; }
+  .phone.short .phone-screen { height: 580px; }
+
+  /* status bar */
+  .statusbar {
+    height: 44px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 26px 0 30px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink);
+    position: relative; z-index: 5; background: var(--canvas);
+  }
+  .statusbar .sb-time { font-variant-numeric: tabular-nums; }
+  .statusbar .sb-right { display: flex; align-items: center; gap: 7px; }
+  .statusbar .sb-right svg { height: 13px; color: var(--ink); }
+  .statusbar::after {
+    content: ""; position: absolute; top: 9px; left: 50%; transform: translateX(-50%);
+    width: 108px; height: 26px; background: #0b0b0b; border-radius: 16px;
+  }
+
+  /* ---------------- mobile app-bar ---------------- */
+  .appbar {
+    flex-shrink: 0; height: 54px; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px 0 6px; border-bottom: 1px solid var(--hairline);
+    background: color-mix(in srgb, var(--canvas) 90%, transparent);
+    backdrop-filter: saturate(180%) blur(8px); position: relative; z-index: 4;
+  }
+  .icon-btn {
+    width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; border-radius: 10px;
+    display: grid; place-items: center; cursor: pointer; color: var(--ink);
+  }
+  .icon-btn:hover { background: var(--canvas-soft-2); }
+  .icon-btn svg { width: 21px; height: 21px; }
+  .appbar-title { font-size: 17px; font-weight: 600; letter-spacing: -0.035em; }
+  .appbar .spacer { flex: 1; }
+  .appbar-sub { font-size: 11px; color: var(--mute); font-weight: 400; letter-spacing: -0.01em; margin-top: 1px; }
+  .appbar-titlewrap { display: flex; flex-direction: column; justify-content: center; line-height: 1.15; }
+
+  /* scroll body */
+  .screen-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; background: var(--canvas); }
+  .screen-body::-webkit-scrollbar { width: 0; }
+
+  /* ---------------- week bar (reused v1) ---------------- */
+  .mweekbar {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    border-bottom: 1px solid var(--hairline); background: var(--canvas); position: sticky; top: 0; z-index: 3;
+  }
+  .mweeknav { display: inline-flex; align-items: center; height: 40px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--canvas); overflow: hidden; box-shadow: 0 1px 1px #0000000a; }
+  .mweeknav button { height: 100%; width: 40px; border: 0; background: transparent; cursor: pointer; color: var(--body); display: grid; place-items: center; }
+  .mweeknav button:active { background: var(--canvas-soft-2); }
+  .mweeknav button svg { width: 16px; height: 16px; }
+  .mweeknav .wlab { padding: 0 12px; font-size: 14px; font-weight: 600; letter-spacing: -0.02em; border-left: 1px solid var(--hairline); border-right: 1px solid var(--hairline); height: 100%; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .mweeknav .wlab .wm { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); }
+  .today-btn { height: 40px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--hairline); background: var(--canvas); font: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em; color: var(--body); cursor: pointer; box-shadow: 0 1px 1px #0000000a; }
+  .today-btn:active { background: var(--canvas-soft); }
+
+  /* ---------------- view segment (Лента | Сводка) ---------------- */
+  .mseg { margin-left: auto; display: inline-flex; padding: 3px; background: var(--canvas-soft-2); border-radius: 10px; gap: 2px; }
+  .mseg button { border: 0; background: transparent; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; color: var(--mute); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+  .mseg button.active { background: var(--canvas); color: var(--ink); box-shadow: 0 1px 1px #0000000a, 0 0 0 1px #00000008; }
+
+  /* ---------------- week context head ---------------- */
+  .mweek-head { padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 9px; border-bottom: 1px solid var(--hairline); }
+  .mweek-top { display: flex; align-items: center; gap: 9px; }
+  .mweek-num { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; }
+  .mweek-title { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .mweek-title .wmeta { color: var(--mute); font-weight: 400; }
+  .mweek-season { font-size: 12px; color: var(--body); display: inline-flex; align-items: center; gap: 7px; }
+  .mweek-season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cult-cucumber); }
+  .mweek-season .sub { color: var(--mute); }
+
+  /* ---------------- readonly hint ---------------- */
+  .ro-hint { display: flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 12px; color: var(--mute); background: var(--canvas-soft); border-bottom: 1px solid var(--hairline); letter-spacing: -0.01em; }
+  .ro-hint svg { width: 14px; height: 14px; flex-shrink: 0; opacity: .8; }
+  .ro-hint b { color: var(--body); font-weight: 500; }
+
+  /* ================================================================ */
+  /* PLAN — culture cards                                             */
+  /* ================================================================ */
+  .pcards { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .pcard { border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 3px #0000000a; }
+  .pcard-main { padding: 13px 14px 14px; }
+
+  .pcard-top { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
+  .pcard-cult { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; letter-spacing: -0.025em; min-width: 0; }
+  .pcard-cult .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .wk-badge { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--body); background: var(--canvas-soft-2); border: 1px solid var(--hairline); border-radius: 4px; padding: 2px 6px; margin-left: 2px; }
+  .pcard-fig { margin-left: auto; text-align: right; white-space: nowrap; }
+  .pcard-fig .val { font-family: "Geist Mono", monospace; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .pcard-fig .val .goal { color: var(--mute); font-weight: 400; }
+
+  /* progress bar */
+  .pbar { position: relative; height: 8px; border-radius: 4px; background: var(--bar-track); overflow: visible; }
+  .pbar .bf { position: absolute; top: 0; height: 100%; }
+  .pbar .actual { left: 0; background: var(--bar-actual); border-radius: 4px 0 0 4px; }
+  .pbar .plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .pbar .over { background: var(--bar-accent); }
+  .pbar .btick { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--bar-tick); border-radius: 1px; }
+  .pbar.met .btick { background: var(--bar-accent); }
+  .pbar .actual.endcap { border-radius: 4px; }
+  .pbar .plan.endcap { border-radius: 0 4px 4px 0; }
+  .pbar .over.endcap { border-radius: 0 4px 4px 0; }
+  .pbar.notarget .btick { display: none; }
+
+  .pcard-cap { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 9px; }
+  .pcard-pct { font-family: "Geist Mono", monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--body); }
+  .pcard-pct.zero { color: var(--mute); }
+  .wdelta { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+  .wdelta.under { color: var(--body); background: var(--canvas-soft-2); border: 1px solid var(--hairline); }
+  .wdelta.over { color: #fff; background: var(--bar-accent); }
+  .wdelta.na { color: var(--mute); background: transparent; border: 1px dashed var(--hairline-strong); }
+
+  /* day breakdown (expandable) */
+  .pcard-days-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 14px; border: 0; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: -0.02em; color: var(--body); cursor: pointer; text-align: left; }
+  .pcard-days-toggle:hover { background: var(--canvas-soft-2); }
+  .pcard-days-toggle .chev { margin-left: auto; display: grid; place-items: center; transition: transform .18s; color: var(--mute); }
+  .pcard-days-toggle .chev svg { width: 15px; height: 15px; display: block; }
+  .pcard.open .pcard-days-toggle .chev { transform: rotate(180deg); }
+  .pcard-days-toggle .peek { color: var(--mute); font-weight: 400; font-family: "Geist Mono", monospace; font-size: 11px; }
+
+  .pcard-days { display: none; padding: 4px 14px 14px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); }
+  .pcard.open .pcard-days { display: block; }
+  .dstrip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; padding-top: 12px; }
+  .dcol { display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: center; }
+  .dcol .dlbl { font-size: 11px; font-weight: 500; color: var(--body); letter-spacing: -0.02em; }
+  .dcol .dlbl.off { color: var(--hairline-strong); }
+  .dmini { position: relative; height: 46px; border-radius: 5px; background: var(--bar-track); overflow: hidden; display: flex; flex-direction: column-reverse; }
+  .dmini .df { width: 100%; }
+  .dmini .df.actual { background: var(--bar-actual); }
+  .dmini .df.plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .dmini .df.over { background: var(--bar-accent); }
+  .dmini .dtick { position: absolute; left: 0; right: 0; height: 2px; background: var(--bar-tick); }
+  .dmini.met .dtick { background: var(--bar-accent); }
+  .dcol .dval { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .dcol .dval.zero { color: var(--hairline-strong); }
+  .dcol .dgoal { font-family: "Geist Mono", monospace; font-size: 9.5px; color: var(--mute); margin-top: -3px; }
+
+  /* week-mode note (no day breakdown) */
+  .pcard-wknote { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; }
+  .pcard-wknote svg { width: 14px; height: 14px; flex-shrink: 0; opacity: .8; }
+
+  /* no-target caption */
+  .nt-hint { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: var(--hairline-strong); text-transform: uppercase; }
+
+  /* ================================================================ */
+  /* SUMMARY — heatmap strip cards                                    */
+  /* ================================================================ */
+  .scards { padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .scard { border: 1px solid var(--hairline); border-radius: 12px; background: var(--canvas); box-shadow: 0 1px 1px #00000005, 0 2px 3px #0000000a; padding: 12px 13px 13px; }
+  .scard-top { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+  .scard-cult { display: inline-flex; align-items: center; gap: 9px; font-size: 14.5px; font-weight: 600; letter-spacing: -0.025em; min-width: 0; }
+  .scard-cult .chip { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .scard-tot { margin-left: auto; text-align: right; white-space: nowrap; }
+  .scard-tot .fact { font-family: "Geist Mono", monospace; font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .scard-tot .pct { font-family: "Geist Mono", monospace; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--mute); margin-left: 6px; }
+  .scard-tot .pct.over { color: var(--ink); }
+
+  .hstrip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .hcell { border-radius: 6px; border: 1px solid var(--hairline); background: var(--canvas); min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px 2px; }
+  .hcell .hd { font-size: 10px; font-weight: 500; color: var(--mute); letter-spacing: -0.01em; }
+  .hcell .hv { font-family: "Geist Mono", monospace; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .hcell.zero { background: var(--canvas-soft); }
+  .hcell.zero .hv { color: var(--hairline-strong); }
+  .hcell.filled { border-color: transparent; }
+
+  .scard-wk { display: flex; align-items: center; gap: 8px; padding: 12px 12px; border-radius: 8px; background: var(--canvas-soft); border: 1px dashed var(--hairline-strong); font-size: 12.5px; color: var(--body); letter-spacing: -0.01em; }
+  .scard-wk svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--mute); }
+  .scard-wk b { font-weight: 600; color: var(--ink); }
+
+  /* summary Δ mini */
+  .scard-delta { margin-top: 9px; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--mute); letter-spacing: -0.01em; }
+  .scard-delta .track { flex: 1; height: 5px; border-radius: 3px; background: var(--bar-track); overflow: hidden; position: relative; }
+  .scard-delta .track .fill { position: absolute; left: 0; top: 0; height: 100%; background: var(--bar-actual); border-radius: 3px; }
+  .scard-delta .track .fill.over { background: var(--bar-accent); }
+  .scard-delta .dl { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scard-delta .dl b { color: var(--body); font-weight: 500; }
+
+  /* ---------------- week total plate (both views) ---------------- */
+  .wtotal { margin: 4px 16px 20px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--canvas-soft-2); padding: 14px 16px; }
+  .wtotal-row { display: flex; align-items: baseline; gap: 10px; }
+  .wtotal-lab { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+  .wtotal-fig { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .wtotal-fig .goal { color: var(--mute); font-weight: 400; }
+  .wtotal-fig .pctv { color: var(--body); margin-left: 8px; }
+  .wtotal .pbar { margin-top: 12px; }
+
+  /* ---------------- empty state ---------------- */
+  .m-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 64px 34px; gap: 6px; }
+  .m-empty .ec-ic { width: 54px; height: 54px; border-radius: 14px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; margin-bottom: 10px; }
+  .m-empty .ec-ic svg { width: 26px; height: 26px; color: var(--hairline-strong); }
+  .m-empty .et { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; }
+  .m-empty .ed { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; max-width: 280px; line-height: 19px; }
+  .m-empty .ea { margin-top: 8px; font-size: 12px; color: var(--body); background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 8px; padding: 8px 12px; line-height: 17px; max-width: 300px; }
+
+  /* ---------------- drawer ---------------- */
+  .ov-frame { position: relative; }
+  .ov-scrim { position: absolute; inset: 0; background: #17171766; z-index: 10; border-radius: 35px; }
+  .drawer { position: absolute; top: 0; left: 0; bottom: 0; width: 300px; background: var(--canvas); z-index: 11; display: flex; flex-direction: column; box-shadow: 4px 0 24px -6px #00000026; }
+  .drawer-head { padding: 16px 18px 14px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--hairline); }
+  .drawer-brand { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; display: flex; align-items: center; gap: 9px; }
+  .drawer-brand .mark { width: 22px; height: 22px; }
+  .drawer-nav { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .dnav-item { display: flex; align-items: center; gap: 12px; padding: 12px 12px; border-radius: 9px; font-size: 15px; color: var(--body); text-decoration: none; letter-spacing: -0.02em; }
+  .dnav-item svg { width: 19px; height: 19px; flex-shrink: 0; opacity: .85; }
+  .dnav-item:hover { text-decoration: none; }
+  .dnav-item.active { background: #efefef; color: var(--ink); font-weight: 500; }
+  .dnav-item.mobile-off { opacity: .5; }
+  .dnav-item .soon { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; }
+  .dnav-item .ro { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 9px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--body); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 5px; background: var(--canvas-soft-2); }
+  .dnav-sep { height: 1px; background: var(--hairline); margin: 8px 6px; }
+  .dnav-lab { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); padding: 6px 12px 4px; }
+  .drawer-foot { border-top: 1px solid var(--hairline); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--mute); }
+  .drawer-foot .who b { color: var(--body); font-weight: 500; }
+
+  .frame-note { margin-top: 12px; font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); line-height: 16px; display: flex; gap: 8px; letter-spacing: 0; }
+  .frame-note svg { width: 13px; height: 13px; flex-shrink: 0; margin-top: 1px; opacity: .8; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--canvas-soft); font-size: 11.5px; color: var(--body); letter-spacing: -0.01em; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .lg-sw { width: 22px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .lg-sw.actual { background: var(--bar-actual); }
+  .lg-sw.plan { background-image: repeating-linear-gradient(45deg, var(--bar-plan-a) 0 3px, var(--bar-plan-b) 3px 6px); }
+  .lg-sw.over { background: var(--bar-accent); }
+  .lg-tick { width: 2px; height: 13px; background: var(--bar-tick); border-radius: 1px; flex-shrink: 0; margin: 0 9px; }
+  .lg-heat { width: 22px; height: 12px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--cult-tomato) 18%, transparent), var(--cult-tomato)); flex-shrink: 0; }
+
+  /* ---------------- decisions ---------------- */
+  .decisions { margin-top: 72px; border-top: 1px solid var(--hairline); padding-top: 30px; max-width: 900px; }
+  .dec-title { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .dec-sub { font-size: 13px; color: var(--mute); margin: 0 0 24px; letter-spacing: -0.01em; }
+  .dec { border-left: 2px solid var(--hairline); padding: 0 0 0 16px; margin-bottom: 22px; }
+  .dec.open { border-left-color: var(--warning); }
+  .dec .q { font-size: 14.5px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+  .dec .a { font-size: 13.5px; color: var(--body); line-height: 21px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+  .dec.open .tag { color: var(--warning-deep); border-color: #f0d9a8; background: var(--warning-soft); }
+
+  .endnote { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; max-width: 900px; }
+  .endnote .mono { color: var(--body); }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="430" y="120" width="340" height="560" rx="48" fill="#0b0b0b"/>
+    <rect x="446" y="136" width="308" height="528" rx="34" fill="#ffffff"/>
+    <rect x="470" y="210" width="260" height="70" rx="12" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="486" y="230" width="90" height="9" rx="4" fill="#171717"/>
+    <rect x="486" y="256" width="200" height="7" rx="3" fill="#9a9a9a"/>
+    <rect x="690" y="254" width="24" height="9" rx="4" fill="#171717"/>
+    <rect x="470" y="300" width="260" height="70" rx="12" fill="#ffffff" stroke="#ebebeb" stroke-width="2"/>
+    <rect x="486" y="320" width="90" height="9" rx="4" fill="#171717"/>
+    <g>
+      <rect x="486" y="346" width="34" height="16" rx="3" fill="#f76b1544"/>
+      <rect x="524" y="346" width="34" height="16" rx="3" fill="#f76b15aa"/>
+      <rect x="562" y="346" width="34" height="16" rx="3" fill="#f76b1566"/>
+      <rect x="600" y="346" width="34" height="16" rx="3" fill="#f76b15dd"/>
+    </g>
+    <circle cx="491" cy="234" r="6" fill="#e5484d"/>
+    <circle cx="491" cy="324" r="6" fill="#f76b15"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Мобильная версия · v2</p>
+    <h1 class="doc-title">Мобильные обзорные вьюхи — План недели и Сводка</h1>
+    <p class="doc-lead">Продолжение мобильной&nbsp;v1: две <b>read-only</b> обзорные вьюхи на телефоне. <b>План недели</b> (десктоп «План») и <b>Сводка</b> (десктоп «Сводка») питаются от одного загрузчика <span class="mono">getPlanWeek</span> — культуры&nbsp;×&nbsp;рабочие дни, эффективный вес (BR-22), недельный/дневной режим цели (BR-23). Плотная матрица культура&nbsp;×&nbsp;день не влезает в&nbsp;390px&nbsp;→ <b>карточный список по культурам</b>. Каркас, таб-бар и drawer наследуются из&nbsp;v1. Правка целей остаётся десктопной. Токены — <span class="mono">DESIGN-SYSTEM.md</span> (Geist / Geist&nbsp;Mono, <span class="mono">tabular-nums</span>, hairline, radius&nbsp;6–12, цвета культур из БД), тач-цели&nbsp;≥44px.</p>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- NAV FRAGMENT                                                 -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">0 · Навигация — как попасть на обзор</span><span class="gl-line"></span></div>
+    <p class="group-note"><b style="color:var(--body)">Сводка</b> — переключатель вида на мобильной Ленте (сегмент «Лента&nbsp;|&nbsp;Сводка», как десктоп <span class="mono">/shipments</span>). <b style="color:var(--body)">План</b> — через drawer, пункт «Планировщик» (на мобиле открывает read-only «План»); «Доска» — десктоп-функция, приглушена. Нижний таб-бар&nbsp;v1 (Лента&nbsp;·&nbsp;Приёмка&nbsp;·&nbsp;Водители&nbsp;·&nbsp;Ещё) не переизобретаем: Сводка живёт под Лентой, План — под «Ещё».</p>
+
+    <div class="frames">
+      <!-- 0A — segment on лента -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">0A</span><span class="frame-name">Сегмент «Лента | Сводка»</span></div>
+          <div class="frame-desc">На мобильной Ленте — тот же сегмент вида, что на десктопе. Тап по «Сводка» переключает ленту машин на heatmap-обзор (фрейм&nbsp;2A) без смены раздела.</div>
+        </div>
+        <div class="phone short">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn" title="Меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Лента отгрузок</span><span class="appbar-sub">Овощное сырьё · сезон 2026</span></div>
+            </div>
+            <div class="mweekbar">
+              <div class="mweeknav">
+                <button title="Пред."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <div class="wlab"><span class="wm">W24</span> 8–13 июня</div>
+                <button title="След."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+              <div class="mseg" data-screen-label="Сегмент Лента|Сводка">
+                <button class="active">Лента</button>
+                <button>Сводка</button>
+              </div>
+            </div>
+            <div class="ro-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Сегмент вида в шапке недели. <b>Сводка</b> — обзор культура×день за неделю.</div>
+            <div class="screen-body">
+              <div class="m-empty" style="padding-top:52px">
+                <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+                <div class="et">Лента машин</div>
+                <div class="ed">Вид «Лента» — карточки машин из v1. Тап по «Сводка» откроет heatmap-обзор недели.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>Сегмент — тот же контрол, что на десктопе. Неделя общая для обоих видов (из URL).</div>
+      </div>
+
+      <!-- 0B — drawer with Планировщик -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">0B</span><span class="frame-name">Drawer — «Планировщик» → План</span></div>
+          <div class="frame-desc">Пункт «Планировщик» теперь активен на мобиле и открывает read-only «План» (фрейм&nbsp;1A). «Доска» (drag-планирование) — десктоп, приглушена.</div>
+        </div>
+        <div class="phone short ov-frame">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Лента отгрузок</span><span class="appbar-sub">Овощное сырьё · сезон 2026</span></div>
+            </div>
+            <div class="screen-body"></div>
+            <div class="ov-scrim"></div>
+            <aside class="drawer" data-screen-label="Drawer — Планировщик">
+              <div class="drawer-head">
+                <span class="drawer-brand"><svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2 22 20H2L12 2Z" fill="#171717"/></svg>VSMS</span>
+                <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+              </div>
+              <nav class="drawer-nav">
+                <div class="dnav-lab">В полях</div>
+                <a class="dnav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>Лента отгрузок</a>
+                <a class="dnav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Приёмка</a>
+                <a class="dnav-item" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Водители</a>
+                <div class="dnav-sep"></div>
+                <div class="dnav-lab">Обзор</div>
+                <a class="dnav-item active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Планировщик <span class="ro">план · RO</span></a>
+                <div class="dnav-sep"></div>
+                <div class="dnav-lab">Только десктоп</div>
+                <a class="dnav-item mobile-off" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>Доска-планировщик <span class="soon">десктоп</span></a>
+                <a class="dnav-item mobile-off" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Контракты <span class="soon">десктоп</span></a>
+                <a class="dnav-item mobile-off" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>Аналитика <span class="soon">десктоп</span></a>
+                <a class="dnav-item mobile-off" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки <span class="soon">десктоп</span></a>
+              </nav>
+              <div class="drawer-foot">
+                <span class="who"><b>snabzhenec</b> · снабженец</span>
+                <button class="icon-btn" style="width:36px;height:36px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <div class="frame-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Открытый вопрос: План как отдельный пункт drawer или тоже сегмент рядом со Сводкой — см. «Решения».</div>
+      </div>
+    </div>
+  </section>
+  <!-- ============================================================ -->
+  <!-- SCREEN 1 · ПЛАН НЕДЕЛИ (read-only)                          -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">1 · План недели — read-only</span><span class="gl-line"></span></div>
+    <p class="group-note">Одна культура = одна карточка: цвет-чип + название, строка <b style="color:var(--body)">план / факт / % выполнения</b> (прогресс-бар как на десктоп-«Плане») + <b style="color:var(--body)">Δ отклонение</b>. Разбивка по дням — сворачиваемые мини-полоски. Week-mode культура (недельная цель) помечена, без дневной разбивки (BR-23). Прогресс нейтральный, единственный акцент (ink) — «достигнуто&nbsp;/&nbsp;перелёт». Правка целей — только десктоп.</p>
+
+    <div class="frames">
+      <!-- 1A — filled -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">1A</span><span class="frame-name">Неделя с целями и фактом</span></div>
+          <div class="frame-desc">Томаты — частично перевешено (разбивка раскрыта), Огурцы — только плановые (факт&nbsp;0), <b>Перец — перелёт</b> (акцент), Патиссоны — <b>week-mode</b> (цель на неделю).</div>
+        </div>
+        <div class="phone tall">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn" title="Меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Планировщик</span><span class="appbar-sub">План недели · read-only</span></div>
+            </div>
+            <div class="mweekbar">
+              <div class="mweeknav">
+                <button title="Пред."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <div class="wlab"><span class="wm">W24</span> 8–13 июня</div>
+                <button title="След."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+              <button class="today-btn">Сегодня</button>
+            </div>
+            <div class="mweek-head">
+              <div class="mweek-top">
+                <span class="mweek-num">W24</span>
+                <span class="mweek-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+              </div>
+              <span class="mweek-season"><span class="dot"></span>Сезон 2026 <span class="sub">· рабочие дни Пн–Сб</span></span>
+            </div>
+            <div class="ro-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Просмотр — <b>правка целей на десктопе</b>.</div>
+            <div class="screen-body">
+              <div class="pcards">
+
+                <!-- ТОМАТЫ · частично перевешено · раскрыто -->
+                <div class="pcard open" data-screen-label="Карточка План · Томаты">
+                  <div class="pcard-main">
+                    <div class="pcard-top">
+                      <span class="pcard-cult"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                      <span class="pcard-fig"><span class="val tnum">7,3 <span class="goal">/ 9,0 т</span></span></span>
+                    </div>
+                    <div class="pbar"><div class="bf actual" style="width:28.6%"></div><div class="bf plan endcap" style="left:28.6%;width:46%"></div><div class="btick" style="left:92%"></div></div>
+                    <div class="pcard-cap"><span class="pcard-pct tnum">81% выполнено</span><span class="wdelta under tnum">−1,7 т</span></div>
+                  </div>
+                  <button class="pcard-days-toggle">По дням<span class="peek">Пн 1,4 · Вт 1,4 · Ср 2,0…</span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
+                  <div class="pcard-days">
+                    <div class="dstrip">
+                      <div class="dcol"><span class="dlbl">Пн</span><div class="dmini"><div class="dtick" style="top:15%"></div><div class="df actual" style="height:79%"></div></div><span class="dval tnum">1,4</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Вт</span><div class="dmini"><div class="dtick" style="top:15%"></div><div class="df actual" style="height:79%"></div></div><span class="dval tnum">1,4</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Ср</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">2,0</span><span class="dgoal tnum">/ 2,0</span></div>
+                      <div class="dcol"><span class="dlbl">Чт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,5</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Пт</span><div class="dmini"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:57%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Сб</span><div class="dmini"><div class="dtick" style="top:15%"></div></div><span class="dval zero tnum">0</span><span class="dgoal tnum">/ 1,0</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ОГУРЦЫ · только плановые (факт 0) · свёрнуто -->
+                <div class="pcard" data-screen-label="Карточка План · Огурцы">
+                  <div class="pcard-main">
+                    <div class="pcard-top">
+                      <span class="pcard-cult"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                      <span class="pcard-fig"><span class="val tnum">5,5 <span class="goal">/ 6,0 т</span></span></span>
+                    </div>
+                    <div class="pbar"><div class="bf plan endcap" style="left:0;width:84.3%"></div><div class="btick" style="left:92%"></div></div>
+                    <div class="pcard-cap"><span class="pcard-pct tnum">92% планом · факт 0</span><span class="wdelta under tnum">−0,5 т</span></div>
+                  </div>
+                  <button class="pcard-days-toggle">По дням<span class="peek">Пн 1,0 · Вт 1,0 · Ср 0,5…</span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
+                  <div class="pcard-days">
+                    <div class="dstrip">
+                      <div class="dcol"><span class="dlbl">Пн</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Вт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Ср</span><div class="dmini"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:42%"></div></div><span class="dval tnum">0,5</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Чт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,5</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Пт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Сб</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">0,5</span><span class="dgoal tnum">/ 0,5</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ПЕРЕЦ · перелёт · свёрнуто -->
+                <div class="pcard" data-screen-label="Карточка План · Перец · перелёт">
+                  <div class="pcard-main">
+                    <div class="pcard-top">
+                      <span class="pcard-cult"><span class="chip" style="background:var(--cult-pepper)"></span>Перец</span>
+                      <span class="pcard-fig"><span class="val tnum">7,7 <span class="goal">/ 6,5 т</span></span></span>
+                    </div>
+                    <div class="pbar met"><div class="bf actual" style="width:28.6%"></div><div class="bf plan" style="left:28.6%;width:55.8%"></div><div class="bf over endcap" style="left:84.4%;width:15.6%"></div><div class="btick" style="left:84.4%"></div></div>
+                    <div class="pcard-cap"><span class="pcard-pct tnum">118% · цель пройдена</span><span class="wdelta over tnum">+1,2 т</span></div>
+                  </div>
+                  <button class="pcard-days-toggle">По дням<span class="peek">Пн 1,2 · Вт 1,0 · Ср 1,0…</span><span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span></button>
+                  <div class="pcard-days">
+                    <div class="dstrip">
+                      <div class="dcol"><span class="dlbl">Пн</span><div class="dmini met"><div class="dtick" style="top:20%"></div><div class="df actual" style="height:80%"></div><div class="df over" style="height:16%"></div></div><span class="dval tnum">1,2</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Вт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df actual" style="height:85%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Ср</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,0</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Чт</span><div class="dmini met"><div class="dtick" style="top:36%"></div><div class="df plan" style="height:64%"></div><div class="df over" style="height:32%"></div></div><span class="dval tnum">1,5</span><span class="dgoal tnum">/ 1,0</span></div>
+                      <div class="dcol"><span class="dlbl">Пт</span><div class="dmini met"><div class="dtick" style="top:15%"></div><div class="df plan" style="height:85%"></div></div><span class="dval tnum">1,5</span><span class="dgoal tnum">/ 1,5</span></div>
+                      <div class="dcol"><span class="dlbl">Сб</span><div class="dmini met"><div class="dtick" style="top:36%"></div><div class="df plan" style="height:64%"></div><div class="df over" style="height:32%"></div></div><span class="dval tnum">1,5</span><span class="dgoal tnum">/ 1,0</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ПАТИССОНЫ · week-mode · без дневной разбивки -->
+                <div class="pcard" data-screen-label="Карточка План · Патиссоны · week-mode">
+                  <div class="pcard-main">
+                    <div class="pcard-top">
+                      <span class="pcard-cult"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны <span class="wk-badge">неделя</span></span>
+                      <span class="pcard-fig"><span class="val tnum">3,5 <span class="goal">/ 4,0 т</span></span></span>
+                    </div>
+                    <div class="pbar"><div class="bf actual" style="width:20.7%"></div><div class="bf plan endcap" style="left:20.7%;width:59.8%"></div><div class="btick" style="left:92%"></div></div>
+                    <div class="pcard-cap"><span class="pcard-pct tnum">88% выполнено</span><span class="wdelta under tnum">−0,5 т</span></div>
+                  </div>
+                  <div class="pcard-wknote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg>Цель задана на неделю одним итогом — без дневной разбивки (BR-23).</div>
+                </div>
+
+              </div>
+
+              <!-- week total plate -->
+              <div class="wtotal" data-screen-label="Итог недели · План">
+                <div class="wtotal-row">
+                  <span class="wtotal-lab">Итог недели</span>
+                  <span class="wtotal-fig tnum">24,0 <span class="goal">/ 25,5 т</span><span class="pctv">94%</span></span>
+                </div>
+                <div class="pbar"><div class="bf actual" style="width:21.3%"></div><div class="bf plan endcap" style="left:21.3%;width:65.3%"></div><div class="btick" style="left:92%"></div></div>
+              </div>
+
+              <div class="legend">
+                <span><span class="lg-sw actual"></span>перевешено</span>
+                <span><span class="lg-sw plan"></span>план</span>
+                <span><span class="lg-tick"></span>цель</span>
+                <span><span class="lg-sw over"></span>перелёт</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>Тап по «По дням» раскрывает мини-полоски по рабочим дням. По умолчанию свёрнуто — см. «Решения».</div>
+      </div>
+
+      <!-- 1B — empty -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">1B</span><span class="frame-name">Пустая неделя</span></div>
+          <div class="frame-desc">Ни целей, ни отгрузок. Нейтральное пустое состояние, без тревожных цветов. Задать цели — на десктопе.</div>
+        </div>
+        <div class="phone short">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn" title="Меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Планировщик</span><span class="appbar-sub">План недели · read-only</span></div>
+            </div>
+            <div class="mweekbar">
+              <div class="mweeknav">
+                <button title="Пред."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <div class="wlab"><span class="wm">W26</span> 22–27 июня</div>
+                <button title="След."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+              <button class="today-btn">Сегодня</button>
+            </div>
+            <div class="screen-body">
+              <div class="m-empty">
+                <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+                <div class="et">План на неделю не задан</div>
+                <div class="ed">На неделе 26 пока нет ни целей по культурам, ни отгрузок.</div>
+                <div class="ea">Задать недельные цели можно на десктопе — прогресс начнёт заполняться по мере планирования и перевески.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ============================================================ -->
+  <!-- SCREEN 2 · СВОДКА (read-only)                                  -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">2 · Сводка — read-only</span><span class="gl-line"></span></div>
+    <p class="group-note">Карточка культуры = чип + название, <b style="color:var(--body)">компактная heatmap-лента по дням</b> (клетки-дни с интенсивностью по объёму — как десктоп-Сводка, но горизонтальной лентой) + итог культуры (факт за неделю). Интенсивность — <b style="color:var(--body)">по строке</b> (внутри культуры), цвет культуры.</p>
+
+    <div class="frames">
+      <!-- 2A — filled -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">2A</span><span class="frame-name">Неделя с данными — heatmap-ленты</span></div>
+          <div class="frame-desc">Ленты по культурам: тёмнее = больше тонн в этот день. <b>Патиссоны — week-mode</b> (цель на неделю, без дней). Снизу — итог недели.</div>
+        </div>
+        <div class="phone tall">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn" title="Меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Лента отгрузок</span><span class="appbar-sub">Овощное сырьё · сезон 2026</span></div>
+            </div>
+            <div class="mweekbar">
+              <div class="mweeknav">
+                <button title="Пред."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <div class="wlab"><span class="wm">W24</span> 8–13 июня</div>
+                <button title="След."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+              <div class="mseg">
+                <button>Лента</button>
+                <button class="active">Сводка</button>
+              </div>
+            </div>
+            <div class="mweek-head">
+              <div class="mweek-top">
+                <span class="mweek-num">W24</span>
+                <span class="mweek-title">Неделя 24 <span class="wmeta">· 8–13 июня 2026</span></span>
+              </div>
+              <span class="mweek-season"><span class="dot"></span>Сезон 2026 <span class="sub">· выполнение 24,0 / 25,5 т · 94%</span></span>
+            </div>
+            <div class="screen-body">
+              <div class="scards">
+
+                <!-- ТОМАТЫ -->
+                <div class="scard" data-screen-label="Сводка · Томаты">
+                  <div class="scard-top">
+                    <span class="scard-cult"><span class="chip" style="background:var(--cult-tomato)"></span>Томаты</span>
+                    <span class="scard-tot"><span class="fact tnum">7,3 т</span><span class="pct tnum">81%</span></span>
+                  </div>
+                  <div class="hstrip">
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-tomato) 75%, transparent)"><span class="hd" style="color:#fff">Пн</span><span class="hv" style="color:#fff">1,4</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-tomato) 75%, transparent)"><span class="hd" style="color:#fff">Вт</span><span class="hv" style="color:#fff">1,4</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-tomato) 100%, transparent)"><span class="hd" style="color:#fff">Ср</span><span class="hv" style="color:#fff">2,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-tomato) 80%, transparent)"><span class="hd" style="color:#fff">Чт</span><span class="hv" style="color:#fff">1,5</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-tomato) 59%, transparent)"><span class="hd" style="color:#fff">Пт</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell zero"><span class="hd">Сб</span><span class="hv">·</span></div>
+                  </div>
+                </div>
+
+                <!-- ОГУРЦЫ -->
+                <div class="scard" data-screen-label="Сводка · Огурцы">
+                  <div class="scard-top">
+                    <span class="scard-cult"><span class="chip" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                    <span class="scard-tot"><span class="fact tnum">5,5 т</span><span class="pct tnum">92%</span></span>
+                  </div>
+                  <div class="hstrip">
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 73%, transparent)"><span class="hd" style="color:#fff">Пн</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 73%, transparent)"><span class="hd" style="color:#fff">Вт</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 45%, transparent)"><span class="hd">Ср</span><span class="hv">0,5</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 100%, transparent)"><span class="hd" style="color:#fff">Чт</span><span class="hv" style="color:#fff">1,5</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 73%, transparent)"><span class="hd" style="color:#fff">Пт</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-cucumber) 45%, transparent)"><span class="hd">Сб</span><span class="hv">0,5</span></div>
+                  </div>
+                </div>
+
+                <!-- ПЕРЕЦ · перелёт -->
+                <div class="scard" data-screen-label="Сводка · Перец · перелёт">
+                  <div class="scard-top">
+                    <span class="scard-cult"><span class="chip" style="background:var(--cult-pepper)"></span>Перец</span>
+                    <span class="scard-tot"><span class="fact tnum">7,7 т</span><span class="pct over tnum">118%</span></span>
+                  </div>
+                  <div class="hstrip">
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 84%, transparent)"><span class="hd" style="color:#fff">Пн</span><span class="hv" style="color:#fff">1,2</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 73%, transparent)"><span class="hd" style="color:#fff">Вт</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 73%, transparent)"><span class="hd" style="color:#fff">Ср</span><span class="hv" style="color:#fff">1,0</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 100%, transparent)"><span class="hd" style="color:#fff">Чт</span><span class="hv" style="color:#fff">1,5</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 100%, transparent)"><span class="hd" style="color:#fff">Пт</span><span class="hv" style="color:#fff">1,5</span></div>
+                    <div class="hcell filled" style="background:color-mix(in srgb, var(--cult-pepper) 100%, transparent)"><span class="hd" style="color:#fff">Сб</span><span class="hv" style="color:#fff">1,5</span></div>
+                  </div>
+                </div>
+
+                <!-- ПАТИССОНЫ · week-mode -->
+                <div class="scard" data-screen-label="Сводка · Патиссоны · week-mode">
+                  <div class="scard-top">
+                    <span class="scard-cult"><span class="chip" style="background:var(--cult-squash)"></span>Патиссоны <span class="wk-badge">неделя</span></span>
+                    <span class="scard-tot"><span class="fact tnum">3,5 т</span><span class="pct tnum">88%</span></span>
+                  </div>
+                  <div class="scard-wk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 2"/></svg>Цель задана на неделю · факт <b>3,5 т</b> за неделю (без дневной разбивки)</div>
+                </div>
+
+              </div>
+
+              <!-- week total plate -->
+              <div class="wtotal" data-screen-label="Итог недели · Сводка">
+                <div class="wtotal-row">
+                  <span class="wtotal-lab">Набрано за неделю</span>
+                  <span class="wtotal-fig tnum">24,0 <span class="goal">/ 25,5 т</span><span class="pctv">94%</span></span>
+                </div>
+                <div class="pbar"><div class="bf actual" style="width:21.3%"></div><div class="bf plan endcap" style="left:21.3%;width:65.3%"></div><div class="btick" style="left:92%"></div></div>
+              </div>
+
+              <div class="legend">
+                <span><span class="lg-heat"></span>меньше → больше тонн (по строке)</span>
+                <span style="color:var(--mute)">· — нет отгрузок</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="frame-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>Интенсивность нормируется по макс. ячейке внутри культуры — как десктоп-Сводка (BR-22).</div>
+      </div>
+
+      <!-- 2B — empty -->
+      <div class="frame">
+        <div class="frame-cap">
+          <div class="frame-tag"><span class="frame-num">2B</span><span class="frame-name">Пустая неделя</span></div>
+          <div class="frame-desc">Ни целей, ни отгрузок — heatmap пуст. Нейтральное состояние.</div>
+        </div>
+        <div class="phone short">
+          <div class="phone-screen">
+            <div class="appbar">
+              <button class="icon-btn" title="Меню"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+              <div class="appbar-titlewrap"><span class="appbar-title">Лента отгрузок</span><span class="appbar-sub">Овощное сырьё · сезон 2026</span></div>
+            </div>
+            <div class="mweekbar">
+              <div class="mweeknav">
+                <button title="Пред."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+                <div class="wlab"><span class="wm">W26</span> 22–27 июня</div>
+                <button title="След."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+              </div>
+              <div class="mseg">
+                <button>Лента</button>
+                <button class="active">Сводка</button>
+              </div>
+            </div>
+            <div class="screen-body">
+              <div class="m-empty">
+                <span class="ec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></span>
+                <div class="et">На этой неделе пусто</div>
+                <div class="ed">Нет ни целей, ни отгрузок на неделе 26.</div>
+                <div class="ea">Смените неделю ‹&nbsp;› или задайте план на десктопе.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ============================================================ -->
+  <!-- DECISIONS / QUESTIONS                                        -->
+  <!-- ============================================================ -->
+  <section class="decisions">
+    <h2 class="dec-title">Решения / вопросы</h2>
+    <p class="dec-sub">Зафиксированное по брифу v2 + открытые вопросы к ревью (PM + пользователь).</p>
+
+    <div class="dec">
+      <div class="q">Плотная матрица культура×день → карточный список по культурам</div>
+      <div class="a"><span class="tag">решено</span>На 390px десктоп-матрица не влезает. Обе вьюхи — <b>одна культура = одна карточка</b>. Тот же код/данные (<span class="mono">getPlanWeek</span>), что десктоп — responsive, мобильные варианты.</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Обе вьюхи — read-only на мобиле</div>
+      <div class="a"><span class="tag">решено</span>Никаких инпутов целей/действий — в отличие от десктоп-«Плана». Правка целей остаётся десктопной; шапка помечена «read-only». Эффективный вес (BR-22) и week-mode (BR-23) — те же.</div>
+    </div>
+
+    <div class="dec open">
+      <div class="q">План: отдельный пункт drawer vs. сегмент рядом со Сводкой</div>
+      <div class="a"><span class="tag">вопрос</span>Сейчас План — <b>пункт drawer «Планировщик»</b> (фрейм 0B), а Сводка — сегмент на Ленте. Альтернатива: сделать План тоже сегментом (Лента&nbsp;|&nbsp;Сводка&nbsp;|&nbsp;План) — одно место для трёх обзоров, но гуще шапка. Что предпочесть?</div>
+    </div>
+
+    <div class="dec open">
+      <div class="q">Сводка: heatmap-лента vs. список чисел</div>
+      <div class="a"><span class="tag">вопрос</span>Сейчас — <b>горизонтальная heatmap-лента</b> (клетки-дни с интенсивностью). На узком экране 6 клеток — мелковато; альтернатива — простой список «Пн 1,4·Ср 2,0…» без цветовой заливки. Оставить heatmap или дать тумблер?</div>
+    </div>
+
+    <div class="dec open">
+      <div class="q">План: дневная разбивка — свёрнута или раскрыта по умолчанию</div>
+      <div class="a"><span class="tag">вопрос</span>В макете первая карточка раскрыта, остальные — <b>свёрнуты</b> (peek-строка «Пн 1,4·Вт 1,4…»). По умолчанию всё свёрнуто (короче, обзорнее) или всё раскрыто (видны дни сразу)?</div>
+    </div>
+  </section>
+
+  <p class="endnote">VSMS · мобильная версия v2. Статичный макет двух read-only обзорных вьюх — <span class="mono">План недели</span> и <span class="mono">Сводка</span> — продолжение мобильной v1. Обе питаются от <span class="mono">getPlanWeek</span> (культуры×рабочие дни, эффективный вес BR-22, week-mode BR-23). Неделя — в URL. Токены — <span class="mono">DESIGN-SYSTEM.md</span>; прогресс/бары нейтральные, единственный акцент (ink) — «достигнуто&nbsp;/&nbsp;перелёт»; статусные цвета отгрузок здесь не используются.</p>
+
+</div>
+<script src="mobile-v2.js"></script>
+</body>
+</html>

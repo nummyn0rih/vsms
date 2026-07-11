@@ -37,7 +37,12 @@ export default async function ShipmentsPage({
       </div>
 
       <div className="md:hidden">
-        <MobileShipmentsFeed feed={feed} options={options} initialWeek={initialWeek} />
+        <MobileShipmentsFeed
+          feed={feed}
+          options={options}
+          initialWeek={initialWeek}
+          initialView={initialView}
+        />
       </div>
     </div>
   );

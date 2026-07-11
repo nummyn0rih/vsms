@@ -13,20 +13,37 @@ import {
 } from "@/server/shipments/feed";
 import type { ShipmentOptions } from "@/server/shipments/schema";
 import { formatTareTotals } from "@/server/shipments/format";
-import { formatWeekParam } from "@/server/shipments/workdays";
+import {
+  formatWeekParam,
+  isoWeekRange,
+  isoWeek as isoWeekOf,
+  seasonWeekBounds,
+  compareIsoWeek,
+  currentSeasonWeek,
+} from "@/server/shipments/workdays";
 import { weekKey, formatWeekRange, writeUrlParam } from "./week-format";
 import type { Week } from "./ShipmentsFeed";
 import { CultureChip, formatTons } from "./FeedChips";
 import { MobileMachineCard } from "./MobileMachineCard";
 import { MobileFilterSheet } from "./MobileFilterSheet";
+import { MobileSummaryView } from "./MobileSummaryView";
+import { usePlanWeek } from "@/app/(app)/planner/_components/usePlanWeek";
 
 type Status = FeedShipment["status"];
+type View = "lenta" | "summary";
 
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
   timeZone: "UTC",
 });
+// Короткий диапазон недели («8–13 июня») для шапки вида «Сводка» — своя неделя
+// (не связана с days из FeedWeek), считаем напрямую из isoWeekRange.
+const dayFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", timeZone: "UTC" });
+function isoWeekRangeLabel(isoYear: number, isoWeek: number): string {
+  const { start, end } = isoWeekRange(isoYear, isoWeek);
+  return `${dayFmt.format(start)}–${dayMonthFmt.format(end)}`;
+}
 
 function EmptyBlock({
   title,
@@ -51,22 +68,80 @@ function EmptyBlock({
   );
 }
 
+function ViewSegment({ view, onChange }: { view: View; onChange: (v: View) => void }) {
+  return (
+    <div className="mseg">
+      <button
+        type="button"
+        className={view === "lenta" ? "active" : ""}
+        onClick={() => onChange("lenta")}
+      >
+        Лента
+      </button>
+      <button
+        type="button"
+        className={view === "summary" ? "active" : ""}
+        onClick={() => onChange("summary")}
+      >
+        Сводка
+      </button>
+    </div>
+  );
+}
+
 // Мобильная карточная лента (md:hidden) — та же серверная выборка (getFeed), те же
 // чистые хелперы (weekSummary/daySummary/filterFeedWeeks — feed.ts), что десктопная
-// ShipmentsFeed. Read-only: без создания/правки/статусных действий, без вида
-// «Сводка» (мобиле v1 = строго лента). Неделя навигируется тапами по W##-барy и
-// пишется в ?week (writeUrlParam, общий с десктопом), без scrollspy — проще
+// ShipmentsFeed. Read-only: без создания/правки/статусных действий. Сегмент
+// «Лента | Сводка» — вид в ?view (writeUrlParam, общий с десктопом); Сводка грузит
+// getPlanWeek тем же usePlanWeek-хуком, что десктопная ShipmentsFeed. Неделя ленты
+// навигируется тапами по W##-бару и пишется в ?week, без scrollspy — проще
 // desktop-механики, т.к. список короче и обычно не требует авто-детекта на скролле.
+// Неделя Сводки — отдельный стейт (не привязан к данным ленты), зеркалит десктопную
+// ветку «Сводка» в ShipmentsFeed.tsx (summaryStepWeek/summaryGoToday).
 export function MobileShipmentsFeed({
   feed,
   options,
   initialWeek,
+  initialView,
 }: {
   feed: Feed;
   options: ShipmentOptions;
   initialWeek: Week;
+  initialView: View;
 }) {
   const weeks = feed.weeks;
+
+  const [view, setView] = useState<View>(initialView);
+  function onViewChange(v: View) {
+    setView(v);
+    writeUrlParam("view", v);
+  }
+
+  const [summaryWeek, setSummaryWeek] = useState<Week>(initialWeek);
+  const plan = usePlanWeek({ ...summaryWeek, enabled: view === "summary" });
+
+  function summaryStepWeek(delta: number) {
+    setSummaryWeek((p) => {
+      const { start } = isoWeekRange(p.isoYear, p.isoWeek);
+      const d = new Date(start);
+      d.setUTCDate(d.getUTCDate() + delta * 7);
+      const w = isoWeekOf(d);
+      const b = seasonWeekBounds(p.seasonYear);
+      if (compareIsoWeek(w, b.first) < 0 || compareIsoWeek(w, b.last) > 0) return p;
+      const next = { seasonYear: p.seasonYear, isoYear: w.isoYear, isoWeek: w.isoWeek };
+      writeUrlParam("week", formatWeekParam(next));
+      return next;
+    });
+  }
+  function summaryGoToday() {
+    const c = currentSeasonWeek();
+    const next = { seasonYear: c.seasonYear, isoYear: c.isoYear, isoWeek: c.isoWeek };
+    setSummaryWeek(next);
+    writeUrlParam("week", formatWeekParam(next));
+  }
+  const summaryBounds = seasonWeekBounds(summaryWeek.seasonYear);
+  const summaryAtFirst = compareIsoWeek(summaryWeek, summaryBounds.first) <= 0;
+  const summaryAtLast = compareIsoWeek(summaryWeek, summaryBounds.last) >= 0;
 
   const [supplierSel, setSupplierSel] = useState<Set<number>>(new Set());
   const [cultureSel, setCultureSel] = useState<Set<number>>(new Set());
@@ -173,28 +248,66 @@ export function MobileShipmentsFeed({
   return (
     <>
       <div className="mweekbar">
-        <div className="mweeknav">
-          <button type="button" title="Предыдущая неделя" onClick={onPrevWeek} disabled={prevDisabled}>
-            <ChevronLeft />
-          </button>
-          <div className="wlab">
-            <span className="wm">W{activeWeek?.isoWeek ?? ""}</span> {activeRange}
-          </div>
-          <button type="button" title="Следующая неделя" onClick={onNextWeek} disabled={nextDisabled}>
-            <ChevronRight />
-          </button>
+        <div className="mweekbar-row">
+          <ViewSegment view={view} onChange={onViewChange} />
         </div>
-        <button type="button" className="today-btn" onClick={onToday}>
-          Сегодня
-        </button>
-        <button type="button" className="filter-btn" onClick={() => setSheetOpen(true)}>
-          Фильтры
-          {filterCount > 0 && <span className="fdot">{filterCount}</span>}
-          <Filter />
-        </button>
+
+        {view === "summary" ? (
+          <div className="mweekbar-row">
+            <div className="mweeknav">
+              <button
+                type="button"
+                title="Предыдущая неделя"
+                onClick={() => summaryStepWeek(-1)}
+                disabled={summaryAtFirst}
+              >
+                <ChevronLeft />
+              </button>
+              <div className="wlab">
+                <span className="wm">W{summaryWeek.isoWeek}</span>{" "}
+                {isoWeekRangeLabel(summaryWeek.isoYear, summaryWeek.isoWeek)}
+              </div>
+              <button
+                type="button"
+                title="Следующая неделя"
+                onClick={() => summaryStepWeek(1)}
+                disabled={summaryAtLast}
+              >
+                <ChevronRight />
+              </button>
+            </div>
+            <button type="button" className="today-btn" onClick={summaryGoToday}>
+              Сегодня
+            </button>
+          </div>
+        ) : (
+          <div className="mweekbar-row">
+            <div className="mweeknav">
+              <button type="button" title="Предыдущая неделя" onClick={onPrevWeek} disabled={prevDisabled}>
+                <ChevronLeft />
+              </button>
+              <div className="wlab">
+                <span className="wm">W{activeWeek?.isoWeek ?? ""}</span> {activeRange}
+              </div>
+              <button type="button" title="Следующая неделя" onClick={onNextWeek} disabled={nextDisabled}>
+                <ChevronRight />
+              </button>
+            </div>
+            <button type="button" className="today-btn" onClick={onToday}>
+              Сегодня
+            </button>
+            <button type="button" className="filter-btn" onClick={() => setSheetOpen(true)}>
+              Фильтры
+              {filterCount > 0 && <span className="fdot">{filterCount}</span>}
+              <Filter />
+            </button>
+          </div>
+        )}
       </div>
 
-      {weeks.length === 0 ? (
+      {view === "summary" ? (
+        <MobileSummaryView week={plan.week} loading={plan.loading} />
+      ) : weeks.length === 0 ? (
         <EmptyBlock
           title="Пока нет отгрузок"
           text={`В сезоне ${feed.seasonYear} ещё не заведено ни одной отгрузки.`}

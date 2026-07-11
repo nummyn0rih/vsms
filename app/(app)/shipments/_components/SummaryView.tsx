@@ -1,7 +1,8 @@
 "use client";
 
-import type { PlanWeek, PlanRow } from "@/server/plan/schema";
+import type { PlanWeek } from "@/server/plan/schema";
 import { fmtTons } from "@/lib/format";
+import { EPS, cellFill, rowMax, rowPlan, weekHeadline } from "./summary-fill";
 
 const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -25,27 +26,6 @@ function dayMonth(dateStr: string): string {
 }
 function dayNum(dateStr: string): string {
   return dayNumFmt.format(new Date(`${dateStr}T00:00:00Z`));
-}
-
-const EPS = 0.0005;
-
-// План культуры для итогов: недельная цель или Σ дневных целей (0 → нет цели).
-function rowPlan(r: PlanRow): number {
-  if (r.weekTarget != null) return r.weekTarget;
-  return Object.values(r.dayTargets).reduce((s, v) => s + v, 0);
-}
-
-// Заливка ячейки по строке (BR-22): интенсивность ∝ значение / макс. ячейка строки.
-// opacity% = 18 + 82·value/rowMax (минимальный видимый порог 18%), нулевая → без фона.
-// Текст белый при насыщенной заливке (порог по читаемости, как в прототипе).
-const WHITE_TEXT_OPACITY = 58;
-function cellFill(value: number, rowMax: number, color: string): { bg?: string; white: boolean } {
-  if (value <= EPS || rowMax <= 0) return { white: false };
-  const opacity = Math.round(18 + 82 * (value / rowMax));
-  return {
-    bg: `color-mix(in srgb, ${color} ${opacity}%, transparent)`,
-    white: opacity >= WHITE_TEXT_OPACITY,
-  };
 }
 
 export function SummaryView({
@@ -76,17 +56,11 @@ export function SummaryView({
   const days = week.days;
 
   // Headline (BR-22): Σ эффективного / Σ целей — только культуры, у которых есть план.
-  let headlinePlan = 0;
-  let headlineFact = 0;
-  for (const r of week.rows) {
-    const plan = rowPlan(r);
-    if (plan > EPS) {
-      headlinePlan += plan;
-      headlineFact += r.weekProgress.effectiveTons;
-    }
-  }
-  const headlinePct =
-    headlinePlan > EPS ? Math.round((headlineFact / headlinePlan) * 100) : null;
+  const {
+    plan: headlinePlan,
+    fact: headlineFact,
+    pct: headlinePct,
+  } = weekHeadline(week);
 
   return (
     <div className="summary-view">
@@ -147,13 +121,7 @@ export function SummaryView({
                 const pct = hasPlan ? (fact / plan) * 100 : null;
                 const delta = fact - plan;
 
-                // Макс. дневная ячейка строки — база интенсивности заливки.
-                const rowMax = isWeek
-                  ? 0
-                  : days.reduce(
-                      (m, d) => Math.max(m, r.dayProgress[d.date]?.effectiveTons ?? 0),
-                      0,
-                    );
+                const maxCell = rowMax(r, days);
 
                 return (
                   <tr key={r.cultureId}>
@@ -175,7 +143,7 @@ export function SummaryView({
                       days.map((d) => {
                         const value = r.dayProgress[d.date]?.effectiveTons ?? 0;
                         const zero = value <= EPS;
-                        const { bg, white } = cellFill(value, rowMax, r.color);
+                        const { bg, white } = cellFill(value, maxCell, r.color);
                         return (
                           <td
                             key={d.date}
