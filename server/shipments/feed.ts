@@ -273,9 +273,20 @@ export function weekSummary(week: FeedWeek): {
   cultures: CultureTotal[];
   totalKg: number;
   machineCount: number;
+  // Факт/принято суммируются по всем позициям недели (null → 0) — для печатных итогов.
+  factKg: number;
+  acceptedKg: number;
+  positionCount: number;
 } {
   const machines = week.days.flatMap((d) => d.shipments);
-  return { ...summarizeCultures(machines), machineCount: machines.length };
+  const items = machines.flatMap((s) => s.items);
+  return {
+    ...summarizeCultures(machines),
+    machineCount: machines.length,
+    factKg: items.reduce((a, it) => a + (it.actualKg ?? 0), 0),
+    acceptedKg: items.reduce((a, it) => a + (it.acceptedKg ?? 0), 0),
+    positionCount: items.length,
+  };
 }
 
 export function daySummary(day: FeedDay): {
@@ -285,11 +296,16 @@ export function daySummary(day: FeedDay): {
   // все barrel → barrels (DESIGN §2). Рендер — через formatTareTotals.
   tare: { boxes: number; barrels: number };
   hasUnpricedTare: boolean;
+  // Факт/принято суммируются по позициям дня (null → 0) — для печатных подытогов.
+  factKg: number;
+  acceptedKg: number;
 } {
   const items = day.shipments.flatMap((s) => s.items);
   let boxes = 0;
   let barrels = 0;
   let hasUnpricedTare = false;
+  let factKg = 0;
+  let acceptedKg = 0;
   for (const it of items) {
     if (it.tareMissingNorm) hasUnpricedTare = true;
     // Навал (tareUnits=null без флага) и «нет нормы» в сводку тары не входят.
@@ -297,10 +313,14 @@ export function daySummary(day: FeedDay): {
       if (it.packagingKind === "box") boxes += it.tareUnits;
       else if (it.packagingKind === "barrel") barrels += it.tareUnits;
     }
+    factKg += it.actualKg ?? 0;
+    acceptedKg += it.acceptedKg ?? 0;
   }
   return {
     ...summarizeCultures(day.shipments),
     tare: { boxes, barrels },
     hasUnpricedTare,
+    factKg,
+    acceptedKg,
   };
 }

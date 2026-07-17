@@ -22,6 +22,17 @@ export function computeAcceptedKg(
   return (actualKg * acceptedPct) / 100;
 }
 
+// Средневзвешенный брак по фактическому весу: Σ(actual×brak%) / Σ actual.
+// Пустой набор ИЛИ Σ actual = 0 → 0. База — факт (BR-10/§5). Единая формула для
+// печатной приёмки и аналитики (per-culture + total).
+export function computeWeightedBrak(
+  rows: { actualKg: number; brakPercent: number }[],
+): number {
+  const den = rows.reduce((s, r) => s + r.actualKg, 0);
+  if (den <= 0) return 0;
+  return rows.reduce((s, r) => s + r.brakPercent * r.actualKg, 0) / den;
+}
+
 // Подпись калибр-категории для показа (чипы зоны 3). Размерная — из min/max (см),
 // безразмерная (оба null) — label категории. Числа уже в см (number|null).
 export function calibreRangeLabel(

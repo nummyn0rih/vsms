@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { getContractExecution } from "@/server/contracts/execution";
-import { computeAcceptedKg } from "@/server/acceptance/accepted";
+import { computeAcceptedKg, computeWeightedBrak } from "@/server/acceptance/accepted";
 import {
   seasonYearOf,
   isoWeek,
@@ -164,12 +164,11 @@ export async function getSeasonAnalytics({
   // acceptanceByWeek: Σ принятого (эффективного) веса по ISO-неделе прибытия.
   const weekTons = new Map<string, { isoYear: number; isoWeek: number; tons: number }>();
   // brakByCulture: Σ(actual×brak%) / Σ actual по культуре (база — факт, BR-10/§5).
+  // Копим строки {actualKg, brakPercent}; % считает общая computeWeightedBrak.
   const brakAgg = new Map<
     number,
-    { cultureName: string; color: string; num: number; den: number }
+    { cultureName: string; color: string; rows: { actualKg: number; brakPercent: number }[] }
   >();
-  let brakNumTotal = 0;
-  let brakDenTotal = 0;
 
   for (const it of acceptedItems) {
     const arrival = it.shipment.arrival_date ?? it.shipment.departure_date;
@@ -201,14 +200,10 @@ export async function getSeasonAnalytics({
       const agg = brakAgg.get(it.culture.id) ?? {
         cultureName: it.culture.name,
         color: it.culture.color,
-        num: 0,
-        den: 0,
+        rows: [],
       };
-      agg.num += actual * bp;
-      agg.den += actual;
+      agg.rows.push({ actualKg: actual, brakPercent: bp });
       brakAgg.set(it.culture.id, agg);
-      brakNumTotal += actual * bp;
-      brakDenTotal += actual;
     }
   }
 
@@ -240,11 +235,14 @@ export async function getSeasonAnalytics({
       cultureId,
       cultureName: a.cultureName,
       color: a.color,
-      pct: a.den > 0 ? a.num / a.den : 0,
+      pct: computeWeightedBrak(a.rows),
     }))
     .sort((a, b) => b.pct - a.pct);
 
-  const avgBrakPct = brakDenTotal > 0 ? brakNumTotal / brakDenTotal : null;
+  // Total — та же формула; null при пустом наборе (Σ факт = 0) сохраняем для показа.
+  const allBrakRows = [...brakAgg.values()].flatMap((a) => a.rows);
+  const totalBrakActual = allBrakRows.reduce((s, r) => s + r.actualKg, 0);
+  const avgBrakPct = totalBrakActual > 0 ? computeWeightedBrak(allBrakRows) : null;
 
   // === 3) Рейсы ТК (BR-14): овощные и материальные РАЗДЕЛЬНО ===
   // Овощные: Shipment в arrived/accepted, сезон по прибытию, ТК через driver.

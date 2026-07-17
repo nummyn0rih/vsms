@@ -41,14 +41,6 @@ function csvNums(raw: string | undefined): Set<number> {
   return s;
 }
 
-// Факт/Принято суммируются на показе (null → не считаем): это отображение, не домен.
-function sumFact(items: FeedItem[]): number {
-  return items.reduce((a, it) => a + (it.actualKg ?? 0), 0);
-}
-function sumAccepted(items: FeedItem[]): number {
-  return items.reduce((a, it) => a + (it.acceptedKg ?? 0), 0);
-}
-
 function tareCell(it: FeedItem): string {
   if (it.packagingTypeName == null) return "—"; // навал
   if (it.tareMissingNorm) return `${it.packagingTypeName} · ?`;
@@ -108,14 +100,10 @@ export default async function PrintShipmentsPage({
     </>
   );
 
-  // Итоги недели.
-  const ws = week ? weekSummary(week) : { totalKg: 0, machineCount: 0 };
-  const allItems = week
-    ? week.days.flatMap((d) => d.shipments.flatMap((s) => s.items))
-    : [];
-  const weekFact = sumFact(allItems);
-  const weekAccepted = sumAccepted(allItems);
-  const positionsCount = allItems.length;
+  // Итоги недели — из чистого weekSummary (факт/принято/позиции суммируются там же).
+  const ws = week
+    ? weekSummary(week)
+    : { totalKg: 0, machineCount: 0, factKg: 0, acceptedKg: 0, positionCount: 0 };
 
   return (
     <PrintSheet
@@ -128,7 +116,7 @@ export default async function PrintShipmentsPage({
         <>
           <b>Итого:</b> <span className="num">{ws.machineCount}</span> машин ·
           эффективный вес <span className="num">{fmtTons(ws.totalKg / 1000)} т</span> ·
-          принято <span className="num">{fmtTons(weekAccepted / 1000)} т</span>
+          принято <span className="num">{fmtTons(ws.acceptedKg / 1000)} т</span>
         </>
       }
       footPage={`Отгрузки · W${String(wk.isoWeek).padStart(2, "0")} · лист 1/1`}
@@ -163,7 +151,6 @@ export default async function PrintShipmentsPage({
             </tr>
           )}
           {week?.days.map((day) => {
-            const items = day.shipments.flatMap((s) => s.items);
             const ds = daySummary(day);
             const dl = dayLabel(day.date);
             if (day.shipments.length === 0) {
@@ -186,8 +173,8 @@ export default async function PrintShipmentsPage({
                     </span>
                   </td>
                   <td className="r g-meta">{fmtInt(ds.totalKg)}</td>
-                  <td className="r g-meta">{fmtInt(sumFact(items))}</td>
-                  <td className="r g-meta">{fmtInt(sumAccepted(items))}</td>
+                  <td className="r g-meta">{fmtInt(ds.factKg)}</td>
+                  <td className="r g-meta">{fmtInt(ds.acceptedKg)}</td>
                 </tr>
                 {day.shipments.map((m) =>
                   m.items.map((it, idx) => (
@@ -236,11 +223,11 @@ export default async function PrintShipmentsPage({
           <tfoot>
             <tr>
               <td colSpan={5} className="lead">
-                Итого недели · {ws.machineCount} машин · {positionsCount} позиций
+                Итого недели · {ws.machineCount} машин · {ws.positionCount} позиций
               </td>
               <td className="r num">{fmtInt(ws.totalKg)}</td>
-              <td className="r num">{fmtInt(weekFact)}</td>
-              <td className="r num">{fmtInt(weekAccepted)}</td>
+              <td className="r num">{fmtInt(ws.factKg)}</td>
+              <td className="r num">{fmtInt(ws.acceptedKg)}</td>
             </tr>
           </tfoot>
         )}

@@ -1,4 +1,5 @@
 import { getAcceptanceBoard } from "@/server/acceptance/board";
+import { computeWeightedBrak } from "@/server/acceptance/accepted";
 import type {
   AcceptanceMachine,
   AcceptedMachine,
@@ -71,10 +72,7 @@ export default async function PrintAcceptancePage() {
   const totalAccepted = acceptedPositions.reduce((a, p) => a + p.acceptedKg, 0);
   const totalActual = acceptedPositions.reduce((a, p) => a + p.actualKg, 0);
   // Средний брак — взвешенный по фактическому весу (Σ брак·факт / Σ факт).
-  const weightedBrak =
-    totalActual > 0
-      ? acceptedPositions.reduce((a, p) => a + p.brakPercent * p.actualKg, 0) / totalActual
-      : 0;
+  const weightedBrak = computeWeightedBrak(acceptedPositions);
   const actCount = new Set(
     acceptedPositions.map((p) => p.actNumber).filter((n): n is string => Boolean(n)),
   ).size;
