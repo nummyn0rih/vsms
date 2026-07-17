@@ -16,12 +16,17 @@
   padding: 24px 16px 80px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* НЕ align-items:center — при листе шире вьюпорта (landscape 297мм на узком экране)
+     это уводит левый край в минус (недостижим скроллом). Центрируем margin-inline:auto
+     на самих листах — оно безопасно вырождается в 0, оставляя лист у левого края со
+     скроллом вправо. */
+  align-items: stretch;
   gap: 14px;
 }
 .print-toolbar {
   width: 210mm;
   max-width: 100%;
+  margin-inline: auto;
   display: flex;
   justify-content: flex-end;
   position: sticky;
@@ -68,6 +73,7 @@
   width: 210mm;
   min-height: 297mm;
   max-width: 100%;
+  margin-inline: auto;
   padding: 15mm 15mm 14mm;
   background: var(--canvas);
   color: var(--ink);
