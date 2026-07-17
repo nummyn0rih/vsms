@@ -24,6 +24,11 @@
   max-width: 100%;
   display: flex;
   justify-content: flex-end;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-block: 12px;
+  background: var(--print-desk);
 }
 .print-btn {
   height: 34px;
@@ -490,5 +495,8 @@ table.dt tfoot .lead {
     width: 297mm;
     min-height: 210mm;
     page: landscape;
+  }
+  .an-print .recharts-tooltip-wrapper {
+    display: none;
   }
 }

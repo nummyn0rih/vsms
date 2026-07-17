@@ -135,6 +135,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
 
           <div className="spacer" />
 
+          {printSlot}
+
           <div className="seg">
             {views.map((v) =>
               v.disabled ? (
@@ -217,8 +219,6 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             <span className={`switch${hidePlanned ? "" : " off"}`} />
             Скрыть плановые
           </label>
-
-          {printSlot}
 
           <div className="tip-wrap">
             <button type="button" className="btn btn-sm is-disabled" aria-disabled>
