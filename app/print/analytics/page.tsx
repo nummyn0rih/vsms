@@ -1,14 +1,16 @@
 import { getSeasonAnalytics } from "@/server/analytics/dashboard";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { fmtTons, fmtPct1 } from "@/lib/format";
+import { AcceptanceAreaChart } from "@/app/(app)/analytics/_components/AcceptanceAreaChart";
+import { BrakBarChart } from "@/app/(app)/analytics/_components/BrakBarChart";
+import { TripsBarChart } from "@/app/(app)/analytics/_components/TripsBarChart";
+import { PrintSheet } from "../_components/PrintSheet";
 
-import { SeasonSelector } from "./_components/SeasonSelector";
-import { AcceptanceAreaChart } from "./_components/AcceptanceAreaChart";
-import { BrakBarChart } from "./_components/BrakBarChart";
-import { TripsBarChart } from "./_components/TripsBarChart";
-
-// Дашборд сезона — read-only. Сезон из ?season= (дефолт текущий). Агрегаты на лету.
-export default async function AnalyticsPage({
+// Печатный лист «Аналитика сезона» (print-3, A4 portrait, с графиками). Read-only,
+// источник — getSeasonAnalytics (те же величины, что десктоп-дашборд). KPI-полоса + сетка
+// 2×2: CSS-бары «Выполнение по культурам» + 3 Recharts-графика дашборда (переиспользуются,
+// не дублируются). Деньги не выводятся. Сезон — из ?season= (дефолт текущий).
+export default async function PrintAnalyticsPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -21,52 +23,39 @@ export default async function AnalyticsPage({
   const data = await getSeasonAnalytics({ season });
   const { kpi } = data;
 
-  return (
-    <div className="mx-auto w-full max-w-[1320px]">
-      <div className="an-stage">
-        {/* page head */}
-        <div className="an-phead">
-          <div style={{ minWidth: 0 }}>
-            <div className="an-title">Аналитика</div>
-            <div className="an-sub">
-              <span className="ro">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                Только просмотр
-              </span>
-              <span className="sep" />
-              <span>дашборд сезона · агрегаты на лету</span>
-            </div>
-          </div>
-          <div className="spacer" />
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <SeasonSelector season={season} seasons={data.seasons} />
-            <a
-              href={`/print/analytics?season=${season}`}
-              target="_blank"
-              rel="noopener"
-              className="btn btn-sm"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
-              Печать
-            </a>
-          </div>
-        </div>
+  const weeks = data.acceptanceByWeek;
+  const period = weeks.length
+    ? `сезон ${season} · ${weeks[0].label}–${weeks[weeks.length - 1].label}`
+    : `сезон ${season}`;
 
-        {/* KPI strip */}
+  return (
+    <PrintSheet
+      title="Аналитика сезона"
+      subtitle="Сводный дашборд · агрегаты считаются на лету (не хранятся)"
+      season={`Сезон ${season}`}
+      period={period}
+      periodLabel="Период"
+      filters={
+        <>
+          Серии культур — <b>Culture.color</b> · недели и ТК — графит · брак — по культурам
+        </>
+      }
+      footTotal={
+        <>
+          <b>Итого сезона:</b> принято <span className="num">{fmtTons(kpi.acceptedTons)} т</span> из{" "}
+          <span className="num">{fmtTons(kpi.targetTons)} т</span> · выполнение{" "}
+          <span className="num">
+            {kpi.completionPct == null ? "—" : `${Math.round(kpi.completionPct)}%`}
+          </span>{" "}
+          · средний брак{" "}
+          <span className="num">{kpi.avgBrakPct == null ? "—" : `${fmtPct1(kpi.avgBrakPct)}%`}</span>{" "}
+          · рейсов <span className="num">{kpi.tripsTotal}</span>
+        </>
+      }
+      footPage={`Аналитика · сезон ${season} · лист 1/1`}
+    >
+      <div className="an-print">
+        {/* KPI-полоса (5 плиток) — копия дашборда, без денег */}
         <div className="an-kpis">
           <div className="an-kpi">
             <div className="k">Принято</div>
@@ -94,7 +83,9 @@ export default async function AnalyticsPage({
               <span>{kpi.avgBrakPct == null ? "—" : fmtPct1(kpi.avgBrakPct)}</span>
               {kpi.avgBrakPct != null && <span className="u">%</span>}
             </div>
-            <div className="sub">{kpi.avgBrakPct == null ? "нет завершённых актов" : "взвешенный по весу"}</div>
+            <div className="sub">
+              {kpi.avgBrakPct == null ? "нет завершённых актов" : "взвешенный по весу"}
+            </div>
           </div>
 
           <div className="an-kpi">
@@ -132,9 +123,9 @@ export default async function AnalyticsPage({
           </div>
         </div>
 
-        {/* chart grid 2×2 */}
+        {/* Сетка 2×2 графиков */}
         <div className="an-charts">
-          {/* 1 · Выполнение по культурам */}
+          {/* 1 · Выполнение по культурам — CSS-бары (копия дашборда) */}
           <div className="an-card">
             <div className="an-card-head">
               <div className="an-card-title">Выполнение по культурам</div>
@@ -180,9 +171,7 @@ export default async function AnalyticsPage({
               <div className="an-card-unit">суммарно · т эффективного веса · ISO-недели</div>
             </div>
             <div className="an-card-body">
-              <AcceptanceAreaChart
-                data={data.acceptanceByWeek.map((w) => ({ label: w.label, tons: w.tons }))}
-              />
+              <AcceptanceAreaChart data={weeks.map((w) => ({ label: w.label, tons: w.tons }))} />
             </div>
           </div>
 
@@ -190,7 +179,7 @@ export default async function AnalyticsPage({
           <div className="an-card">
             <div className="an-card-head">
               <div className="an-card-title">% брака по культурам</div>
-              <div className="an-card-unit">брак / принято · % · нейтральный янтарь</div>
+              <div className="an-card-unit">брак / принято · % · по культурам</div>
             </div>
             <div className="an-card-body">
               <BrakBarChart data={data.brakByCulture} />
@@ -209,6 +198,6 @@ export default async function AnalyticsPage({
           </div>
         </div>
       </div>
-    </div>
+    </PrintSheet>
   );
 }

@@ -263,8 +263,8 @@
 - [x] Фактический средний вес рейса — `aggregateActualTripWeight` (Σ факт / число перевешенных овощных рейсов; машины без перевески и материальные исключены, BR-14); KPI «Осталось ~N машин» = недобор / факт-вес (fallback на `TripWeightNorm`), подпись «факт ≈X · план ≈Y». Спека `PROMPTS-TRIPWEIGHT.md`. Коммит `6a58685`. DOMAIN §5 обновлён.
 - [~] Печатные формы (ТЕКУЩИЙ): рабочие виды таблицами (без графики) + **Аналитика с графиками**. Подход: print-CSS, отдельные bare print-роуты `app/print/...`, контекст из URL, «Печать»→PDF. Дизайн-спека `DESIGN-PRINT.md`. Ориентация: Сводка/План — landscape, остальное portrait. Без денег (натуральные единицы). (Печать акта — бэклог, `DESIGN-ACT-PRINT.md` замещена.)
   - [x] print-1: каркас (`PrintSheet`/@page/кнопки) + Отгрузки (неделя) + Приёмка (сезон), portrait. `PROMPTS-PRINT-1(-FIX).md`. Коммиты `1bf9f8a` + `b54e17e` (консолидация weighted-brak/feed-подытогов).
-  - [~] print-2: Сводка + План — landscape, из `getPlanWeek` (ТЕКУЩИЙ). `PROMPTS-PRINT-2.md`.
-  - [ ] print-3: Аналитика — portrait, KPI + 4 графика. `PROMPTS-PRINT-3.md`.
+  - [x] print-2: Сводка + План — A4 landscape, из `getPlanWeek`. `PROMPTS-PRINT-2.md`. Коммит `84e176d`.
+  - [~] print-3: Аналитика — portrait, KPI + 4 графика (последний print-срез, ТЕКУЩИЙ). `PROMPTS-PRINT-3.md`.
 - [ ] Сравнение сезонов год-к-году — ждёт исторических данных (импорт — этап G).
 
 **Мобильная версия v1** (responsive-first, прототип `mobile-v1.html`; таб-бар+drawer, карточный список):

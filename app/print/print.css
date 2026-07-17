@@ -383,6 +383,79 @@ table.dt tfoot .lead {
   white-space: nowrap;
 }
 
+/* --- Лист «Аналитика» (print-3): компактный порт an-* дашборда под A4 portrait.
+   Только на /print/*, десктоп-дашборд не затрагивается. Высоты Recharts (200px) —
+   в компонентах, не трогаем; компактим паддинги/типографику. --- */
+.an-print .an-kpis {
+  padding: 0;
+  gap: 8px;
+  margin-top: 14px;
+}
+.an-print .an-kpi {
+  background: transparent;
+  border-radius: 7px;
+  padding: 9px 10px;
+}
+.an-print .an-kpi .k {
+  font-size: 8px;
+  line-height: 12px;
+}
+.an-print .an-kpi .v {
+  font-size: 20px;
+  margin-top: 5px;
+}
+.an-print .an-kpi .v .u {
+  font-size: 10px;
+}
+.an-print .an-kpi .sub {
+  font-size: 9px;
+  margin-top: 5px;
+  line-height: 12px;
+}
+.an-print .an-charts {
+  padding: 0;
+  gap: 10px;
+  margin-top: 12px;
+}
+.an-print .an-card {
+  box-shadow: none;
+  border-radius: 8px;
+}
+.an-print .an-card-head {
+  padding: 8px 11px 7px;
+}
+.an-print .an-card-title {
+  font-size: 11.5px;
+}
+.an-print .an-card-unit {
+  font-size: 8.5px;
+  margin-top: 2px;
+}
+.an-print .an-card-body {
+  padding: 8px 12px 10px;
+}
+.an-print .an-empty {
+  min-height: 0;
+  padding: 18px 12px;
+}
+.an-print .an-cbars {
+  gap: 11px;
+}
+.an-print .an-cbar {
+  grid-template-columns: 96px 1fr 34px;
+  gap: 10px;
+}
+.an-print .an-cbar-name {
+  font-size: 12px;
+}
+.an-print .an-cbar-pct {
+  font-size: 12px;
+}
+.an-print .an-legend {
+  margin-top: 8px;
+  font-size: 10px;
+}
+
 /* ================= PRINT ================= */
 @media print {
   @page {
