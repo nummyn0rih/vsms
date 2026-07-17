@@ -207,6 +207,55 @@ table.dt tbody td.c {
   font-weight: 500;
 }
 
+/* Матрица культура×день (листы «Сводка»/«План»): максимум строки — жирным, без
+   heatmap-заливки; week-mode строка — спан на дни; тонкие Δ / % без плашек. */
+td.maxcell .num,
+td.maxcell {
+  font-weight: 600;
+  color: var(--ink);
+}
+.wkspan {
+  color: var(--mute);
+  font-size: 10px;
+  font-style: italic;
+}
+.wk-badge {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--mute);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 6px;
+}
+.pct {
+  font-family: var(--font-geist-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.delta {
+  font-family: var(--font-geist-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+}
+.delta.pos {
+  color: var(--ink);
+}
+.delta.neg {
+  color: var(--mute);
+}
+
+/* Landscape-лист (Сводка/План): широкая матрица — 297мм. Экранный предпросмотр. */
+.print-toolbar.landscape {
+  width: 297mm;
+}
+.sheet.landscape {
+  width: 297mm;
+  min-height: 210mm;
+}
+
 /* Групповые/подытоговые строки (день, зона) */
 tr.grp td {
   background: var(--canvas-soft);
@@ -340,6 +389,11 @@ table.dt tfoot .lead {
     size: A4 portrait;
     margin: 0;
   }
+  /* Именованная landscape-страница только для листов Сводка/План (page: landscape). */
+  @page landscape {
+    size: A4 landscape;
+    margin: 0;
+  }
   html,
   body {
     background: #fff;
@@ -358,5 +412,10 @@ table.dt tfoot .lead {
     min-height: 297mm;
     margin: 0;
     box-shadow: none;
+  }
+  .sheet.landscape {
+    width: 297mm;
+    min-height: 210mm;
+    page: landscape;
   }
 }

@@ -8,18 +8,22 @@ export function PrintSheet({
   subtitle,
   season,
   period,
+  periodLabel = "Период",
   filters,
   footTotal,
   footPage,
+  landscape = false,
   children,
 }: {
   title: string;
   subtitle: string;
   season: string; // «Сезон 2026»
   period: string; // «W24 · 8–13 июня 2026» / «сезон 2026 · текущее состояние»
+  periodLabel?: string; // подпись перед периодом (дефолт «Период»; «Неделя» для план/сводки)
   filters?: ReactNode; // строка «Фильтры: …» (лист «Отгрузки»); опц.
   footTotal: ReactNode; // .sf-tot — итог листа
   footPage: string; // .sf-page — «вид · период · лист 1/1»
+  landscape?: boolean; // A4 landscape (широкая матрица культура×день)
   children: ReactNode; // таблица
 }) {
   const printDate = new Intl.DateTimeFormat("ru-RU", {
@@ -30,11 +34,11 @@ export function PrintSheet({
 
   return (
     <div className="print-wrap">
-      <div className="print-toolbar screen-only">
+      <div className={`print-toolbar screen-only${landscape ? " landscape" : ""}`}>
         <PrintButton />
       </div>
 
-      <article className="sheet">
+      <article className={`sheet${landscape ? " landscape" : ""}`}>
         <div className="doc-head">
           <div className="dh-l">
             <p className="dh-eyebrow">VSMS · Печатная форма</p>
@@ -47,7 +51,7 @@ export function PrintSheet({
               {season}
             </div>
             <div>
-              <span className="lbl">Период</span> {period}
+              <span className="lbl">{periodLabel}</span> {period}
             </div>
             <div>
               <span className="lbl">Дата печати</span> {printDate}

@@ -19,6 +19,14 @@ import {
 import { fmtTons } from "@/lib/format";
 import { PlanInput } from "./PlanInput";
 import { barGeometry, PlanBar } from "./plan-bar";
+import {
+  EPS,
+  planDayTotals,
+  planHeadlineEffective,
+  rowWeekTarget,
+  rowWeekTotal,
+  weekGrandTotal as sumWeekTargets,
+} from "./plan-totals";
 
 const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
@@ -42,8 +50,7 @@ const EMPTY_PROGRESS: CellProgress = {
 };
 
 // Геометрия бара и PlanBar — общий модуль ./plan-bar (переиспользует MobilePlanView).
-// Сравнения tons — с допуском EPS (3 знака).
-const EPS = 0.0005;
+// Сравнения tons — с допуском EPS (3 знака, из plan-totals).
 
 // Подпись дневной ячейки: «{эффективный} / {цель}» или «{эффективный} нет цели».
 function DayCaption({ progress, target }: { progress: CellProgress; target: number | null }) {
@@ -213,39 +220,17 @@ export function PlanView({
   }
 
   const days = week.days;
-  const rowWeekTotal = (r: PlanWeek["rows"][number]): number =>
-    r.mode === "week"
-      ? (r.weekTarget ?? 0)
-      : Object.values(r.dayTargets).reduce((s, v) => s + v, 0);
-
-  // Итоги по столбцам (суммы целей).
-  const dayTotals = days.map((d) =>
-    week.rows.reduce(
-      (s, r) => s + (r.mode === "day" ? (r.dayTargets[d.date] ?? 0) : 0),
-      0,
-    ),
-  );
-  const weekGrandTotal = week.rows.reduce((s, r) => s + rowWeekTotal(r), 0);
+  // Итоги/цели — из общего plan-totals (тот же источник, что печатный лист /print/plan).
+  const dayTotals = planDayTotals(week);
+  const grandTargetTotal = sumWeekTargets(week);
   const weekEffectiveTotal = week.weekTotalProgress.effectiveTons;
-
-  // Цель недели по строке для бара: week-режим → r.weekTarget; day-режим → Σ дней
-  // (null, если целей нет → бар без риски).
-  const rowWeekTarget = (r: PlanWeek["rows"][number]): number | null => {
-    const t = rowWeekTotal(r);
-    return t > 0 ? t : null;
-  };
-  // Headline «набрано» (BR-22): только культуры, у которых есть цель. Факт неплановых
-  // культур в выполнение плана не идёт (остаётся в их строках).
-  const headlineEffective = week.rows.reduce(
-    (s, r) => s + (rowWeekTarget(r) != null ? r.weekProgress.effectiveTons : 0),
-    0,
-  );
+  const headlineEffective = planHeadlineEffective(week);
   // No-target дневные ячейки масштабируются к max эффективного по строке (построчно).
   const rowMaxEffective = (r: PlanWeek["rows"][number]): number =>
     days.reduce((m, d) => Math.max(m, r.dayProgress[d.date]?.effectiveTons ?? 0), 0);
 
   // Совсем пусто: ни целей, ни отгрузок на неделе — показываем хинт над сеткой.
-  const fullyEmpty = weekGrandTotal <= 0 && weekEffectiveTotal <= 0;
+  const fullyEmpty = grandTargetTotal <= 0 && weekEffectiveTotal <= 0;
 
   return (
     <div className="plan-view">
@@ -262,11 +247,11 @@ export function PlanView({
           Сезон {week.seasonYear}
         </span>
         <span className="plan-headline">
-          {weekGrandTotal > 0 ? (
+          {grandTargetTotal > 0 ? (
             <>
               План недели:{" "}
               <b className="tnum">
-                {fmtTons(headlineEffective)} / {fmtTons(weekGrandTotal)} т
+                {fmtTons(headlineEffective)} / {fmtTons(grandTargetTotal)} т
               </b>
             </>
           ) : (
