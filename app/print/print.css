@@ -1,0 +1,362 @@
+/* Печатные листы VSMS (print-1). Порт классов из docs/prototypes/print-views-v1.html
+   (строки 46–208), адаптировано под self-hosted шрифты (var(--font-geist*)) и ч/б печать.
+   Грузится ТОЛЬКО на роутах /print/* (импорт в app/print/layout.tsx) — @page и скрытие
+   хрома не влияют на обычные страницы приложения. */
+
+:root {
+  /* Недостающие в globals.css мелочи (остальные токены — из globals :root). */
+  --rule: #cfcfcf;
+  --print-desk: #e6e6e9;
+}
+
+/* --- Экранная подложка (в печати убирается) --- */
+.print-wrap {
+  min-height: 100vh;
+  background: var(--print-desk);
+  padding: 24px 16px 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.print-toolbar {
+  width: 210mm;
+  max-width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+.print-btn {
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 7px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px #0000001f;
+}
+.print-btn:hover {
+  background: #000;
+}
+.print-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mono {
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Лист A4 --- */
+.sheet {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  padding: 15mm 15mm 14mm;
+  background: var(--canvas);
+  color: var(--ink);
+  box-shadow: 0 1px 2px #00000012, 0 12px 30px -10px #00000026;
+  display: flex;
+  flex-direction: column;
+  letter-spacing: -0.01em;
+  font-feature-settings: "ss01";
+}
+
+/* Шапка документа */
+.doc-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  border-bottom: 1.5px solid var(--ink);
+  padding-bottom: 9px;
+}
+.dh-l {
+  min-width: 0;
+}
+.dh-eyebrow {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin: 0 0 5px;
+}
+.dh-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  margin: 0;
+  line-height: 1.05;
+}
+.dh-sub {
+  font-size: 12px;
+  color: var(--body);
+  margin-top: 3px;
+  letter-spacing: -0.01em;
+}
+.dh-r {
+  text-align: right;
+  flex-shrink: 0;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.dh-r .lbl {
+  color: var(--mute);
+}
+.dh-r .season {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.dh-r .season .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1d8e75;
+}
+.dh-filters {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--mute);
+  letter-spacing: 0;
+  margin-top: 7px;
+  padding-bottom: 2px;
+}
+.dh-filters b {
+  color: var(--body);
+  font-weight: 500;
+}
+
+/* Компактная таблица документа */
+table.dt {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+table.dt thead th {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mute);
+  text-align: left;
+  padding: 0 7px 6px;
+  border-bottom: 1px solid var(--ink);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+table.dt thead th.r {
+  text-align: right;
+}
+table.dt thead th.c {
+  text-align: center;
+}
+table.dt tbody td {
+  font-size: 11px;
+  padding: 5px 7px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+  letter-spacing: -0.01em;
+  line-height: 15px;
+}
+table.dt tbody td.r {
+  text-align: right;
+}
+table.dt tbody td.c {
+  text-align: center;
+}
+.num {
+  font-family: var(--font-geist-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.dim {
+  color: var(--mute);
+}
+.chip {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: baseline;
+  position: relative;
+  top: 0;
+  flex-shrink: 0;
+}
+.cultname {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Групповые/подытоговые строки (день, зона) */
+tr.grp td {
+  background: var(--canvas-soft);
+  border-bottom: 1px solid var(--hairline);
+  padding: 5px 7px;
+}
+tr.grp .g-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+tr.grp .g-title .gd {
+  color: var(--mute);
+  font-weight: 400;
+}
+tr.grp .g-meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10px;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+}
+tr.empty td {
+  color: var(--mute);
+  font-style: italic;
+  font-size: 10.5px;
+  padding: 6px 7px;
+  background: var(--canvas-soft);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Статус словом (ч/б: точка серой градацией, без цветных плашек) */
+.st {
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.st .d {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+  background: var(--hairline-strong);
+}
+.st.planned {
+  color: var(--mute);
+}
+.st.planned .d {
+  background: #b3b3b3;
+}
+.st.sent {
+  color: var(--body);
+}
+.st.sent .d {
+  background: #5b5b5b;
+}
+.st.arrived {
+  color: var(--body);
+}
+.st.arrived .d {
+  background: #2f2f2f;
+}
+.st.accepted {
+  color: var(--ink);
+  font-weight: 500;
+}
+.st.accepted .d {
+  background: var(--ink);
+}
+
+.mno {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 10.5px;
+  color: var(--ink);
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+.mdrv {
+  font-size: 9.5px;
+  color: var(--mute);
+  margin-top: 2px;
+  letter-spacing: -0.01em;
+}
+
+/* Итоговая строка таблицы */
+table.dt tfoot td {
+  font-size: 11px;
+  padding: 8px 7px;
+  border-top: 1.5px solid var(--ink);
+  font-weight: 600;
+}
+table.dt tfoot td.r {
+  text-align: right;
+}
+table.dt tfoot .lead {
+  letter-spacing: -0.02em;
+}
+
+/* Подвал листа */
+.sheet-foot {
+  margin-top: auto;
+  padding-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  border-top: 1px solid var(--hairline);
+  font-size: 10px;
+  color: var(--mute);
+}
+.sheet-foot .sf-tot {
+  font-size: 11px;
+  color: var(--ink);
+}
+.sheet-foot .sf-tot b {
+  font-weight: 600;
+}
+.sheet-foot .sf-tot .num {
+  font-weight: 600;
+}
+.sheet-foot .sf-page {
+  font-family: var(--font-geist-mono), monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ================= PRINT ================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .screen-only {
+    display: none !important;
+  }
+  .print-wrap {
+    min-height: 0;
+    background: #fff;
+    padding: 0;
+    display: block;
+  }
+  .sheet {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    box-shadow: none;
+  }
+}

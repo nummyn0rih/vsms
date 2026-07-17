@@ -57,6 +57,8 @@ type FeedToolbarProps = {
   onToggleHidePlanned?: () => void;
   showReset?: boolean;
   onReset?: () => void;
+  // Ссылка «Печать» → print-роут (собирается в ShipmentsFeed с текущей неделей+фильтрами).
+  printSlot?: ReactNode;
 };
 
 // Тулбар ленты. Row 1 — создание/неделя/вид (Часть A). Row 2 — поиск/фильтры/
@@ -89,6 +91,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       onToggleHidePlanned,
       showReset,
       onReset,
+      printSlot,
     },
     ref,
   ) {
@@ -214,6 +217,8 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             <span className={`switch${hidePlanned ? "" : " off"}`} />
             Скрыть плановые
           </label>
+
+          {printSlot}
 
           <div className="tip-wrap">
             <button type="button" className="btn btn-sm is-disabled" aria-disabled>

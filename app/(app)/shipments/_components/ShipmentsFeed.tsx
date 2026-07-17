@@ -495,6 +495,36 @@ export function ShipmentsFeed({
   const activeWeek = navWeeks[activeIndex];
   const activeRange = activeWeek ? formatWeekRange(activeWeek).range : "";
 
+  // «Печать» → print-роут с текущей неделей + активными фильтрами (лента держит их в
+  // React-state, не в URL, поэтому сериализуем сюда). Парсер — print/shipments/page.
+  const printHref = (() => {
+    const p = new URLSearchParams();
+    if (activeWeek) p.set("week", formatWeekParam(activeWeek));
+    if (supplierSel.size) p.set("sup", [...supplierSel].join(","));
+    if (cultureSel.size) p.set("cult", [...cultureSel].join(","));
+    if (statusSel.size) p.set("st", [...statusSel].join(","));
+    if (hidePlanned) p.set("hp", "1");
+    if (search.trim()) p.set("q", search.trim());
+    return `/print/shipments?${p.toString()}`;
+  })();
+  const printSlot = (
+    <a href={printHref} target="_blank" rel="noopener" className="btn btn-sm">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </svg>
+      Печать
+    </a>
+  );
+
   const toolbar = (
     <FeedToolbar
       ref={toolbarRef}
@@ -523,6 +553,7 @@ export function ShipmentsFeed({
       nextDisabled={activeIndex >= navWeeks.length - 1}
       todayActive={activeKey !== currentKey}
       showFilters
+      printSlot={printSlot}
       {...viewProps}
       {...filterProps}
     />

@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="omelette-owns-print" content="1" />
+<title>VSMS · Печатные формы рабочих видов (v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --rule: #cfcfcf;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --desk: #e6e6e9;
+
+    /* culture chips — print set (муже́е неоновый, из summary/plan) */
+    --ct-tomato: #d4322c;
+    --ct-cucumber: #1d8e75;
+    --ct-pepper: #e8830c;
+    --ct-squash: #7928ca;
+
+    /* analytics-only palette (единственный вид с графикой) */
+    --cult-tomato: #e5484d;
+    --cult-cucumber: #30a46c;
+    --cult-pepper: #f76b15;
+    --cult-squash: #8e4ec6;
+    --graf-1: #2f2f2f;
+    --graf-2: #bdbdbd;
+    --grid: #ebebeb;
+    --track: #f0f0f0;
+    --brak: #cf9a3e;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Geist", Inter, system-ui, -apple-system, sans-serif; background: var(--desk); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; letter-spacing: -0.01em; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- screen scaffolding ---------------- */
+  .board { max-width: 900px; margin: 0 auto; padding: 44px 24px 120px; }
+  .intro { margin-bottom: 40px; }
+  .intro .eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .intro h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .intro p { margin: 12px 0 0; color: var(--body); font-size: 14.5px; line-height: 22px; max-width: 720px; letter-spacing: -0.01em; }
+  .intro p b { color: var(--ink); font-weight: 600; }
+  .intro .rule-note { margin-top: 16px; display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 9px; padding: 11px 13px; line-height: 18px; }
+  .intro .rule-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--mute); }
+  .intro .rule-note b { color: var(--ink); }
+
+  .sheet-block { margin-bottom: 46px; }
+  .sheet-cap { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 12px; }
+  .sheet-cap .sc-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-bottom: 2px; }
+  .sheet-cap .sc-txt { min-width: 0; }
+  .sheet-cap .sc-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .sheet-cap .sc-desc { font-size: 12.5px; color: var(--mute); letter-spacing: -0.01em; margin-top: 2px; line-height: 17px; }
+  .sheet-cap .spacer { flex: 1; }
+  .print-btn { flex-shrink: 0; height: 34px; padding: 0 13px; border-radius: 7px; border: 1px solid var(--ink); background: var(--ink); color: #fff; font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; box-shadow: 0 1px 2px #0000001f; }
+  .print-btn:hover { background: #000; }
+  .print-btn svg { width: 14px; height: 14px; }
+
+  /* ---------------- the A4 sheet ---------------- */
+  .sheet { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm 15mm 14mm; background: var(--canvas); color: var(--ink); box-shadow: 0 1px 2px #00000012, 0 12px 30px -10px #00000026; display: flex; flex-direction: column; }
+
+  /* document header (common to all 5) */
+  .doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; border-bottom: 1.5px solid var(--ink); padding-bottom: 9px; }
+  .dh-l { min-width: 0; }
+  .dh-eyebrow { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mute); margin: 0 0 5px; }
+  .dh-title { font-size: 20px; font-weight: 600; letter-spacing: -0.04em; margin: 0; line-height: 1.05; }
+  .dh-sub { font-size: 12px; color: var(--body); margin-top: 3px; letter-spacing: -0.01em; }
+  .dh-r { text-align: right; flex-shrink: 0; font-family: "Geist Mono", monospace; font-size: 10.5px; line-height: 16px; color: var(--body); font-variant-numeric: tabular-nums; }
+  .dh-r .lbl { color: var(--mute); }
+  .dh-r .season { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 500; }
+  .dh-r .season .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ct-cucumber); }
+  .dh-filters { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); letter-spacing: 0; margin-top: 7px; padding-bottom: 2px; }
+  .dh-filters b { color: var(--body); font-weight: 500; }
+
+  /* generic compact document table */
+  table.dt { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  table.dt thead th { font-family: "Geist Mono", monospace; font-size: 8.5px; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); text-align: left; padding: 0 7px 6px; border-bottom: 1px solid var(--ink); white-space: nowrap; vertical-align: bottom; }
+  table.dt thead th.r { text-align: right; }
+  table.dt thead th.c { text-align: center; }
+  table.dt tbody td { font-size: 11px; padding: 5px 7px; border-bottom: 1px solid var(--hairline); vertical-align: top; letter-spacing: -0.01em; line-height: 15px; }
+  table.dt tbody td.r { text-align: right; }
+  table.dt tbody td.c { text-align: center; }
+  .num { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  .dim { color: var(--mute); }
+  .chip { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; position: relative; top: 0px; flex-shrink: 0; }
+  .cultname { white-space: nowrap; font-weight: 500; }
+  .cultname .sub { color: var(--mute); font-weight: 400; }
+
+  /* day / group subheader rows */
+  tr.grp td { background: var(--canvas-soft); border-bottom: 1px solid var(--hairline); padding: 5px 7px; }
+  tr.grp .g-title { font-size: 11px; font-weight: 600; letter-spacing: -0.02em; }
+  tr.grp .g-title .gd { color: var(--mute); font-weight: 400; }
+  tr.grp .g-meta { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); font-variant-numeric: tabular-nums; }
+  tr.subtot td { border-bottom: 1px solid var(--hairline); background: #fff; }
+  tr.subtot td, tr.subtot .num { font-size: 10px; color: var(--body); font-weight: 500; }
+  tr.empty td { color: var(--mute); font-style: italic; font-size: 10.5px; padding: 6px 7px; background: var(--canvas-soft); border-bottom: 1px solid var(--hairline); }
+
+  /* status word */
+  .st { font-size: 10.5px; white-space: nowrap; }
+  .st .d { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; vertical-align: middle; background: var(--hairline-strong); }
+  .st.planned { color: var(--mute); } .st.planned .d { background: #b3b3b3; }
+  .st.sent { color: var(--body); } .st.sent .d { background: #5b5b5b; }
+  .st.arrived { color: var(--body); } .st.arrived .d { background: #2f2f2f; }
+  .st.accepted { color: var(--ink); font-weight: 500; } .st.accepted .d { background: var(--ink); }
+
+  .mno { font-family: "Geist Mono", monospace; font-size: 10.5px; color: var(--ink); font-weight: 500; letter-spacing: 0; white-space: nowrap; }
+  .mdrv { font-size: 9.5px; color: var(--mute); margin-top: 2px; letter-spacing: -0.01em; }
+
+  /* total footer row */
+  table.dt tfoot td { font-size: 11px; padding: 8px 7px; border-top: 1.5px solid var(--ink); font-weight: 600; }
+  table.dt tfoot td.r { text-align: right; }
+  table.dt tfoot .lead { letter-spacing: -0.02em; }
+
+  /* sheet footer note */
+  .sheet-foot { margin-top: auto; padding-top: 10px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; border-top: 1px solid var(--hairline); font-size: 10px; color: var(--mute); }
+  .sheet-foot .sf-tot { font-size: 11px; color: var(--ink); }
+  .sheet-foot .sf-tot b { font-weight: 600; }
+  .sheet-foot .sf-tot .num { font-weight: 600; }
+  .sheet-foot .sf-page { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* delta chips (Сводка / План) — тонкие, без заливки */
+  .delta { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; font-size: 10.5px; }
+  .delta.pos { color: var(--ink); }
+  .delta.neg { color: var(--mute); }
+  .pct { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; font-weight: 500; }
+  td.maxcell .num { font-weight: 600; color: var(--ink); }
+  .wk-badge { font-family: "Geist Mono", monospace; font-size: 8.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); border: 1px solid var(--hairline-strong); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+  .wkspan { color: var(--mute); font-size: 10px; font-style: italic; }
+
+  /* ================= analytics sheet (with charts) ================= */
+  .an-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 14px; }
+  .an-kpi { border: 1px solid var(--hairline); border-radius: 7px; padding: 9px 10px; }
+  .an-kpi .k { font-family: "Geist Mono", monospace; font-size: 8px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); line-height: 12px; }
+  .an-kpi .v { font-size: 20px; font-weight: 600; letter-spacing: -0.04em; margin-top: 5px; display: flex; align-items: baseline; gap: 3px; line-height: 1; }
+  .an-kpi .v .u { font-size: 10px; font-weight: 400; color: var(--mute); }
+  .an-kpi .sub { font-size: 9px; color: var(--mute); margin-top: 5px; letter-spacing: -0.01em; line-height: 12px; }
+  .an-kpi .sub b { color: var(--body); font-weight: 500; }
+
+  .an-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .an-card { border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .an-card-head { padding: 8px 11px 7px; border-bottom: 1px solid var(--hairline); }
+  .an-card-title { font-size: 11.5px; font-weight: 600; letter-spacing: -0.025em; }
+  .an-card-unit { font-family: "Geist Mono", monospace; font-size: 8.5px; color: var(--mute); margin-top: 2px; }
+  .an-card-body { padding: 10px 12px 11px; flex: 1; }
+
+  .cbars { display: flex; flex-direction: column; gap: 11px; }
+  .cbar { display: grid; grid-template-columns: 96px 1fr 34px; align-items: center; gap: 10px; }
+  .cbar-name { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 500; letter-spacing: -0.02em; }
+  .cbar-name .cq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .cbar-track { position: relative; height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .cbar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .cbar-cap { font-family: "Geist Mono", monospace; font-size: 9px; color: var(--mute); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .cbar-cap b { color: var(--body); font-weight: 500; }
+  .cbar-pct { font-size: 12px; font-weight: 600; letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .chart-svg text { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+  .ax-lbl { font-size: 10.5px; fill: var(--mute); }
+  .ax-lbl.x { font-family: "Geist", sans-serif; letter-spacing: -0.02em; }
+  .val-lbl { font-size: 10.5px; fill: var(--body); font-weight: 500; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--hairline-strong); stroke-width: 1; opacity: .55; }
+  .legend { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 9px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--body); letter-spacing: -0.01em; }
+  .legend .sw { width: 16px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ---------------- decisions ---------------- */
+  .decisions { max-width: 900px; margin: 8px auto 0; padding: 0 24px; }
+  .dec-inner { border-top: 1px solid var(--hairline-strong); padding-top: 26px; }
+  .dec-title { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .dec-sub { font-size: 13px; color: var(--mute); margin: 0 0 20px; letter-spacing: -0.01em; }
+  .dec { border-left: 2px solid var(--hairline); padding: 0 0 0 16px; margin-bottom: 18px; }
+  .dec .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+  .dec .a { font-size: 13.5px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+  .dec .tag.open { color: var(--warning-deep, #ab570a); border-color: #cf9a3e; background: #f6ecd6; }
+  .endnote { max-width: 900px; margin: 34px auto 0; padding: 22px 24px 0; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+  .endnote .mono { color: var(--body); }
+
+  /* ================= PRINT ================= */
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { background: #fff; }
+    .screen-only { display: none !important; }
+    .board { max-width: none; margin: 0; padding: 0; }
+    .sheet-block { margin: 0; }
+    .sheet { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .sheet:last-of-type { page-break-after: auto; break-after: auto; }
+    /* per-sheet print isolation */
+    body.print-isolate .sheet-block:not(.printing) { display: none !important; }
+    body.print-isolate .printing .sheet { page-break-after: auto; break-after: auto; }
+  }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#e6e6e9">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#e6e6e9"/>
+    <rect x="340" y="90" width="520" height="640" rx="6" fill="#ffffff" stroke="#cfcfcf" stroke-width="3"/>
+    <rect x="392" y="150" width="200" height="22" rx="4" fill="#171717"/>
+    <rect x="392" y="196" width="416" height="3" fill="#171717"/>
+    <rect x="392" y="230" width="416" height="2" fill="#ebebeb"/>
+    <rect x="392" y="270" width="416" height="2" fill="#ebebeb"/>
+    <rect x="392" y="310" width="416" height="2" fill="#ebebeb"/>
+    <rect x="392" y="350" width="416" height="2" fill="#ebebeb"/>
+    <rect x="392" y="390" width="416" height="2" fill="#ebebeb"/>
+    <circle cx="404" cy="250" r="6" fill="#d4322c"/>
+    <circle cx="404" cy="290" r="6" fill="#1d8e75"/>
+    <circle cx="404" cy="330" r="6" fill="#e8830c"/>
+    <circle cx="404" cy="370" r="6" fill="#7928ca"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="board">
+
+  <!-- ================= INTRO (screen only) ================= -->
+  <header class="intro screen-only">
+    <p class="eyebrow">VSMS · Печатные формы · v1</p>
+    <h1>Печатные формы рабочих видов</h1>
+    <p>Пять <b>A4-листов</b> для распечатки / «Сохранить как PDF»: Отгрузки, Сводка, План недели, Приёмка — компактными таблицами (чёрным по белому, без графики); <b>Аналитика — с графиками</b> (KPI + 4 графика, подогнаны под лист). Отдельные print-представления: чистые таблицы, а не «@media print» поверх интерактивных экранов. Каждый лист печатается своим контекстом (сезон / неделя / фильтры). Токены наследуются из системы — Geist + Geist&nbsp;Mono, <span class="mono">tabular-nums</span>, hairline-рамки.</p>
+    <div class="rule-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      <span>Кнопка <b>«Печать»</b> на каждом листе открывает браузерную печать <b>только этого листа</b> (Ctrl/⌘+P → «Сохранить как PDF»). Экранный хром (кнопки, подписи, блок решений) в печать не попадает.</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- SHEET 1 · ОТГРУЗКИ                                            -->
+  <!-- ============================================================ -->
+  <section class="sheet-block" id="sb-shipments">
+    <div class="sheet-cap screen-only">
+      <span class="sc-num">01</span>
+      <div class="sc-txt">
+        <div class="sc-name">Отгрузки (Лента) — за неделю</div>
+        <div class="sc-desc">Группировка по дням недели, подытоги дня + итог недели (машин, тонн). Статус — словом, без плашек. Тара — опц. колонкой.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="print-btn" onclick="printSheet('sb-shipments')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать</button>
+    </div>
+
+    <article class="sheet" data-screen-label="Лист 01 · Отгрузки">
+      <div class="doc-head">
+        <div class="dh-l">
+          <p class="dh-eyebrow">VSMS · Печатная форма</p>
+          <h2 class="dh-title">Отгрузки — неделя</h2>
+          <div class="dh-sub">Овощное сырьё на завод · лента отгрузок</div>
+        </div>
+        <div class="dh-r">
+          <div class="season"><span class="dot"></span>Сезон 2026</div>
+          <div><span class="lbl">Неделя</span> W24 · 8–13 июня 2026</div>
+          <div><span class="lbl">Дата печати</span> 16 июля 2026</div>
+        </div>
+      </div>
+      <div class="dh-filters">Фильтры: поставщик — <b>все</b> · сырьё — <b>все</b> · статус — <b>все</b></div>
+
+      <table class="dt">
+        <colgroup><col style="width:20%"/><col style="width:13%"/><col style="width:18%"/><col style="width:15%"/><col style="width:10%"/><col style="width:8%"/><col style="width:8%"/><col style="width:8%"/></colgroup>
+        <thead>
+          <tr>
+            <th>№ машины · перевозчик</th>
+            <th>Статус</th>
+            <th>Культура</th>
+            <th>Поставщик</th>
+            <th>Тара</th>
+            <th class="r">План, кг</th>
+            <th class="r">Факт, кг</th>
+            <th class="r">Принято, кг</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Понедельник -->
+          <tr class="grp"><td colspan="5"><span class="g-title"><span class="gd">Понедельник,</span> 8 июня</span></td><td class="r g-meta">3 200</td><td class="r g-meta">3 240</td><td class="r g-meta">3 130</td></tr>
+          <tr>
+            <td rowspan="2"><span class="mno">М-2406-01</span><div class="mdrv">Петренко А. В. · Юг-Логистик</div></td>
+            <td rowspan="2"><span class="st accepted"><span class="d"></span>Принята</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td>ИП Ковальчук</td>
+            <td class="num dim">ящик · 62</td>
+            <td class="r num">1 200</td><td class="r num">1 240</td><td class="r num">1 190</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец сладкий</span></td>
+            <td>ООО «Юг-Агро»</td>
+            <td class="num dim">бочка · 8</td>
+            <td class="r num">2 000</td><td class="r num">2 000</td><td class="r num">1 940</td>
+          </tr>
+
+          <!-- Вторник -->
+          <tr class="grp"><td colspan="8"><span class="g-title"><span class="gd">Вторник,</span> 9 июня</span></td></tr>
+          <tr class="empty"><td colspan="8">нет отгрузок</td></tr>
+
+          <!-- Среда -->
+          <tr class="grp"><td colspan="5"><span class="g-title"><span class="gd">Среда,</span> 10 июня</span></td><td class="r g-meta">8 800</td><td class="r g-meta">7 300</td><td class="r g-meta">—</td></tr>
+          <tr>
+            <td rowspan="3"><span class="mno">М-2410-02</span><div class="mdrv">Сидоров И. Н. · АвтоТранс</div></td>
+            <td rowspan="3"><span class="st arrived"><span class="d"></span>Прибыла</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="num dim">ящик · 155</td>
+            <td class="r num">3 000</td><td class="r num">3 100</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="num dim">ящик · 150</td>
+            <td class="r num">2 700</td><td class="r num">2 700</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец сладкий</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="num dim">бочка · 6</td>
+            <td class="r num">1 500</td><td class="r num">1 500</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="mno">М-2410-03</span><div class="mdrv">водитель не назначен</div></td>
+            <td><span class="st sent"><span class="d"></span>Отправлена</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-squash)"></span>Патиссоны</span></td>
+            <td>ООО «Зелёный Дол»</td>
+            <td class="num dim">бочка · 8</td>
+            <td class="r num">1 600</td><td class="r num dim">—</td><td class="r num dim">—</td>
+          </tr>
+
+          <!-- Пятница -->
+          <tr class="grp"><td colspan="5"><span class="g-title"><span class="gd">Пятница,</span> 12 июня</span></td><td class="r g-meta">13 250</td><td class="r g-meta">6 350</td><td class="r g-meta">—</td></tr>
+          <tr>
+            <td rowspan="2"><span class="mno">М-2412-04</span><div class="mdrv">Гнатюк В. П. · Магистраль</div></td>
+            <td rowspan="2"><span class="st sent"><span class="d"></span>Отправлена</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td>ИП Мельник</td>
+            <td class="num dim">ящик · 161</td>
+            <td class="r num">2 900</td><td class="r num dim">—</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td>ИП Мельник</td>
+            <td class="num dim">ящик · 90</td>
+            <td class="r num">1 800</td><td class="r num dim">—</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="mno">М-2412-05</span><div class="mdrv">Петренко А. В. · Юг-Логистик</div></td>
+            <td><span class="st planned"><span class="d"></span>Плановая</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец сладкий</span></td>
+            <td>ООО «Юг-Агро»</td>
+            <td class="num dim">бочка · ≈9</td>
+            <td class="r num">2 250</td><td class="r num dim">—</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td rowspan="3"><span class="mno">М-2412-06</span><div class="mdrv">Кравец О. И. · АвтоТранс</div></td>
+            <td rowspan="3"><span class="st arrived"><span class="d"></span>Прибыла</span></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td>ИП Гриценко</td>
+            <td class="num dim">ящик · 106</td>
+            <td class="r num">1 900</td><td class="r num">1 950</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td>ИП Гриценко</td>
+            <td class="num dim">ящик · 118</td>
+            <td class="r num">2 400</td><td class="r num">2 350</td><td class="r num dim">—</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-squash)"></span>Патиссоны</span></td>
+            <td>ИП Гриценко</td>
+            <td class="num dim">бочка · 10</td>
+            <td class="r num">2 000</td><td class="r num">2 050</td><td class="r num dim">—</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" class="lead">Итого недели · 6 машин · 13 позиций</td>
+            <td class="r num">25 250</td>
+            <td class="r num">25 440</td>
+            <td class="r num">3 130</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="sheet-foot">
+        <div class="sf-tot"><b>Итого:</b> <span class="num">6</span> машин · эффективный вес <span class="num">25,44 т</span> · принято <span class="num">3,13 т</span></div>
+        <div class="sf-page">Отгрузки · W24 · лист 1/1</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SHEET 2 · СВОДКА                                              -->
+  <!-- ============================================================ -->
+  <section class="sheet-block" id="sb-summary">
+    <div class="sheet-cap screen-only">
+      <span class="sc-num">02</span>
+      <div class="sc-txt">
+        <div class="sc-name">Сводка — неделя</div>
+        <div class="sc-desc">Культура × рабочий день (эфф. вес, т) + Итог: План · Факт · % · Δ. Без heatmap-заливки — только числа; максимум дня по строке выделен жирным.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="print-btn" onclick="printSheet('sb-summary')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать</button>
+    </div>
+
+    <article class="sheet" data-screen-label="Лист 02 · Сводка">
+      <div class="doc-head">
+        <div class="dh-l">
+          <p class="dh-eyebrow">VSMS · Печатная форма</p>
+          <h2 class="dh-title">Сводка — неделя</h2>
+          <div class="dh-sub">Эффективный вес по культурам и дням · факт перевески, где есть, иначе плановый</div>
+        </div>
+        <div class="dh-r">
+          <div class="season"><span class="dot"></span>Сезон 2026</div>
+          <div><span class="lbl">Неделя</span> W27 · 29 июн – 4 июл 2026</div>
+          <div><span class="lbl">Дата печати</span> 16 июля 2026</div>
+        </div>
+      </div>
+      <div class="dh-filters">Фильтры: сырьё — <b>все</b> · единица — <b>тонны (эффективный вес)</b></div>
+
+      <table class="dt">
+        <colgroup><col style="width:21%"/><col/><col/><col/><col/><col/><col/><col style="width:9%"/><col style="width:9%"/><col style="width:8%"/><col style="width:8%"/></colgroup>
+        <thead>
+          <tr>
+            <th>Культура</th>
+            <th class="r">Пн<br>29.06</th>
+            <th class="r">Вт<br>30.06</th>
+            <th class="r">Ср<br>01.07</th>
+            <th class="r">Чт<br>02.07</th>
+            <th class="r">Пт<br>03.07</th>
+            <th class="r">Сб<br>04.07</th>
+            <th class="r">План</th>
+            <th class="r">Факт</th>
+            <th class="r">%</th>
+            <th class="r">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td class="r num">42,0</td><td class="r num">38,0</td><td class="r num maxcell">51,0</td><td class="r num">27,0</td><td class="r num">30,0</td><td class="r num dim">—</td>
+            <td class="r num dim">210,0</td><td class="r num">188,0</td><td class="r pct">90%</td><td class="r delta neg">−22,0</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td class="r num">18,0</td><td class="r num">24,0</td><td class="r num">22,0</td><td class="r num maxcell">28,0</td><td class="r num">26,0</td><td class="r num">14,0</td>
+            <td class="r num dim">120,0</td><td class="r num">132,0</td><td class="r pct">110%</td><td class="r delta pos">+12,0</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец сладкий</span></td>
+            <td class="r num dim">—</td><td class="r num">9,0</td><td class="r num maxcell">12,0</td><td class="r num">8,0</td><td class="r num">7,0</td><td class="r num">5,0</td>
+            <td class="r num dim">60,0</td><td class="r num">41,0</td><td class="r pct">68%</td><td class="r delta neg">−19,0</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-squash)"></span>Патиссоны</span><span class="wk-badge">неделя</span></td>
+            <td class="c wkspan" colspan="6">цель задана на неделю · факт 64,0 т за неделю</td>
+            <td class="r num dim">80,0</td><td class="r num">64,0</td><td class="r pct">80%</td><td class="r delta neg">−16,0</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="lead">Итого по дням <span class="dim" style="font-weight:400">· day-mode</span></td>
+            <td class="r num">60,0</td><td class="r num">71,0</td><td class="r num">85,0</td><td class="r num">63,0</td><td class="r num">63,0</td><td class="r num">19,0</td>
+            <td class="r num">470,0</td><td class="r num">425,0</td><td class="r pct">90%</td><td class="r delta neg">−45,0</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="sheet-foot">
+        <div class="sf-tot"><b>Итого недели:</b> факт <span class="num">425,0 т</span> из плана <span class="num">470,0 т</span> · выполнение <span class="num">90%</span> · недобор <span class="num">45,0 т</span></div>
+        <div class="sf-page">Сводка · W27 · лист 1/1</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SHEET 3 · ПЛАН НЕДЕЛИ                                         -->
+  <!-- ============================================================ -->
+  <section class="sheet-block" id="sb-plan">
+    <div class="sheet-cap screen-only">
+      <span class="sc-num">03</span>
+      <div class="sc-txt">
+        <div class="sc-name">План недели</div>
+        <div class="sc-desc">Культура × день: факт / цель (т) по дням + недельные Цель · Факт · % · Δ. week-mode культуры — строкой «цель на неделю». Без прогресс-баров.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="print-btn" onclick="printSheet('sb-plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать</button>
+    </div>
+
+    <article class="sheet" data-screen-label="Лист 03 · План недели">
+      <div class="doc-head">
+        <div class="dh-l">
+          <p class="dh-eyebrow">VSMS · Печатная форма</p>
+          <h2 class="dh-title">План недели</h2>
+          <div class="dh-sub">Недельные цели по культурам · в ячейке дня «факт / цель», т</div>
+        </div>
+        <div class="dh-r">
+          <div class="season"><span class="dot"></span>Сезон 2026</div>
+          <div><span class="lbl">Неделя</span> W24 · 8–13 июня 2026</div>
+          <div><span class="lbl">Дата печати</span> 16 июля 2026</div>
+        </div>
+      </div>
+      <div class="dh-filters">Рабочие дни: <b>Пн–Сб</b> · прогресс = Σ эффективного веса / цель (факт перевески, иначе план)</div>
+
+      <table class="dt">
+        <colgroup><col style="width:21%"/><col/><col/><col/><col/><col/><col/><col style="width:8%"/><col style="width:8%"/><col style="width:7%"/><col style="width:8%"/></colgroup>
+        <thead>
+          <tr>
+            <th>Культура <span style="text-transform:none;letter-spacing:-0.01em">(факт / цель)</span></th>
+            <th class="r">Пн<br>8.06</th>
+            <th class="r">Вт<br>9.06</th>
+            <th class="r">Ср<br>10.06</th>
+            <th class="r">Чт<br>11.06</th>
+            <th class="r">Пт<br>12.06</th>
+            <th class="r">Сб<br>13.06</th>
+            <th class="r">Цель</th>
+            <th class="r">Факт</th>
+            <th class="r">%</th>
+            <th class="r">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td class="r num">1,4 <span class="dim">/ 1,5</span></td>
+            <td class="r num">1,4 <span class="dim">/ 1,5</span></td>
+            <td class="r num">2,0 <span class="dim">/ 2,0</span></td>
+            <td class="r num">1,5 <span class="dim">/ 1,5</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,5</span></td>
+            <td class="r num dim">0 / 1,0</td>
+            <td class="r num dim">9,0</td><td class="r num">7,3</td><td class="r pct">81%</td><td class="r delta neg">−1,7</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,0</span></td>
+            <td class="r num">0,5 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,5 <span class="dim">/ 1,5</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,0</span></td>
+            <td class="r num">0,5 <span class="dim">/ 0,5</span></td>
+            <td class="r num dim">6,0</td><td class="r num">5,5</td><td class="r pct">92%</td><td class="r delta neg">−0,5</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец сладкий</span></td>
+            <td class="r num">1,2 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,0 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,5 <span class="dim">/ 1,0</span></td>
+            <td class="r num">1,5 <span class="dim">/ 1,5</span></td>
+            <td class="r num">1,5 <span class="dim">/ 1,0</span></td>
+            <td class="r num dim">6,5</td><td class="r num">7,7</td><td class="r pct">118%</td><td class="r delta pos">+1,2</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-squash)"></span>Патиссоны</span><span class="wk-badge">неделя</span></td>
+            <td class="c wkspan" colspan="6">цель задана на неделю одним итогом</td>
+            <td class="r num dim">4,0</td><td class="r num">3,5</td><td class="r pct">88%</td><td class="r delta neg">−0,5</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="lead">Итого по дням <span class="dim" style="font-weight:400">· day-mode</span></td>
+            <td class="r num">3,6 <span class="dim" style="font-weight:400">/ 3,5</span></td>
+            <td class="r num">3,4 <span class="dim" style="font-weight:400">/ 3,5</span></td>
+            <td class="r num">3,5 <span class="dim" style="font-weight:400">/ 4,0</span></td>
+            <td class="r num">4,5 <span class="dim" style="font-weight:400">/ 4,0</span></td>
+            <td class="r num">3,5 <span class="dim" style="font-weight:400">/ 4,0</span></td>
+            <td class="r num">2,0 <span class="dim" style="font-weight:400">/ 2,5</span></td>
+            <td class="r num">25,5</td><td class="r num">24,0</td><td class="r pct">94%</td><td class="r delta neg">−1,5</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="sheet-foot">
+        <div class="sf-tot"><b>Итого недели:</b> набрано <span class="num">24,0 т</span> из цели <span class="num">25,5 т</span> · выполнение <span class="num">94%</span> · недобор <span class="num">1,5 т</span></div>
+        <div class="sf-page">План · W24 · лист 1/1</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SHEET 4 · ПРИЁМКА                                             -->
+  <!-- ============================================================ -->
+  <section class="sheet-block" id="sb-acceptance">
+    <div class="sheet-cap screen-only">
+      <span class="sc-num">04</span>
+      <div class="sc-txt">
+        <div class="sc-name">Приёмка</div>
+        <div class="sc-desc">Позиции: № машины · Культура · Поставщик · Факт · Брак % · Принято · № акта. Сгруппировано по статусу (Прибыли / На приёмке / Принято). Итоги: принято, средний брак.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="print-btn" onclick="printSheet('sb-acceptance')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать</button>
+    </div>
+
+    <article class="sheet" data-screen-label="Лист 04 · Приёмка">
+      <div class="doc-head">
+        <div class="dh-l">
+          <p class="dh-eyebrow">VSMS · Печатная форма</p>
+          <h2 class="dh-title">Приёмка</h2>
+          <div class="dh-sub">Позиционная приёмка машин · принято = факт − брак</div>
+        </div>
+        <div class="dh-r">
+          <div class="season"><span class="dot"></span>Сезон 2026</div>
+          <div><span class="lbl">Период</span> сезон 2026 (весь)</div>
+          <div><span class="lbl">Дата печати</span> 16 июля 2026</div>
+        </div>
+      </div>
+      <div class="dh-filters">Фильтры: сырьё — <b>все</b> · период — <b>сезон</b> · группировка — <b>по статусу</b></div>
+
+      <table class="dt">
+        <colgroup><col style="width:19%"/><col style="width:20%"/><col style="width:17%"/><col style="width:11%"/><col style="width:8%"/><col style="width:11%"/><col style="width:14%"/></colgroup>
+        <thead>
+          <tr>
+            <th>№ машины · перевозчик</th>
+            <th>Культура</th>
+            <th>Поставщик</th>
+            <th class="r">Факт, кг</th>
+            <th class="r">Брак %</th>
+            <th class="r">Принято, кг</th>
+            <th>№ акта</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- ЗОНА · ПРИБЫЛИ (ожидают приёмки) -->
+          <tr class="grp"><td colspan="6"><span class="g-title">Прибыли <span class="gd">· ожидают приёмки</span></span></td><td class="g-meta">требуют акта</td></tr>
+          <tr>
+            <td><span class="mno">М-2410-02</span><div class="mdrv">Сидоров И. Н. · АвтоТранс</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="r num">3 100</td><td class="r num dim">—</td><td class="r num dim">—</td><td class="dim">ожидает</td>
+          </tr>
+          <tr>
+            <td><span class="mno">М-2412-06</span><div class="mdrv">Кравец О. И. · АвтоТранс</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы</span></td>
+            <td>ИП Гриценко</td>
+            <td class="r num">1 950</td><td class="r num dim">—</td><td class="r num dim">—</td><td class="dim">ожидает</td>
+          </tr>
+
+          <!-- ЗОНА · НА ПРИЁМКЕ -->
+          <tr class="grp"><td colspan="6"><span class="g-title">На приёмке <span class="gd">· часть позиций принята</span></span></td><td class="g-meta">в работе</td></tr>
+          <tr>
+            <td rowspan="2"><span class="mno">М-2410-07</span><div class="mdrv">Данилов П. К. · АвтоТранс</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы · корнишон</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="r num">2 700</td><td class="r num">4</td><td class="r num">2 592</td><td class="mono">П-0610-025</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты · стандарт</span></td>
+            <td>КФХ Бондаренко</td>
+            <td class="r num">3 100</td><td class="r num dim">—</td><td class="r num dim">—</td><td class="dim">ожидает</td>
+          </tr>
+
+          <!-- ЗОНА · ПРИНЯТО -->
+          <tr class="grp"><td colspan="6"><span class="g-title">Принято <span class="gd">· акт оформлен</span></span></td><td class="g-meta">завершено</td></tr>
+          <tr>
+            <td rowspan="2"><span class="mno">М-0608-01</span><div class="mdrv">Петренко А. В. · Юг-Логистик</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-tomato)"></span>Томаты · стандарт</span></td>
+            <td>ИП Ковальчук</td>
+            <td class="r num">13 945</td><td class="r num">4</td><td class="r num">13 387</td><td class="mono">П-0608-014</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец · маринад</span></td>
+            <td>ООО «Юг-Агро»</td>
+            <td class="r num">2 000</td><td class="r num">3</td><td class="r num">1 940</td><td class="mono">П-0608-015</td>
+          </tr>
+          <tr>
+            <td rowspan="2"><span class="mno">М-0610-02</span><div class="mdrv">Коваль Р. С. · Юг-Логистик</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-cucumber)"></span>Огурцы · корнишон</span></td>
+            <td>ИП Ковальчук</td>
+            <td class="r num">11 200</td><td class="r num">5</td><td class="r num">9 072</td><td class="mono">П-0610-023</td>
+          </tr>
+          <tr>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-squash)"></span>Патиссоны · маринад</span></td>
+            <td>ООО «Зелёный Дол»</td>
+            <td class="r num">8 600</td><td class="r num">2</td><td class="r num">8 428</td><td class="mono">П-0610-024</td>
+          </tr>
+          <tr>
+            <td><span class="mno">М-0612-03</span><div class="mdrv">Гнатюк В. П. · Магистраль</div></td>
+            <td><span class="cultname"><span class="chip" style="background:var(--ct-pepper)"></span>Перец · маринад</span></td>
+            <td>ИП Мельник</td>
+            <td class="r num">2 730</td><td class="r num">3</td><td class="r num">2 648</td><td class="mono">П-0612-007</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="lead">Итого принято · 6 актов</td>
+            <td class="r num">41 175</td>
+            <td class="r num">3,7</td>
+            <td class="r num">38 067</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="sheet-foot">
+        <div class="sf-tot"><b>Итого:</b> принято <span class="num">38 067 кг</span> (≈ <span class="num">38,1 т</span>) · средний брак <span class="num">3,7%</span> (взвеш. по факту) · актов <span class="num">6</span></div>
+        <div class="sf-page">Приёмка · сезон 2026 · лист 1/1</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- SHEET 5 · АНАЛИТИКА (С ГРАФИКАМИ)                             -->
+  <!-- ============================================================ -->
+  <section class="sheet-block" id="sb-analytics">
+    <div class="sheet-cap screen-only">
+      <span class="sc-num">05</span>
+      <div class="sc-txt">
+        <div class="sc-name">Аналитика сезона — с графиками</div>
+        <div class="sc-desc">Print-версия дашборда: KPI-полоса + 4 графика (выполнение, динамика, брак, рейсы ТК), подогнаны под A4. Единственный вид с графикой; серии в цвете.</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="print-btn" onclick="printSheet('sb-analytics')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать</button>
+    </div>
+
+    <article class="sheet" data-screen-label="Лист 05 · Аналитика (с графиками)">
+      <div class="doc-head">
+        <div class="dh-l">
+          <p class="dh-eyebrow">VSMS · Печатная форма · с графиками</p>
+          <h2 class="dh-title">Аналитика сезона</h2>
+          <div class="dh-sub">Сводный дашборд · агрегаты считаются на лету (не хранятся)</div>
+        </div>
+        <div class="dh-r">
+          <div class="season"><span class="dot"></span>Сезон 2026</div>
+          <div><span class="lbl">Период</span> сезон 2026 · W20–W28</div>
+          <div><span class="lbl">Дата печати</span> 16 июля 2026</div>
+        </div>
+      </div>
+      <div class="dh-filters">Серии культур — Culture.color · недели и ТК — графит · брак — нейтральный янтарь · год-к-году вне среза</div>
+
+      <!-- KPI strip -->
+      <div class="an-kpis">
+        <div class="an-kpi"><div class="k">Принято</div><div class="v"><span class="tnum">342</span><span class="u">т</span></div><div class="sub">из <b>516&nbsp;т</b> плана</div></div>
+        <div class="an-kpi"><div class="k">Выполнение</div><div class="v"><span class="tnum">66</span><span class="u">%</span></div><div class="sub">принято / план по контрактам</div></div>
+        <div class="an-kpi"><div class="k">Средний брак</div><div class="v"><span class="tnum">4,0</span><span class="u">%</span></div><div class="sub">взвешенный по весу</div></div>
+        <div class="an-kpi"><div class="k">Рейсов ТК</div><div class="v"><span class="tnum">128</span></div><div class="sub"><b>94</b> овощных · <b>34</b> матер.</div></div>
+        <div class="an-kpi"><div class="k">Осталось</div><div class="v"><span class="tnum">~48</span><span class="u">маш.</span></div><div class="sub">174&nbsp;т недобора · ≈3,6&nbsp;т/рейс</div></div>
+      </div>
+
+      <!-- 2×2 chart grid -->
+      <div class="an-charts">
+
+        <!-- 1 · Выполнение по культурам -->
+        <div class="an-card">
+          <div class="an-card-head"><div class="an-card-title">Выполнение по культурам</div><div class="an-card-unit">принято / план · т · % справа</div></div>
+          <div class="an-card-body">
+            <div class="cbars">
+              <div class="cbar">
+                <span class="cbar-name"><span class="cq" style="background:var(--cult-tomato)"></span>Томаты</span>
+                <div><div class="cbar-track"><span class="cbar-fill" style="width:68%;background:var(--cult-tomato)"></span></div><div class="cbar-cap"><b>142</b> / 210 т</div></div>
+                <span class="cbar-pct">68%</span>
+              </div>
+              <div class="cbar">
+                <span class="cbar-name"><span class="cq" style="background:var(--cult-cucumber)"></span>Огурцы</span>
+                <div><div class="cbar-track"><span class="cbar-fill" style="width:70%;background:var(--cult-cucumber)"></span></div><div class="cbar-cap"><b>98</b> / 140 т</div></div>
+                <span class="cbar-pct">70%</span>
+              </div>
+              <div class="cbar">
+                <span class="cbar-name"><span class="cq" style="background:var(--cult-pepper)"></span>Перец</span>
+                <div><div class="cbar-track"><span class="cbar-fill" style="width:56%;background:var(--cult-pepper)"></span></div><div class="cbar-cap"><b>54</b> / 96 т</div></div>
+                <span class="cbar-pct">56%</span>
+              </div>
+              <div class="cbar">
+                <span class="cbar-name"><span class="cq" style="background:var(--cult-squash)"></span>Патиссоны</span>
+                <div><div class="cbar-track"><span class="cbar-fill" style="width:69%;background:var(--cult-squash)"></span></div><div class="cbar-cap"><b>48</b> / 70 т</div></div>
+                <span class="cbar-pct">69%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2 · Динамика приёмки по неделям -->
+        <div class="an-card">
+          <div class="an-card-head"><div class="an-card-title">Динамика приёмки по неделям</div><div class="an-card-unit">суммарно · т эфф. веса · ISO-недели</div></div>
+          <div class="an-card-body">
+            <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика приёмки по неделям">
+              <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">60</text>
+              <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">45</text>
+              <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">30</text>
+              <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">15</text>
+              <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+              <path d="M44,185.9 L114,140.1 L184,100.9 L254,78.1 L324,42.1 L394,22.5 L464,58.5 L534,32.3 L604,130.3 L604,212 L44,212 Z" fill="var(--ink)" fill-opacity="0.06"/>
+              <path d="M44,185.9 L114,140.1 L184,100.9 L254,78.1 L324,42.1 L394,22.5 L464,58.5 L534,32.3 L604,130.3" fill="none" stroke="var(--graf-1)" stroke-width="1.75" stroke-linejoin="round" stroke-linecap="round"/>
+              <g fill="var(--canvas)" stroke="var(--graf-1)" stroke-width="1.5">
+                <circle cx="44" cy="185.9" r="2.6"/><circle cx="114" cy="140.1" r="2.6"/><circle cx="184" cy="100.9" r="2.6"/><circle cx="254" cy="78.1" r="2.6"/><circle cx="324" cy="42.1" r="2.6"/><circle cx="394" cy="22.5" r="2.6"/><circle cx="464" cy="58.5" r="2.6"/><circle cx="534" cy="32.3" r="2.6"/><circle cx="604" cy="130.3" r="2.6"/>
+              </g>
+              <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+              <text class="ax-lbl x" x="114" y="230" text-anchor="middle">W21</text>
+              <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+              <text class="ax-lbl x" x="254" y="230" text-anchor="middle">W23</text>
+              <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+              <text class="ax-lbl x" x="394" y="230" text-anchor="middle">W25</text>
+              <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+              <text class="ax-lbl x" x="534" y="230" text-anchor="middle">W27</text>
+              <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+            </svg>
+            <div class="legend"><span><span class="sw" style="background:var(--graf-1)"></span>приёмка, суммарно по всем культурам</span></div>
+          </div>
+        </div>
+
+        <!-- 3 · % брака по культурам -->
+        <div class="an-card">
+          <div class="an-card-head"><div class="an-card-title">% брака по культурам</div><div class="an-card-unit">брак / принято · % · нейтральный янтарь</div></div>
+          <div class="an-card-body">
+            <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Процент брака по культурам">
+              <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">8</text>
+              <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">6</text>
+              <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">4</text>
+              <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">2</text>
+              <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+              <rect x="86" y="118.9" width="56" height="93.1" rx="2" fill="var(--brak)"/>
+              <rect x="226" y="140.95" width="56" height="71.05" rx="2" fill="var(--brak)"/>
+              <rect x="366" y="62.55" width="56" height="149.45" rx="2" fill="var(--brak)"/>
+              <rect x="506" y="104.2" width="56" height="107.8" rx="2" fill="var(--brak)"/>
+              <text class="val-lbl" x="114" y="110" text-anchor="middle">3,8</text>
+              <text class="val-lbl" x="254" y="132" text-anchor="middle">2,9</text>
+              <text class="val-lbl" x="394" y="54" text-anchor="middle">6,1</text>
+              <text class="val-lbl" x="534" y="96" text-anchor="middle">4,4</text>
+              <rect x="105" y="222" width="9" height="9" rx="2" fill="var(--cult-tomato)"/><text class="ax-lbl x" x="119" y="230" text-anchor="start">Томаты</text>
+              <rect x="238" y="222" width="9" height="9" rx="2" fill="var(--cult-cucumber)"/><text class="ax-lbl x" x="252" y="230" text-anchor="start">Огурцы</text>
+              <rect x="382" y="222" width="9" height="9" rx="2" fill="var(--cult-pepper)"/><text class="ax-lbl x" x="396" y="230" text-anchor="start">Перец</text>
+              <rect x="504" y="222" width="9" height="9" rx="2" fill="var(--cult-squash)"/><text class="ax-lbl x" x="518" y="230" text-anchor="start">Патиссоны</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 4 · Рейсы ТК -->
+        <div class="an-card">
+          <div class="an-card-head"><div class="an-card-title">Рейсы транспортных компаний</div><div class="an-card-unit">число рейсов · овощные и материальные (BR-14)</div></div>
+          <div class="an-card-body">
+            <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Рейсы транспортных компаний">
+              <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">50</text>
+              <line class="gridline" x1="44" y1="55.2" x2="604" y2="55.2"/><text class="ax-lbl" x="38" y="59" text-anchor="end">40</text>
+              <line class="gridline" x1="44" y1="94.4" x2="604" y2="94.4"/><text class="ax-lbl" x="38" y="98" text-anchor="end">30</text>
+              <line class="gridline" x1="44" y1="133.6" x2="604" y2="133.6"/><text class="ax-lbl" x="38" y="137" text-anchor="end">20</text>
+              <line class="gridline" x1="44" y1="172.8" x2="604" y2="172.8"/><text class="ax-lbl" x="38" y="176" text-anchor="end">10</text>
+              <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+              <rect x="76" y="47.4" width="34" height="164.6" rx="2" fill="var(--graf-1)"/><rect x="118" y="164.96" width="34" height="47.04" rx="2" fill="var(--graf-2)"/>
+              <text class="val-lbl" x="93" y="40" text-anchor="middle">42</text><text class="val-lbl" x="135" y="158" text-anchor="middle">12</text>
+              <rect x="216" y="102.2" width="34" height="109.8" rx="2" fill="var(--graf-1)"/><rect x="258" y="180.64" width="34" height="31.36" rx="2" fill="var(--graf-2)"/>
+              <text class="val-lbl" x="233" y="95" text-anchor="middle">28</text><text class="val-lbl" x="275" y="174" text-anchor="middle">8</text>
+              <rect x="356" y="141.4" width="34" height="70.6" rx="2" fill="var(--graf-1)"/><rect x="398" y="188.48" width="34" height="23.52" rx="2" fill="var(--graf-2)"/>
+              <text class="val-lbl" x="373" y="134" text-anchor="middle">18</text><text class="val-lbl" x="415" y="182" text-anchor="middle">6</text>
+              <rect x="496" y="188.48" width="34" height="23.52" rx="2" fill="var(--graf-1)"/><rect x="538" y="180.64" width="34" height="31.36" rx="2" fill="var(--graf-2)"/>
+              <text class="val-lbl" x="513" y="182" text-anchor="middle">6</text><text class="val-lbl" x="555" y="174" text-anchor="middle">8</text>
+              <text class="ax-lbl x" x="114" y="230" text-anchor="middle">Юг-Логистик</text>
+              <text class="ax-lbl x" x="254" y="230" text-anchor="middle">Дон-Транс</text>
+              <text class="ax-lbl x" x="394" y="230" text-anchor="middle">Кубань-Авто</text>
+              <text class="ax-lbl x" x="534" y="230" text-anchor="middle">Свой автопарк</text>
+            </svg>
+            <div class="legend">
+              <span><span class="sw" style="background:var(--graf-1)"></span>овощные рейсы</span>
+              <span><span class="sw" style="background:var(--graf-2)"></span>материальные рейсы</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="sheet-foot">
+        <div class="sf-tot"><b>Итого сезона:</b> принято <span class="num">342 т</span> из <span class="num">516 т</span> · выполнение <span class="num">66%</span> · средний брак <span class="num">4,0%</span> · рейсов <span class="num">128</span></div>
+        <div class="sf-page">Аналитика · сезон 2026 · лист 1/1</div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- DECISIONS / QUESTIONS (screen only)                           -->
+  <!-- ============================================================ -->
+  <section class="decisions screen-only">
+    <div class="dec-inner">
+      <h2 class="dec-title">Решения / вопросы</h2>
+      <p class="dec-sub">Открыто на ревью печатных форм v1 — до кода.</p>
+
+      <div class="dec">
+        <div class="q">Отгрузки — за неделю или за весь сезон?</div>
+        <div class="a"><span class="tag open">вопрос</span>v1 — печать <b>за выбранную неделю</b> (контекст из ленты: W## + фильтры). Сезонный свод машин — отдельный лист (много страниц, подытоги по неделям). Достаточно ли недельного листа для подшивки, или сразу нужен сезонный вариант с разбивкой по неделям?</div>
+      </div>
+
+      <div class="dec">
+        <div class="q">Включать ли деньги в Аналитику и Приёмку?</div>
+        <div class="a"><span class="tag open">вопрос</span>Сейчас <b>без денег</b>: Приёмка — факт / брак / принято (кг), Аналитика — тонны / % / рейсы. Сумма к оплате (₽/кг × принято) есть в экранной приёмке, но на печатный лист не вынесена. Нужна ли колонка «Сумма, ₽» в Приёмке и денежный KPI в Аналитике, или печатные формы остаются натуральными (кг/т)?</div>
+      </div>
+
+      <div class="dec">
+        <div class="q">Отдельная «Печать» на каждом экране vs единый «Центр печати»</div>
+        <div class="a"><span class="tag">склоняемся</span>v1 — <b>кнопка «Печать» на каждом рабочем экране</b> печатает свой лист в текущем контексте (неделя/сезон/фильтры) — простой и предсказуемый путь. «Центр печати» (выбор вида + периода + пакетная печать нескольких листов) — вероятный v2, когда понадобится печать «всего сразу».</div>
+      </div>
+
+      <div class="dec">
+        <div class="q">Максимум по строке в Сводке — жирным или тонкой штриховкой?</div>
+        <div class="a"><span class="tag">решено</span>Только <b>жирное начертание</b> максимальной ячейки дня в строке — без заливки/heatmap на печати. Штриховку не вводим: на ч/б принтере она грязнит таблицу, а жирность читается всегда.</div>
+      </div>
+
+      <div class="dec">
+        <div class="q">week-mode культуры в Сводке и Плане</div>
+        <div class="a"><span class="tag">решено</span>Культуры с недельной целью (<span class="mono">date=null</span>, BR-23) — строкой с бейджем «неделя»: дневные ячейки объединены, факт только в итоговых колонках. Подвал «Итого по дням» суммирует лишь day-mode культуры; колонка «Факт» итога — все культуры.</div>
+      </div>
+    </div>
+  </section>
+
+  <p class="endnote screen-only">VSMS · инструмент снабженца. Статичный макет печатных форм (v1): пять A4-листов — Отгрузки / Сводка / План / Приёмка компактными таблицами, Аналитика — с графиками (KPI + 4 графика). Общий каркас шапки/подвала, <span class="mono">@media print</span> скрывает весь хром. Значения (эфф. вес, принято, брак, %, выполнение) вычисляются на лету и не хранятся; контекст (сезон / неделя / фильтры) — из URL. Печать — браузером (Ctrl/⌘+P → PDF); серверной PDF-библиотеки нет.</p>
+
+</div>
+
+<script>
+function printSheet(id) {
+  var el = document.getElementById(id);
+  if (!el) { window.print(); return; }
+  document.querySelectorAll('.sheet-block').forEach(function (b) { b.classList.remove('printing'); });
+  el.classList.add('printing');
+  document.body.classList.add('print-isolate');
+  function cleanup() { document.body.classList.remove('print-isolate'); el.classList.remove('printing'); window.removeEventListener('afterprint', cleanup); }
+  window.addEventListener('afterprint', cleanup);
+  window.print();
+  setTimeout(cleanup, 1500);
+}
+</script>
+</body>
+</html>
