@@ -84,6 +84,19 @@
   font-feature-settings: "ss01";
 }
 
+/* Имя `.sheet` пересекается с мобильным bottom-sheet из globals.css (position:fixed;
+   inset ...; bottom:0; max-height:82vh; z-index) — его свойства протекали в печатный
+   лист: лист прижимало вниз, верх обрезало, скролла не было. Гасим протечку с
+   повышенной специфичностью (.print-wrap .sheet = 0,2,0 > .sheet = 0,1,0), возвращая
+   лист в нормальный поток. Действует и на экране, и в печати. */
+.print-wrap .sheet {
+  position: static;
+  inset: auto;
+  max-height: none;
+  z-index: auto;
+  border-radius: 0;
+}
+
 /* Шапка документа */
 .doc-head {
   display: flex;
