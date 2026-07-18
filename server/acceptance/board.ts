@@ -28,8 +28,8 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       include: {
         items: {
           include: {
-            culture: { select: { name: true, color: true } },
-            farmer: { select: { name: true } },
+            culture: { select: { id: true, name: true, color: true } },
+            farmer: { select: { id: true, name: true } },
             acceptanceAct: { select: { act_number: true } },
           },
           orderBy: { id: "asc" },
@@ -52,8 +52,8 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       include: {
         items: {
           include: {
-            culture: { select: { name: true, color: true } },
-            farmer: { select: { name: true } },
+            culture: { select: { id: true, name: true, color: true } },
+            farmer: { select: { id: true, name: true } },
             acceptanceAct: {
               select: {
                 act_number: true,
@@ -119,8 +119,10 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
     const season = seasonYearOf(s.arrival_date ?? s.departure_date ?? new Date());
     const items = s.items.map((it) => ({
       id: it.id,
+      cultureId: it.culture.id,
       cultureName: it.culture.name,
       color: it.culture.color,
+      farmerId: it.farmer.id,
       farmerName: it.farmer.name,
       plannedKg: it.planned_weight_kg.toNumber(),
       actualKg: it.actual_weight_kg != null ? it.actual_weight_kg.toNumber() : null,
@@ -225,8 +227,10 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
 
       return {
         id: it.id,
+        cultureId: it.culture.id,
         cultureName: it.culture.name,
         color: it.culture.color,
+        farmerId: it.farmer.id,
         farmerName: it.farmer.name,
         actNumber: act ? stripSeasonPrefix(act.act_number, season) : null,
         actualKg,

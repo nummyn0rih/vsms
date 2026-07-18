@@ -1,5 +1,10 @@
 import { getAcceptanceBoard } from "@/server/acceptance/board";
 import { computeWeightedBrak } from "@/server/acceptance/accepted";
+import {
+  filterBoard,
+  boardOptions,
+  anyAcceptanceFilterActive,
+} from "@/server/acceptance/board-filter";
 import type {
   AcceptanceMachine,
   AcceptedMachine,
@@ -7,6 +12,24 @@ import type {
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { fmtInt, fmtTons, fmtPct1 } from "@/lib/format";
 import { PrintSheet } from "../_components/PrintSheet";
+
+function csvNums(raw: string | undefined): Set<number> {
+  const s = new Set<number>();
+  if (!raw) return s;
+  for (const p of raw.split(",")) {
+    const n = Number(p);
+    if (Number.isFinite(n)) s.add(n);
+  }
+  return s;
+}
+
+// Имена выбранных опций для строки фильтров в шапке (id → name, «все» если пусто).
+function nameList(
+  opts: { id: string | number; name: string }[],
+  sel: Set<number>,
+): string {
+  return opts.filter((o) => sel.has(Number(o.id))).map((o) => o.name).join(", ") || "все";
+}
 
 function machineHead(m: { code: string; driverName: string | null; transportCompanyName: string | null }) {
   const drv = [m.driverName, m.transportCompanyName].filter(Boolean).join(" · ") || "—";
@@ -64,9 +87,35 @@ function PendingZone({
   );
 }
 
-export default async function PrintAcceptancePage() {
-  const board = await getAcceptanceBoard();
+export default async function PrintAcceptancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const sp = await searchParams;
+  const one = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+
+  const fullBoard = await getAcceptanceBoard();
   const seasonYear = currentSeasonWeek().seasonYear;
+
+  const supplierSel = csvNums(one(sp.sup));
+  const cultureSel = csvNums(one(sp.cult));
+  const search = one(sp.q) ?? "";
+  const filters = { search, supplierSel, cultureSel };
+
+  // Тот же чистый фильтр, что и на экране приёмки — вид совпадает с /acceptance.
+  const board = filterBoard(fullBoard, filters);
+
+  // Строка фильтров в шапке (по аналогии с листом «Отгрузки»). Опции — из полного board.
+  const opts = boardOptions(fullBoard);
+  const filtersLine = anyAcceptanceFilterActive(filters) ? (
+    <>
+      Фильтры: поставщик — <b>{nameList(opts.farmers, supplierSel)}</b> · сырьё —{" "}
+      <b>{nameList(opts.cultures, cultureSel)}</b>
+      {search.trim() ? <> · поиск — «{search.trim()}»</> : null}
+    </>
+  ) : undefined;
 
   const acceptedPositions = board.zone3.flatMap((m: AcceptedMachine) => m.positions);
   const totalAccepted = acceptedPositions.reduce((a, p) => a + p.acceptedKg, 0);
@@ -83,6 +132,7 @@ export default async function PrintAcceptancePage() {
       subtitle="Перевеска и приёмка прибывших машин"
       season={`Сезон ${seasonYear}`}
       period={`сезон ${seasonYear} · текущее состояние`}
+      filters={filtersLine}
       footTotal={
         <>
           <b>Итого:</b> принято <span className="num">{fmtInt(totalAccepted)} кг</span> (≈{" "}

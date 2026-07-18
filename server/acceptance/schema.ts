@@ -102,8 +102,10 @@ export type ActContext = {
 
 export type AcceptanceItem = {
   id: number;
+  cultureId: number;
   cultureName: string;
   color: string;
+  farmerId: number;
   farmerName: string;
   plannedKg: number;
   actualKg: number | null;
@@ -153,8 +155,10 @@ export type AcceptedNonStandard = {
 
 export type AcceptedPosition = {
   id: number; // shipmentItemId
+  cultureId: number;
   cultureName: string;
   color: string;
+  farmerId: number;
   farmerName: string;
   actNumber: string | null;
   actualKg: number;
