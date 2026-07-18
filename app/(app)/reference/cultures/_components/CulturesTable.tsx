@@ -94,9 +94,11 @@ function ActivateButton({ row }: { row: CultureRow }) {
 export function CulturesTable({
   rows,
   packagingOptions,
+  takenColors,
 }: {
   rows: CultureRow[];
   packagingOptions: PackagingOption[];
+  takenColors: { id: number; name: string; color: string }[];
 }) {
   return (
     <Table>
@@ -166,6 +168,7 @@ export function CulturesTable({
                     mode="edit"
                     row={row}
                     packagingOptions={packagingOptions}
+                    takenColors={takenColors}
                   />
                   {row.active ? (
                     <DeactivateButton row={row} />

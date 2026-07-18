@@ -40,15 +40,28 @@ export default async function CulturesPage({
     active: c.active,
   }));
 
+  // Цвета активных культур — для пометки «занятых» swatch в пикере формы.
+  const takenColors = rows
+    .filter((r) => r.active)
+    .map((r) => ({ id: r.id, name: r.name, color: r.color }));
+
   return (
     <div>
       <ReferenceToolbar searchPlaceholder="Поиск по названию…">
         <RoleGate allow={["admin"]}>
-          <CultureFormDialog mode="create" packagingOptions={packagingOptions} />
+          <CultureFormDialog
+            mode="create"
+            packagingOptions={packagingOptions}
+            takenColors={takenColors}
+          />
         </RoleGate>
       </ReferenceToolbar>
 
-      <CulturesTable rows={rows} packagingOptions={packagingOptions} />
+      <CulturesTable
+        rows={rows}
+        packagingOptions={packagingOptions}
+        takenColors={takenColors}
+      />
     </div>
   );
 }

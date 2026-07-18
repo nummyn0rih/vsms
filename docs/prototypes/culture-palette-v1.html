@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Палитра цветов культур — v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --hairline: #e8e8e8;
+    --hairline-strong: #a1a1a1;
+    --rule: #cfcfcf;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+    --desk: #e6e6e9;
+    --track: #f0f0f0;
+    /* status-fills — не для культур, только для проверки конфликтов */
+    --st-sent: #0070f3;
+    --st-arrived: #f5a623;
+    --st-accepted: #29bc9b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Geist", Inter, system-ui, -apple-system, sans-serif; background: var(--desk); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; letter-spacing: -0.011em; }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .board { max-width: 1000px; margin: 0 auto; padding: 44px 24px 120px; }
+  .intro { margin-bottom: 40px; }
+  .intro .eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .intro h1 { font-size: 30px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .intro p { margin: 12px 0 0; color: var(--body); font-size: 14.5px; line-height: 22px; max-width: 760px; letter-spacing: -0.01em; }
+  .intro p b { color: var(--ink); font-weight: 600; }
+  .intro .rule-note { margin-top: 16px; display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--body); background: var(--canvas); border: 1px solid var(--hairline); border-radius: 8px; padding: 11px 13px; max-width: 760px; line-height: 18px; }
+  .intro .rule-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--mute); }
+  .intro .rule-note b { color: var(--ink); }
+
+  /* section cards */
+  .sec { background: var(--canvas); border: 1px solid var(--hairline); border-radius: 12px; padding: 26px 28px 30px; margin-bottom: 30px; box-shadow: 0 1px 2px #0000000a, 0 10px 26px -18px #0000001f; }
+  .sec-cap { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .sec-cap .sc-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); }
+  .sec-cap h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.03em; margin: 0; }
+  .sec-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin: 0 0 20px; line-height: 18px; max-width: 720px; }
+  .sub-h { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 26px 0 12px; border-bottom: 1px solid var(--hairline); padding-bottom: 6px; }
+
+  /* palette proof table */
+  table.pal { width: 100%; border-collapse: collapse; }
+  table.pal thead th { font-family: "Geist Mono", monospace; font-size: 8.5px; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); text-align: left; padding: 0 10px 7px 0; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+  table.pal thead th.c { text-align: center; }
+  table.pal tbody td { padding: 9px 10px 9px 0; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+  table.pal tbody tr:last-child td { border-bottom: none; }
+  .pl-name { display: flex; align-items: center; gap: 9px; }
+  .pl-sw { width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0; box-shadow: inset 0 0 0 1px #0000001f; }
+  .pl-lab { font-size: 13px; font-weight: 500; letter-spacing: -0.02em; }
+  .pl-eg { font-size: 11px; color: var(--mute); margin-top: 1px; }
+  .pl-hex { font-family: "Geist Mono", monospace; font-size: 11.5px; color: var(--body); letter-spacing: 0; text-transform: uppercase; }
+  /* chip samples */
+  .chips-cell { display: flex; align-items: center; gap: 12px; }
+  .chip-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+  .chip { border-radius: 2px; box-shadow: inset 0 0 0 0.5px #00000026; flex-shrink: 0; }
+  .chip.s8 { width: 8px; height: 8px; }
+  .chip.s11 { width: 11px; height: 11px; }
+  /* heatmap 3 levels */
+  .heat-cell { display: flex; gap: 5px; }
+  .heat { width: 40px; height: 26px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-family: "Geist Mono", monospace; font-size: 9px; color: var(--body); box-shadow: inset 0 0 0 0.5px #0000000f; }
+  .heat.full { color: #fff; font-weight: 500; }
+  /* single graph bar sample */
+  .barsample { display: flex; align-items: flex-end; gap: 3px; height: 34px; }
+  .barsample i { width: 9px; border-radius: 1.5px 1.5px 0 0; display: block; }
+
+  /* all-together legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 7px 16px; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .legend .lg .chip { width: 10px; height: 10px; }
+
+  /* heatmap matrix (all colors × levels) */
+  .heatmatrix { display: grid; grid-auto-flow: column; gap: 4px; }
+  .heatmatrix .col { display: flex; flex-direction: column; gap: 4px; }
+  .heatmatrix .cell { width: 100%; height: 22px; border-radius: 3px; box-shadow: inset 0 0 0 0.5px #0000000f; }
+  .heatmatrix .lab { font-family: "Geist Mono", monospace; font-size: 8.5px; color: var(--mute); text-align: center; margin-top: 2px; white-space: nowrap; }
+
+  /* grouped bar chart svg */
+  .chart-wrap { border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 14px 8px; }
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .chart-svg text { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+
+  /* grayscale proof */
+  .gray { filter: grayscale(1) contrast(1.02); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  .gcap { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); margin-bottom: 10px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 6px; }
+  .strip .st-sw { width: 100%; height: 30px; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; color: #fff; font-family: "Geist Mono", monospace; font-size: 9.5px; box-shadow: inset 0 0 0 0.5px #00000026; }
+  .stripgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+
+  /* conflict check row */
+  .conflict { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .conflict .cf { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--body); border: 1px solid var(--hairline); border-radius: 999px; padding: 5px 11px 5px 7px; }
+  .conflict .cf .dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: inset 0 0 0 0.5px #00000026; }
+
+  /* ---------- swatch picker mock ---------- */
+  .dlg-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .dlg { border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: var(--canvas); box-shadow: 0 1px 2px #0000000a, 0 14px 34px -22px #00000033; }
+  .dlg-state { font-family: "Geist Mono", monospace; font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mute); padding: 9px 16px; border-bottom: 1px solid var(--hairline); background: #fafafa; display: flex; justify-content: space-between; }
+  .dlg-state .badge { color: var(--ink); }
+  .dlg-body { padding: 16px 16px 18px; }
+  .fld { margin-bottom: 15px; }
+  .fld:last-child { margin-bottom: 0; }
+  .fld > label { display: block; font-size: 11px; font-weight: 500; color: var(--body); margin-bottom: 6px; letter-spacing: -0.01em; }
+  .fld .req { color: var(--mute); font-weight: 400; }
+  .inp { width: 100%; height: 34px; border: 1px solid var(--rule); border-radius: 7px; padding: 0 10px; font-family: inherit; font-size: 13px; color: var(--ink); background: #fff; }
+  .inp[disabled] { color: var(--ink); }
+  .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+  .seg span { font-size: 12px; padding: 6px 11px; color: var(--mute); border-right: 1px solid var(--hairline); }
+  .seg span.on { background: var(--ink); color: #fff; }
+  .seg span:last-child { border-right: none; }
+
+  .pk-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+  .pk { position: relative; width: 100%; aspect-ratio: 1; border-radius: 7px; cursor: pointer; box-shadow: inset 0 0 0 0.5px #00000026; }
+  .pk.sel { box-shadow: inset 0 0 0 0.5px #00000026, 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
+  .pk .ck { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
+  .pk.sel .ck { display: flex; }
+  .pk .ck svg { width: 15px; height: 15px; stroke: #fff; stroke-width: 3.2; fill: none; filter: drop-shadow(0 1px 1px #00000059); }
+  .pk .taken { position: absolute; right: -3px; top: -3px; width: 13px; height: 13px; border-radius: 50%; background: var(--st-arrived); box-shadow: 0 0 0 2px #fff; display: flex; align-items: center; justify-content: center; }
+  .pk .taken svg { width: 8px; height: 8px; stroke: #fff; stroke-width: 3.5; }
+  .pk.custom { display: flex; align-items: center; justify-content: center; background: repeating-conic-gradient(#e0e0e0 0% 25%, #f5f5f5 0% 50%) 50% / 10px 10px; box-shadow: inset 0 0 0 1px var(--rule); }
+  .pk.custom svg { width: 15px; height: 15px; stroke: var(--body); stroke-width: 2; fill: none; }
+  .pk.custom.sel svg { stroke: var(--ink); }
+
+  .taken-note { display: flex; align-items: center; gap: 7px; margin-top: 11px; font-size: 11.5px; color: #92610a; background: #fdf3e0; border: 1px solid #f2dcae; border-radius: 6px; padding: 7px 10px; }
+  .taken-note svg { width: 13px; height: 13px; flex-shrink: 0; }
+  .taken-note b { font-weight: 600; }
+  .custom-row { margin-top: 12px; border-top: 1px dashed var(--hairline); padding-top: 12px; }
+  .custom-row .ch { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--body); cursor: pointer; }
+  .custom-row .ch .caret { color: var(--mute); transition: none; }
+  .custom-fields { display: flex; align-items: center; gap: 9px; margin-top: 11px; }
+  .custom-fields .cprev { width: 34px; height: 34px; border-radius: 7px; flex-shrink: 0; box-shadow: inset 0 0 0 0.5px #00000026; }
+  .custom-fields .inp { width: 120px; font-family: "Geist Mono", monospace; text-transform: uppercase; }
+  .custom-fields .hint { font-size: 11px; color: var(--mute); line-height: 15px; }
+  .sel-readout { margin-top: 13px; font-size: 11.5px; color: var(--body); display: flex; align-items: center; gap: 7px; }
+  .sel-readout .chip { width: 11px; height: 11px; }
+  .sel-readout .mono { color: var(--ink); }
+  .sel-readout.none { color: var(--mute); }
+
+  /* decisions */
+  .dec-wrap { margin-top: 8px; }
+  .dec { border: 1px solid var(--hairline); border-radius: 10px; padding: 16px 18px; margin-bottom: 12px; background: var(--canvas); }
+  .dec .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; display: flex; align-items: center; gap: 9px; }
+  .dec .a { font-size: 13px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; }
+  .dec .tag.open { color: #92610a; border-color: #e2c079; background: #fdf3e0; }
+  .dec .tag.rec { color: #0f7a52; border-color: #9ad9bf; background: #e6f7ef; }
+  .endnote { max-width: 1000px; margin: 30px auto 0; font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="intro">
+    <p class="eyebrow">VSMS · Дизайн-система · v1</p>
+    <h1>Палитра цветов культур</h1>
+    <p>Курируемый набор из <b>12 цветов</b> взамен произвольного hex-пикера. Цвет культуры торчит повсюду — чипы в ленте, подложки строк, заливка heatmap «Сводки», серии графиков аналитики, печатные листы (в т.ч. ч/б). Набор подобран так, чтобы 6–8 культур в одной легенде <b>различались рядом</b>, работали заливкой heatmap на трёх уровнях прозрачности, читались столбцом графика и <b>не схлопывались в одинаковый серый на печати</b>. Ниже — палитра с проверками и макет swatch-пикера в форме культуры во всех состояниях.</p>
+    <div class="rule-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span><b>Границы:</b> <span class="mono">Culture.color</span> остаётся hex-строкой — миграции нет. Палитра — это набор допустимых значений + UI выбора. Существующие культуры с off-palette цветом продолжают работать и показываются как «свой цвет».</span>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 1: PALETTE ============ -->
+  <section class="sec">
+    <div class="sec-cap"><span class="sc-num">01</span><h2>Палитра — 12 цветов</h2></div>
+    <p class="sec-desc">Насыщенные, но не неоновые; вписаны в нейтральную Vercel-подобную базу. Лейбл + пример культуры даны как ориентир — цвет не привязан к культуре жёстко, пользователь выбирает любой.</p>
+
+    <table class="pal">
+      <thead>
+        <tr>
+          <th style="width:210px">Цвет / ориентир</th>
+          <th style="width:74px">Hex</th>
+          <th>Чип на белом · 8 / 11px</th>
+          <th class="c" style="width:150px">Heatmap · 18 / 45 / 100%</th>
+          <th class="c" style="width:80px">Столбец</th>
+        </tr>
+      </thead>
+      <tbody id="palBody"></tbody>
+    </table>
+
+    <div class="sub-h">Все цвета вместе — проверка различимости</div>
+    <div class="legend" id="legend"></div>
+
+    <div class="two-col" style="margin-top:22px">
+      <div>
+        <div class="gcap">Сгруппированный график (Recharts-style)</div>
+        <div class="chart-wrap"><svg id="barChart" class="chart-svg" viewBox="0 0 460 180" role="img" aria-label="Проверка палитры столбцами графика"></svg></div>
+      </div>
+      <div>
+        <div class="gcap">Heatmap-матрица · строки = уровни 18 / 45 / 100%</div>
+        <div class="heatmatrix" id="heatMatrix"></div>
+      </div>
+    </div>
+
+    <div class="sub-h">Имитация ч/б печати (grayscale) — соседние цвета не должны слиться</div>
+    <div class="two-col">
+      <div>
+        <div class="gcap">В цвете</div>
+        <div class="stripgrid" id="stripColor"></div>
+      </div>
+      <div>
+        <div class="gcap">Grayscale</div>
+        <div class="stripgrid gray" id="stripGray"></div>
+      </div>
+    </div>
+
+    <div class="sub-h">Не конфликтует со статусными цветами отгрузок</div>
+    <p class="sec-desc" style="margin-bottom:12px">Культура не должна «читаться» как статус. Палитра держится в стороне от азурного «отправлена», янтарного «прибыла / брак» и мятного «принята».</p>
+    <div class="conflict">
+      <span class="cf"><span class="dot" style="background:var(--st-sent)"></span>статус: отправлена · <span class="mono">#0070f3</span></span>
+      <span class="cf"><span class="dot" style="background:var(--st-arrived)"></span>статус: прибыла / брак · <span class="mono">#f5a623</span></span>
+      <span class="cf"><span class="dot" style="background:var(--st-accepted)"></span>статус: принята · <span class="mono">#29bc9b</span></span>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 2: PICKER ============ -->
+  <section class="sec">
+    <div class="sec-cap"><span class="sc-num">02</span><h2>Swatch-пикер в форме культуры</h2></div>
+    <p class="sec-desc">Контрол «Цвет» в диалоге создания / правки культуры — рядом с полями «Название», «Тип приёмки», «Типы тары». Сетка образцов, выбранный помечен обводкой + галочкой. Занятые другой культурой цвета помечаются бейджем (предупреждение, не запрет). Свёрнутый «свой цвет» — фолбэк с hex-полем.</p>
+
+    <div class="dlg-grid">
+      <!-- STATE A: nothing selected -->
+      <div class="dlg">
+        <div class="dlg-state"><span>Состояние A</span><span class="badge">новая культура — ничего не выбрано</span></div>
+        <div class="dlg-body">
+          <div class="fld"><label>Название <span class="req">· обязательно</span></label><input class="inp" placeholder="напр. Баклажаны" /></div>
+          <div class="fld"><label>Тип приёмки</label><div class="seg"><span class="on">по весу</span><span>по ящикам</span><span>по бочкам</span></div></div>
+          <div class="fld">
+            <label>Цвет культуры <span class="req">· выберите из палитры</span></label>
+            <div class="pk-grid" data-picker="A"></div>
+            <div class="sel-readout none">Цвет не выбран — используется нейтральный серый по умолчанию.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE B: palette color selected -->
+      <div class="dlg">
+        <div class="dlg-state"><span>Состояние B</span><span class="badge">выбран цвет палитры</span></div>
+        <div class="dlg-body">
+          <div class="fld"><label>Название <span class="req">· обязательно</span></label><input class="inp" value="Баклажаны" /></div>
+          <div class="fld"><label>Тип приёмки</label><div class="seg"><span class="on">по весу</span><span>по ящикам</span><span>по бочкам</span></div></div>
+          <div class="fld">
+            <label>Цвет культуры</label>
+            <div class="pk-grid" data-picker="B" data-sel="8"></div>
+            <div class="sel-readout"><span class="chip" data-selchip="8"></span>Выбран: <b style="color:var(--ink);margin-left:2px">Фиолетовый</b> · <span class="mono" data-selhex="8"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE C: custom color -->
+      <div class="dlg">
+        <div class="dlg-state"><span>Состояние C</span><span class="badge">свой цвет (вне палитры)</span></div>
+        <div class="dlg-body">
+          <div class="fld"><label>Название <span class="req">· обязательно</span></label><input class="inp" value="Зелень (старая)" /></div>
+          <div class="fld">
+            <label>Цвет культуры</label>
+            <div class="pk-grid" data-picker="C" data-sel="custom"></div>
+            <div class="custom-row" data-open="1">
+              <div class="ch"><svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg><span>Свой цвет</span></div>
+              <div class="custom-fields">
+                <span class="cprev" style="background:#3f7d3a"></span>
+                <input class="inp" value="#3F7D3A" />
+                <span class="hint">Цвет вне палитры.<br />У существующих культур сохраняется как есть.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATE D: color taken -->
+      <div class="dlg">
+        <div class="dlg-state"><span>Состояние D</span><span class="badge">цвет занят другой культурой</span></div>
+        <div class="dlg-body">
+          <div class="fld"><label>Название <span class="req">· обязательно</span></label><input class="inp" value="Помидоры черри" /></div>
+          <div class="fld">
+            <label>Цвет культуры</label>
+            <div class="pk-grid" data-picker="D" data-sel="0" data-taken="0:Томаты,4:Огурцы,1:Перец сладкий"></div>
+            <div class="taken-note">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Цвет уже занят культурой <b>«Томаты»</b>. Можно оставить — но одинаковые цвета мешают различать культуры в ленте и на графиках.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DECISIONS ============ -->
+  <section class="sec">
+    <div class="sec-cap"><span class="sc-num">03</span><h2>Решения / вопросы</h2></div>
+    <div class="dec-wrap">
+      <div class="dec">
+        <div class="q"><span class="tag open">вопрос</span>Сколько цветов достаточно?</div>
+        <div class="a">Взял <b>12</b> (из допустимого диапазона 10–14). Хватает на типичный сезон снабженца (обычно 4–8 активных культур одновременно) с запасом на разные типы/сорта. Больше 14 — цвета начинают сливаться и в цвете, и в grayscale. <b>Нужно PM: подтвердить 12 или сузить до 10 / расширить до 14.</b></div>
+      </div>
+      <div class="dec">
+        <div class="q"><span class="tag open">вопрос</span>Оставлять ли «свой цвет»?</div>
+        <div class="a">Оставил как <b>свёрнутый фолбэк</b> — иначе сломаются существующие культуры с произвольным hex (миграции нет). Открытый вопрос: прятать ли его для <b>новых</b> культур (палитра-only), показывая только при правке off-palette культуры? Это подтолкнёт к единообразию, но уберёт свободу. <b>Рекомендую: скрывать «свой цвет» для новых, показывать только когда у культуры уже нестандартный цвет.</b></div>
+      </div>
+      <div class="dec">
+        <div class="q"><span class="tag rec">решено</span>Предупреждать или запрещать дубликаты?</div>
+        <div class="a"><b>Предупреждать, не запрещать</b> (бейдж «занят: Томаты» + сноска). Запрет ломает сценарий, где культур больше, чем цветов, и заставляет городить исключения. Дубли — плохая практика, но это выбор пользователя, а не ошибка данных.</div>
+      </div>
+      <div class="dec">
+        <div class="q"><span class="tag open">вопрос</span>Единый источник цвета</div>
+        <div class="a">Палитра должна попасть в <span class="mono">DESIGN-SYSTEM.md</span> и в общий константный модуль в коде (напр. <span class="mono">CULTURE_PALETTE</span>), чтобы чипы, heatmap, графики и печать брали цвета из одного места. <b>Нужно инженеру: подтвердить имя/место модуля.</b></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="endnote">VSMS · Палитра цветов культур v1. Статичный дизайн-артефакт: (1) курируемая палитра с проверками — чип / heatmap 3 уровня / столбец графика / «все вместе» / grayscale-печать / отстройка от статусных цветов; (2) макет swatch-пикера в форме культуры в четырёх состояниях. <span class="mono">Culture.color</span> остаётся hex — палитра задаёт допустимые значения и UI выбора.</p>
+</div>
+
+<script>
+  // Curated culture palette — single source of truth for this proof.
+  const PALETTE = [
+    { hex: "#D4322C", label: "Красный",    eg: "Томаты" },
+    { hex: "#E8730C", label: "Оранжевый",  eg: "Перец сладкий" },
+    { hex: "#C99700", label: "Горчичный",  eg: "Тыква / дыня" },
+    { hex: "#5C8A10", label: "Лаймовый",   eg: "Кабачок" },
+    { hex: "#2F9E44", label: "Зелёный",    eg: "Огурцы" },
+    { hex: "#0F766E", label: "Хвойный",    eg: "Зелень / салат" },
+    { hex: "#0E7490", label: "Морской",    eg: "Капуста" },
+    { hex: "#3A56D4", label: "Индиго",     eg: "Баклажан" },
+    { hex: "#7C3AED", label: "Фиолетовый", eg: "Патиссон" },
+    { hex: "#A21CAF", label: "Пурпурный",  eg: "Свёкла" },
+    { hex: "#BE185D", label: "Малиновый",  eg: "Редис" },
+    { hex: "#92561F", label: "Коричневый", eg: "Картофель" }
+  ];
+  const mix = (hex, pct) => `color-mix(in srgb, ${hex} ${pct}%, #ffffff)`;
+  const CK = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+
+  // ---- palette proof table ----
+  document.getElementById("palBody").innerHTML = PALETTE.map(c => `
+    <tr>
+      <td><div class="pl-name"><span class="pl-sw" style="background:${c.hex}"></span><span><span class="pl-lab">${c.label}</span><div class="pl-eg">${c.eg}</div></span></div></td>
+      <td class="pl-hex">${c.hex}</td>
+      <td><div class="chips-cell">
+        <span class="chip-wrap"><span class="chip s8" style="background:${c.hex}"></span>${c.eg.split(" ")[0]}</span>
+        <span class="chip-wrap"><span class="chip s11" style="background:${c.hex}"></span>${c.eg.split(" ")[0]}</span>
+      </div></td>
+      <td><div class="heat-cell">
+        <span class="heat" style="background:${mix(c.hex,18)}">18</span>
+        <span class="heat" style="background:${mix(c.hex,45)}">45</span>
+        <span class="heat full" style="background:${c.hex}">100</span>
+      </div></td>
+      <td><div class="barsample">
+        <i style="height:70%;background:${c.hex}"></i>
+        <i style="height:100%;background:${c.hex}"></i>
+        <i style="height:52%;background:${c.hex}"></i>
+      </div></td>
+    </tr>`).join("");
+
+  // ---- legend (all together) ----
+  document.getElementById("legend").innerHTML = PALETTE.map(c =>
+    `<span class="lg"><span class="chip" style="background:${c.hex};border-radius:2px;box-shadow:inset 0 0 0 0.5px #00000026"></span>${c.label}</span>`).join("");
+
+  // ---- grouped bar chart ----
+  (function(){
+    const W=460,H=180, padL=28, padB=26, padT=10, padR=8;
+    const groups=4, n=PALETTE.length;
+    const plotW=W-padL-padR, plotH=H-padT-padB;
+    const gGap=18, groupW=(plotW-gGap*(groups-1))/groups;
+    const barW=groupW/n;
+    let svg="";
+    // y gridlines
+    for(let g=0; g<=4; g++){ const y=padT+plotH*(g/4); const v=100-g*25;
+      svg+=`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="#eee" stroke-width="1"/>`;
+      svg+=`<text x="${padL-5}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="8.5" fill="#aaa">${v}</text>`; }
+    const seed=[0.62,0.9,0.5,0.74];
+    for(let g=0; g<groups; g++){
+      const gx=padL+g*(groupW+gGap);
+      PALETTE.forEach((c,i)=>{
+        const h=plotH*(0.35+0.6*Math.abs(Math.sin(i*1.7+g*0.9))*seed[g]);
+        const x=gx+i*barW; const y=padT+plotH-h;
+        svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(barW-0.8).toFixed(1)}" height="${h.toFixed(1)}" fill="${c.hex}" rx="0.5"/>`;
+      });
+      svg+=`<text x="${(gx+groupW/2).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#888">Нед ${37+g}</text>`;
+    }
+    document.getElementById("barChart").innerHTML=svg;
+  })();
+
+  // ---- heatmap matrix ----
+  document.getElementById("heatMatrix").innerHTML = PALETTE.map(c=>`
+    <div class="col">
+      <span class="cell" style="background:${mix(c.hex,18)}"></span>
+      <span class="cell" style="background:${mix(c.hex,45)}"></span>
+      <span class="cell" style="background:${c.hex}"></span>
+    </div>`).join("");
+
+  // ---- grayscale strips ----
+  const stripHTML = PALETTE.map(c=>`<span class="st-sw" style="background:${c.hex}">${c.label}</span>`).join("");
+  document.getElementById("stripColor").innerHTML = stripHTML;
+  document.getElementById("stripGray").innerHTML = stripHTML;
+
+  // ---- picker grids ----
+  document.querySelectorAll(".pk-grid").forEach(grid=>{
+    const sel = grid.dataset.sel;
+    const taken = {};
+    (grid.dataset.taken||"").split(",").filter(Boolean).forEach(t=>{ const [i,name]=t.split(":"); taken[i]=name; });
+    let html = PALETTE.map((c,i)=>{
+      const isSel = sel===String(i);
+      const tk = taken[i];
+      return `<div class="pk${isSel?' sel':''}" style="background:${c.hex}" title="${c.label}${tk?' — занят: '+tk:''}">
+        <span class="ck">${CK}</span>
+        ${tk?`<span class="taken" title="занят: ${tk}"><svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg></span>`:''}
+      </div>`;
+    }).join("");
+    // custom swatch (last cell)
+    const isCustom = sel==="custom";
+    html += `<div class="pk custom${isCustom?' sel':''}" title="Свой цвет"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>`;
+    grid.innerHTML = html;
+  });
+
+  // fill selection readouts
+  document.querySelectorAll("[data-selchip]").forEach(el=>{ el.style.background = PALETTE[+el.dataset.selchip].hex; el.style.borderRadius="2px"; el.style.boxShadow="inset 0 0 0 0.5px #00000026"; });
+  document.querySelectorAll("[data-selhex]").forEach(el=>{ el.textContent = PALETTE[+el.dataset.selhex].hex; });
+</script>
+</body>
+</html>

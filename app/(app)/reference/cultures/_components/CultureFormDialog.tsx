@@ -15,6 +15,8 @@ import {
   type PackagingOption,
 } from "@/server/cultures/schema";
 import { createCulture, updateCulture } from "@/server/cultures/actions";
+import { isPaletteColor, normalizeHex } from "@/lib/culture-palette";
+import { ColorSwatchPicker } from "./ColorSwatchPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,21 +45,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const DEFAULT_COLOR = "#22c55e";
+// Активные культуры с их цветами — для пометки «занятых» swatch в пикере.
+type TakenColor = { id: number; name: string; color: string };
 
 type Props =
-  | { mode: "create"; packagingOptions: PackagingOption[]; row?: undefined }
-  | { mode: "edit"; packagingOptions: PackagingOption[]; row: CultureRow };
+  | {
+      mode: "create";
+      packagingOptions: PackagingOption[];
+      takenColors: TakenColor[];
+      row?: undefined;
+    }
+  | {
+      mode: "edit";
+      packagingOptions: PackagingOption[];
+      takenColors: TakenColor[];
+      row: CultureRow;
+    };
 
-export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
+export function CultureFormDialog({
+  mode,
+  row,
+  packagingOptions,
+  takenColors,
+}: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  // Карта «занятых» цветов: нормализованныйHex → название культуры, по ДРУГИМ
+  // культурам (текущую редактируемую исключаем по id). Дубликат цвета — только
+  // предупреждение, не запрет.
+  const takenMap: Record<string, string> = {};
+  for (const c of takenColors) {
+    if (mode === "edit" && c.id === row.id) continue;
+    takenMap[normalizeHex(c.color)] = c.name;
+  }
+
+  // «Свой цвет» показываем только при правке культуры с off-palette цветом
+  // (fallback, чтобы не терять произвольный hex старых культур). У новой — палитра-only.
+  const allowCustom = mode === "edit" && !isPaletteColor(row.color);
 
   const form = useForm<CultureInput>({
     resolver: zodResolver(cultureSchema),
     defaultValues: {
       name: row?.name ?? "",
-      color: row?.color ?? DEFAULT_COLOR,
+      // Новая культура — без предвыбранного цвета (выбор из палитры обязателен,
+      // пустой не пройдёт zod). Правка — текущий цвет культуры.
+      color: row?.color ?? "",
       acceptance_type: row?.acceptance_type ?? "simple",
       packaging_type_ids: row?.packagingTypes.map((pt) => String(pt.id)) ?? [],
       default_packaging_type_id:
@@ -201,22 +234,14 @@ export function CultureFormDialog({ mode, row, packagingOptions }: Props) {
               name="color"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Цвет</FormLabel>
+                  <FormLabel>Цвет культуры</FormLabel>
                   <FormControl>
-                    {/* Нативный color picker + текстовое поле hex (оба на field). */}
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        className="h-9 w-12 cursor-pointer rounded border bg-transparent p-1"
-                        value={field.value}
-                        onChange={field.onChange}
-                      />
-                      <Input
-                        placeholder="#RRGGBB"
-                        className="font-mono"
-                        {...field}
-                      />
-                    </div>
+                    <ColorSwatchPicker
+                      value={field.value}
+                      onChange={field.onChange}
+                      taken={takenMap}
+                      allowCustom={allowCustom}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
