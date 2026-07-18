@@ -310,6 +310,36 @@ tr.empty td {
   border-bottom: 1px solid var(--hairline);
 }
 
+/* Многонедельный лист (режимы expanded/all): секции недель + защита групп от разрыва.
+   break-before на неделю НЕ ставим — недели текут подряд, ломается только по нужде. */
+.wk-sec + .wk-sec {
+  margin-top: 6mm;
+}
+.wk-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 3px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--hairline);
+}
+.wk-sec-head .wk-num {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.wk-sec-head .wk-dates {
+  font-size: 11px;
+  color: var(--mute);
+}
+/* Машина (rowSpan-строки) и заголовок дня — каждый в своём tbody: break-inside по tbody
+   работает, по группе одиночных <tr> — нет. Строки машины не рвём между страницами. */
+.dt tbody.mgrp,
+.dt tbody.dgrp {
+  break-inside: avoid;
+}
+
 /* Статус словом (ч/б: точка серой градацией, без цветных плашек) */
 .st {
   font-size: 10.5px;

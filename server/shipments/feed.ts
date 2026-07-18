@@ -289,6 +289,29 @@ export function weekSummary(week: FeedWeek): {
   };
 }
 
+// Общий итог по нескольким неделям (сумма weekSummary) — для многонедельного
+// печатного листа (режимы expanded/all). Чистая, без обращений к БД.
+export function feedTotals(weeks: FeedWeek[]): {
+  machineCount: number;
+  positionCount: number;
+  totalKg: number;
+  factKg: number;
+  acceptedKg: number;
+} {
+  return weeks.reduce(
+    (acc, w) => {
+      const s = weekSummary(w);
+      acc.machineCount += s.machineCount;
+      acc.positionCount += s.positionCount;
+      acc.totalKg += s.totalKg;
+      acc.factKg += s.factKg;
+      acc.acceptedKg += s.acceptedKg;
+      return acc;
+    },
+    { machineCount: 0, positionCount: 0, totalKg: 0, factKg: 0, acceptedKg: 0 },
+  );
+}
+
 export function daySummary(day: FeedDay): {
   cultures: CultureTotal[];
   totalKg: number;

@@ -59,6 +59,8 @@ type FeedToolbarProps = {
   onReset?: () => void;
   // Ссылка «Печать» → print-роут (собирается в ShipmentsFeed с текущей неделей+фильтрами).
   printSlot?: ReactNode;
+  // Тумблер «Развернуть/Свернуть все недели» (только Лента; собирается в ShipmentsFeed).
+  expandSlot?: ReactNode;
 };
 
 // Тулбар ленты. Row 1 — создание/неделя/вид (Часть A). Row 2 — поиск/фильтры/
@@ -92,6 +94,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       showReset,
       onReset,
       printSlot,
+      expandSlot,
     },
     ref,
   ) {
@@ -135,6 +138,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
 
           <div className="spacer" />
 
+          {expandSlot}
           {printSlot}
 
           <div className="seg">

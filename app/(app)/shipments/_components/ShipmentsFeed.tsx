@@ -22,6 +22,12 @@ import {
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { FilterCombo } from "@/components/filters/FilterCombo";
 import { weekKey, formatWeekRange, writeUrlParam } from "./week-format";
 import { SummaryView } from "./SummaryView";
@@ -519,34 +525,89 @@ export function ShipmentsFeed({
   const activeWeek = navWeeks[activeIndex];
   const activeRange = activeWeek ? formatWeekRange(activeWeek).range : "";
 
-  // «Печать» → print-роут с текущей неделей + активными фильтрами (лента держит их в
-  // React-state, не в URL, поэтому сериализуем сюда). Парсер — print/shipments/page.
-  const printHref = (() => {
+  // «Печать» → print-роут с активными фильтрами (лента держит их в React-state, не в
+  // URL, поэтому сериализуем сюда). Парсер — print/shipments/page. Режим/недели — в extra.
+  const buildPrintHref = (extra: Record<string, string>) => {
     const p = new URLSearchParams();
-    if (activeWeek) p.set("week", formatWeekParam(activeWeek));
     if (supplierSel.size) p.set("sup", [...supplierSel].join(","));
     if (cultureSel.size) p.set("cult", [...cultureSel].join(","));
     if (statusSel.size) p.set("st", [...statusSel].join(","));
     if (hidePlanned) p.set("hp", "1");
     if (search.trim()) p.set("q", search.trim());
+    for (const [k, v] of Object.entries(extra)) p.set(k, v);
     return `/print/shipments?${p.toString()}`;
-  })();
+  };
+
+  // Раскрытые (не свёрнутые) недели — для режима печати «Раскрытые недели» и тумблера.
+  const expandedWeeks = navWeeks.filter((w) => !collapsed.has(weekKey(w)));
+  const weekHref = buildPrintHref({
+    mode: "week",
+    ...(activeWeek ? { week: formatWeekParam(activeWeek) } : {}),
+  });
+  const expandedHref = buildPrintHref({
+    mode: "expanded",
+    weeks: expandedWeeks.map(formatWeekParam).join(","),
+  });
+  const allHref = buildPrintHref({ mode: "all" });
+
   const printSlot = (
-    <a href={printHref} target="_blank" rel="noopener" className="btn btn-sm">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <polyline points="6 9 6 2 18 2 18 9" />
-        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-        <rect x="6" y="14" width="12" height="8" />
-      </svg>
-      Печать
-    </a>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="btn btn-sm">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />
+          </svg>
+          Печать
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
+          <a href={weekHref} target="_blank" rel="noopener">
+            Текущая неделя
+          </a>
+        </DropdownMenuItem>
+        {expandedWeeks.length === 0 ? (
+          <DropdownMenuItem disabled>Раскрытые недели</DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem asChild>
+            <a href={expandedHref} target="_blank" rel="noopener">
+              Раскрытые недели
+            </a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem asChild>
+          <a href={allHref} target="_blank" rel="noopener">
+            Вся лента (по фильтрам)
+          </a>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Тумблер «Развернуть/Свернуть все»: работает по видимым (отфильтрованным) неделям.
+  const allExpanded = navWeeks.length > 0 && expandedWeeks.length === navWeeks.length;
+  const toggleAll = () =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      for (const w of navWeeks) {
+        if (allExpanded) next.add(weekKey(w));
+        else next.delete(weekKey(w));
+      }
+      return next;
+    });
+  const expandSlot = (
+    <button type="button" className="btn btn-sm" onClick={toggleAll}>
+      {allExpanded ? "Свернуть все" : "Развернуть все"}
+    </button>
   );
 
   const toolbar = (
@@ -578,6 +639,7 @@ export function ShipmentsFeed({
       todayActive={activeKey !== currentKey}
       showFilters
       printSlot={printSlot}
+      expandSlot={expandSlot}
       {...viewProps}
       {...filterProps}
     />
