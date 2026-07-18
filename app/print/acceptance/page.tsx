@@ -169,7 +169,11 @@ export default async function PrintAcceptancePage({
             board.zone2.length === 0 &&
             board.zone3.length === 0 && (
               <tr className="empty">
-                <td colSpan={7}>нет машин в приёмке</td>
+                <td colSpan={7}>
+                  {anyAcceptanceFilterActive(filters)
+                    ? "нет машин по заданным фильтрам"
+                    : "нет машин в приёмке"}
+                </td>
               </tr>
             )}
 
