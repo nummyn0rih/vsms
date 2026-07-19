@@ -61,6 +61,8 @@ type FeedToolbarProps = {
   printSlot?: ReactNode;
   // Тумблер «Развернуть/Свернуть все недели» (только Лента; собирается в ShipmentsFeed).
   expandSlot?: ReactNode;
+  // Кнопка «Экспорт Excel» (только Лента; собирается в ShipmentsFeed). Клиентский xlsx.
+  exportSlot?: ReactNode;
 };
 
 // Тулбар ленты. Row 1 — создание/неделя/вид (Часть A). Row 2 — поиск/фильтры/
@@ -95,6 +97,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
       onReset,
       printSlot,
       expandSlot,
+      exportSlot,
     },
     ref,
   ) {
@@ -224,17 +227,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             Скрыть плановые
           </label>
 
-          <div className="tip-wrap">
-            <button type="button" className="btn btn-sm is-disabled" aria-disabled>
-              <Svg>
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </Svg>
-              Excel
-            </button>
-            <span className="tip">скоро</span>
-          </div>
+          {exportSlot}
         </div>
         )}
       </div>

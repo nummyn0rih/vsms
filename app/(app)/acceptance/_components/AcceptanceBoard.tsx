@@ -14,6 +14,8 @@ import {
   boardOptions,
   anyAcceptanceFilterActive,
 } from "@/server/acceptance/board-filter";
+import { currentSeasonWeek } from "@/server/shipments/workdays";
+import { downloadXlsx, type XlsxRow } from "@/lib/xlsx-export";
 import { FilterCombo } from "@/components/filters/FilterCombo";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AcceptanceMachine } from "./AcceptanceMachine";
@@ -101,6 +103,79 @@ export function AcceptanceBoard({ board }: { board: Board }) {
     const qs = p.toString();
     return qs ? `/print/acceptance?${qs}` : "/print/acceptance";
   })();
+
+  // Экспорт Excel: позиции отфильтрованной доски (view = filterBoard), строка = позиция.
+  // Три зоны плоско; зоны 1/2 (items) не несут брак%/принято/№ акта → пусто. Числа — числами.
+  const XLSX_COLUMNS = [
+    "Зона",
+    "№ машины",
+    "Водитель",
+    "Перевозчик",
+    "Культура",
+    "Поставщик",
+    "Факт кг",
+    "Брак %",
+    "Принято кг",
+    "№ акта",
+  ];
+  function exportXlsx() {
+    const rows: XlsxRow[] = [];
+    for (const m of view.zone1) {
+      for (const it of m.items) {
+        rows.push({
+          "Зона": "Ожидают перевески",
+          "№ машины": m.code,
+          "Водитель": m.driverName ?? "",
+          "Перевозчик": m.transportCompanyName ?? "",
+          "Культура": it.cultureName,
+          "Поставщик": it.farmerName,
+          "Факт кг": it.actualKg,
+          "Брак %": null,
+          "Принято кг": null,
+          "№ акта": it.actNumber ?? "",
+        });
+      }
+    }
+    for (const m of view.zone2) {
+      for (const it of m.items) {
+        rows.push({
+          "Зона": "На приёмке",
+          "№ машины": m.code,
+          "Водитель": m.driverName ?? "",
+          "Перевозчик": m.transportCompanyName ?? "",
+          "Культура": it.cultureName,
+          "Поставщик": it.farmerName,
+          "Факт кг": it.actualKg,
+          "Брак %": null,
+          "Принято кг": null,
+          "№ акта": it.actNumber ?? "",
+        });
+      }
+    }
+    for (const m of view.zone3) {
+      for (const pos of m.positions) {
+        rows.push({
+          "Зона": "Принято",
+          "№ машины": m.code,
+          "Водитель": m.driverName ?? "",
+          "Перевозчик": m.transportCompanyName ?? "",
+          "Культура": pos.cultureName,
+          "Поставщик": pos.farmerName,
+          "Факт кг": pos.actualKg,
+          "Брак %": pos.brakPercent,
+          "Принято кг": pos.acceptedKg,
+          "№ акта": pos.actNumber ?? "",
+        });
+      }
+    }
+    const seasonYear = currentSeasonWeek().seasonYear;
+    downloadXlsx({
+      rows,
+      columns: XLSX_COLUMNS,
+      sheetName: "Приёмка",
+      fileName: `vsms-приёмка-${seasonYear}.xlsx`,
+    });
+  }
 
   async function onOpenAct(
     itemId: number,
@@ -234,6 +309,22 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           </svg>
           Печать
         </a>
+
+        <button type="button" onClick={exportXlsx} className="btn btn-sm">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Экспорт Excel
+        </button>
     </div>
   );
 

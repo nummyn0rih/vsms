@@ -22,6 +22,7 @@ import {
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
+import { downloadXlsx, type XlsxRow } from "@/lib/xlsx-export";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -610,6 +611,74 @@ export function ShipmentsFeed({
     </button>
   );
 
+  // Экспорт Excel: все недели по текущим фильтрам (visibleWeeks), строка = позиция.
+  // Плоско — поля машины повторяются в каждой позиции. Числа — числами.
+  const XLSX_COLUMNS = [
+    "Неделя",
+    "Дата прибытия",
+    "№ машины",
+    "Водитель",
+    "Перевозчик",
+    "Статус",
+    "Культура",
+    "Поставщик",
+    "Тип тары",
+    "Кол-во тары",
+    "План кг",
+    "Факт кг",
+    "Принято кг",
+  ];
+  const exportXlsx = () => {
+    const rows: XlsxRow[] = [];
+    for (const w of visibleWeeks) {
+      const weekLabel = `W${String(w.isoWeek).padStart(2, "0")}`;
+      for (const day of w.days) {
+        for (const m of day.shipments) {
+          for (const it of m.items) {
+            rows.push({
+              "Неделя": weekLabel,
+              "Дата прибытия": day.date,
+              "№ машины": m.code,
+              "Водитель": m.driverName ?? "",
+              "Перевозчик": m.transportCompanyName ?? "",
+              "Статус": STATUS_LABEL.get(m.status) ?? m.status,
+              "Культура": it.cultureName,
+              "Поставщик": it.farmerName,
+              "Тип тары": it.packagingTypeName ?? "",
+              "Кол-во тары": it.tareUnits,
+              "План кг": it.plannedKg,
+              "Факт кг": it.actualKg,
+              "Принято кг": it.acceptedKg,
+            });
+          }
+        }
+      }
+    }
+    downloadXlsx({
+      rows,
+      columns: XLSX_COLUMNS,
+      sheetName: "Отгрузки",
+      fileName: `vsms-отгрузки-${feed.seasonYear}.xlsx`,
+    });
+  };
+  const exportSlot = (
+    <button type="button" className="btn btn-sm" onClick={exportXlsx}>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+      Экспорт Excel
+    </button>
+  );
+
   const toolbar = (
     <FeedToolbar
       ref={toolbarRef}
@@ -640,6 +709,7 @@ export function ShipmentsFeed({
       showFilters
       printSlot={printSlot}
       expandSlot={expandSlot}
+      exportSlot={exportSlot}
       {...viewProps}
       {...filterProps}
     />
