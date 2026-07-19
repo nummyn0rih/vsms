@@ -143,6 +143,7 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
 
           {expandSlot}
           {printSlot}
+          {exportSlot}
 
           <div className="seg">
             {views.map((v) =>
@@ -226,8 +227,6 @@ export const FeedToolbar = forwardRef<HTMLDivElement, FeedToolbarProps>(
             <span className={`switch${hidePlanned ? "" : " off"}`} />
             Скрыть плановые
           </label>
-
-          {exportSlot}
         </div>
         )}
       </div>
