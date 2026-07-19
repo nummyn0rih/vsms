@@ -20,6 +20,8 @@ import { BoardView } from "./BoardView";
 import { ScopeCombo } from "./ScopeCombo";
 import { usePlanWeek } from "./usePlanWeek";
 import { useBoardWeek } from "./useBoardWeek";
+import { rowWeekTotal, planDayTotals, weekGrandTotal, EPS } from "./plan-totals";
+import { downloadXlsx, type XlsxRow, t1, dayLabel } from "@/lib/xlsx-export";
 
 type Week = { seasonYear: number; isoYear: number; isoWeek: number };
 type View = "plan" | "board";
@@ -163,6 +165,76 @@ export function PlannerShell({
       </a>
     ) : null;
 
+  // Экспорт Excel Плана: строка = культура, по каждому рабочему дню пара «факт/цель»,
+  // затем Цель/Факт/%/Δ + итоговая строка. Тот же источник, что таблица и /print/plan.
+  const pw = plan.week;
+  const exportSlot =
+    view === "plan" && pw ? (
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={() => {
+          const columns = [
+            "Культура",
+            ...pw.days.flatMap((d) => [`${dayLabel(d.date)} факт`, `${dayLabel(d.date)} цель`]),
+            "Цель",
+            "Факт",
+            "%",
+            "Δ",
+          ];
+          const rows: XlsxRow[] = [];
+          for (const r of pw.rows) {
+            const target = rowWeekTotal(r);
+            const fact = r.weekProgress.effectiveTons;
+            const hasTarget = target > EPS;
+            const row: XlsxRow = { "Культура": r.cultureName };
+            for (const d of pw.days) {
+              const eff = r.dayProgress[d.date]?.effectiveTons ?? 0;
+              const tgt = r.dayTargets[d.date];
+              row[`${dayLabel(d.date)} факт`] = eff > EPS ? t1(eff) : null;
+              row[`${dayLabel(d.date)} цель`] = tgt != null ? t1(tgt) : null;
+            }
+            row["Цель"] = hasTarget ? t1(target) : null;
+            row["Факт"] = t1(fact);
+            row["%"] = hasTarget ? Math.round((fact / target) * 100) : null;
+            row["Δ"] = hasTarget ? t1(fact - target) : null;
+            rows.push(row);
+          }
+          const dayTotals = planDayTotals(pw);
+          const total: XlsxRow = { "Культура": "Итого" };
+          for (let i = 0; i < pw.days.length; i++) {
+            total[`${dayLabel(pw.days[i].date)} факт`] = t1(pw.dayTotalsProgress[i]?.effectiveTons ?? 0);
+            total[`${dayLabel(pw.days[i].date)} цель`] = t1(dayTotals[i] ?? 0);
+          }
+          total["Цель"] = t1(weekGrandTotal(pw));
+          total["Факт"] = t1(pw.weekTotalProgress.effectiveTons);
+          total["%"] = null;
+          total["Δ"] = null;
+          rows.push(total);
+          downloadXlsx({
+            rows,
+            columns,
+            sheetName: "План",
+            fileName: `vsms-план-${pw.seasonYear}-W${String(pw.isoWeek).padStart(2, "0")}.xlsx`,
+          });
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Экспорт Excel
+      </button>
+    ) : null;
+
   return (
     <div>
       <FeedToolbar
@@ -180,6 +252,7 @@ export function PlannerShell({
         views={VIEWS}
         showFilters={false}
         printSlot={printSlot}
+        exportSlot={exportSlot}
         scopeSlot={
           view === "plan" && plan.week ? (
             <ScopeCombo

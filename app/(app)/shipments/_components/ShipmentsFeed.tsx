@@ -22,7 +22,7 @@ import {
 import { WeekBlock } from "./WeekBlock";
 import { ShipmentFormDialog } from "./ShipmentFormDialog";
 import { FeedToolbar } from "@/components/shell/FeedToolbar";
-import { downloadXlsx, type XlsxRow } from "@/lib/xlsx-export";
+import { downloadXlsx, type XlsxRow, t1, dayLabel } from "@/lib/xlsx-export";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -32,6 +32,7 @@ import {
 import { FilterCombo } from "@/components/filters/FilterCombo";
 import { weekKey, formatWeekRange, writeUrlParam } from "./week-format";
 import { SummaryView } from "./SummaryView";
+import { rowPlan, EPS } from "./summary-fill";
 import { usePlanWeek } from "@/app/(app)/planner/_components/usePlanWeek";
 
 export type Week = { seasonYear: number; isoYear: number; isoWeek: number };
@@ -447,6 +448,63 @@ export function ShipmentsFeed({
         Печать
       </a>
     );
+    // Экспорт Excel Сводки: строка = культура, колонки — дни (эфф. факт) + План/Факт/%/Δ,
+    // итоговая строка «Итого по дням». Тот же источник, что таблица и /print/summary.
+    const w = plan.week;
+    const summaryExportSlot = w ? (
+      <button
+        type="button"
+        className="btn btn-sm"
+        onClick={() => {
+          const columns = ["Культура", ...w.days.map((d) => dayLabel(d.date)), "План", "Факт", "%", "Δ"];
+          const rows: XlsxRow[] = [];
+          for (const r of w.rows) {
+            const planTons = rowPlan(r);
+            const fact = r.weekProgress.effectiveTons;
+            const hasPlan = planTons > EPS;
+            const row: XlsxRow = { "Культура": r.cultureName };
+            for (const d of w.days) {
+              const eff = r.dayProgress[d.date]?.effectiveTons ?? 0;
+              row[dayLabel(d.date)] = eff > EPS ? t1(eff) : null;
+            }
+            row["План"] = hasPlan ? t1(planTons) : null;
+            row["Факт"] = t1(fact);
+            row["%"] = hasPlan ? Math.round((fact / planTons) * 100) : null;
+            row["Δ"] = hasPlan ? t1(fact - planTons) : null;
+            rows.push(row);
+          }
+          const total: XlsxRow = { "Культура": "Итого по дням" };
+          for (let i = 0; i < w.days.length; i++) {
+            total[dayLabel(w.days[i].date)] = t1(w.dayTotalsProgress[i]?.effectiveTons ?? 0);
+          }
+          total["План"] = null;
+          total["Факт"] = t1(w.weekTotalProgress.effectiveTons);
+          total["%"] = null;
+          total["Δ"] = null;
+          rows.push(total);
+          downloadXlsx({
+            rows,
+            columns,
+            sheetName: "Сводка",
+            fileName: `vsms-сводка-${w.seasonYear}-W${String(w.isoWeek).padStart(2, "0")}.xlsx`,
+          });
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        Экспорт Excel
+      </button>
+    ) : null;
     return (
       <div ref={rootRef}>
         <FeedToolbar
@@ -462,6 +520,7 @@ export function ShipmentsFeed({
           todayActive={!summaryIsCurrent}
           showFilters={false}
           printSlot={summaryPrintSlot}
+          exportSlot={summaryExportSlot}
           {...viewProps}
         />
         <SummaryView week={plan.week} loading={plan.loading} />
