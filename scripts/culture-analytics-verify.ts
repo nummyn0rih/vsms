@@ -104,6 +104,42 @@ function pureCases() {
   check("calibre: «не в зачёт» — последним", a.calibre[2].isAccepted === false);
   check("calibre: тоннаж категории 6 т", near(a.calibre[0].tons, 6));
 
+  // calibre + брак: категории (50+30+12) + brak 8 = 100. Брак — синтетический ломоть.
+  a = aggregateCultureItems([
+    item({
+      actualKg: 10000,
+      brakPercent: 8,
+      calibres: [
+        { label: "станд.", isAccepted: true, percent: 50 },
+        { label: "мелкий", isAccepted: true, percent: 30 },
+        { label: "не в зачёт", isAccepted: false, percent: 12 },
+      ],
+    }),
+  ]);
+  check("calibre+брак: принято = 80% = 8 т", near(a.acceptedKgTotal, 8000));
+  check(
+    "calibre+брак: «Брак» добавлен последней категорией, Σ = 100%",
+    a.calibre.length === 4 &&
+      a.calibre[3].label === "Брак" &&
+      a.calibre[3].isAccepted === false &&
+      near(a.calibre[3].pct, 8) &&
+      near(a.calibre[3].tons, 0.8) &&
+      near(a.calibre.reduce((s, c) => s + c.pct, 0), 100),
+  );
+
+  // brak = 0 → пустой ломоть НЕ добавляется (регресс-гард)
+  a = aggregateCultureItems([
+    item({
+      actualKg: 10000,
+      brakPercent: 0,
+      calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
+    }),
+  ]);
+  check(
+    "calibre: brak=0 → категория «Брак» не создаётся",
+    a.calibre.length === 1 && a.calibre.every((c) => c.label !== "Брак"),
+  );
+
   // скудный кейс: позиция без перевески — брак «—», принятого нет, ничего не ломается
   a = aggregateCultureItems([item({ actualKg: null })]);
   check(

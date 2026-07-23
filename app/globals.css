@@ -1116,6 +1116,7 @@ a.an-cbar:hover { background: var(--canvas-soft); text-decoration: none; }
 .an-stbl thead th { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); font-weight: 400; text-align: right; padding: 0 0 10px; border-bottom: 1px solid var(--hairline); }
 .an-stbl th.l, .an-stbl td.l { text-align: left; }
 .an-stbl th + th, .an-stbl td + td { padding-left: 20px; }
+.an-stbl th.share, .an-stbl td.share { padding-left: 36px; }
 .an-stbl th.num, .an-stbl td.num { width: 120px; }
 .an-stbl tbody td { padding: 11px 0; border-bottom: 1px solid var(--hairline); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .an-stbl .farmer { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }

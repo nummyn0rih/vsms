@@ -20,6 +20,7 @@ import { listSeasons } from "@/server/seasons/actions";
 // поставщиков и долей в сезоне.
 
 const KG_PER_TON = 1000;
+const BRAK_LABEL = "Брак"; // синтетическая reject-категория стека калибра (brak_percent акта)
 
 export type CultureAnalytics = {
   season: number;
@@ -120,6 +121,7 @@ export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggrega
 
   let acceptedKgTotal = 0;
   let actualKgTotal = 0;
+  let brakKgTotal = 0; // вес брака (actual×brak%) — ломоть «Брак» в стеке калибра
   const brakRowsAll: BrakRow[] = [];
 
   for (const i of items) {
@@ -161,12 +163,21 @@ export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggrega
     // калибр: вес категории = actual × percent/100, доля — от Σ факт. веса
     if (i.actualKg != null) {
       actualKgTotal += i.actualKg;
+      brakKgTotal += (i.actualKg * (i.brakPercent ?? 0)) / 100;
       for (const c of i.calibres) {
         const cur = catKg.get(c.label) ?? { isAccepted: c.isAccepted, kg: 0 };
         cur.kg += (i.actualKg * c.percent) / 100;
         catKg.set(c.label, cur);
       }
     }
+  }
+
+  // Брак — отдельная доля акта (categories + brak = 100), в calibreResults её нет.
+  // Добавляем ломтём «не в зачёт», только если он ненулевой (иначе пустая категория).
+  if (brakKgTotal > 0) {
+    const cur = catKg.get(BRAK_LABEL) ?? { isAccepted: false, kg: 0 };
+    cur.kg += brakKgTotal;
+    catKg.set(BRAK_LABEL, cur);
   }
 
   return {
@@ -322,6 +333,7 @@ export async function getCultureAnalytics({
   });
 
   let targetKgTotal = 0;
+  let execAcceptedKgTotal = 0; // принято по строкам контракта (scoped) — база «Выполнения»
   const execByFarmer = new Map<number, { acceptedKg: number; targetKg: number }>();
   for (const { farmer_id } of farmersWithLine) {
     const exec = await getContractExecution({ farmerId: farmer_id, season });
@@ -330,6 +342,7 @@ export async function getCultureAnalytics({
     const acc = lines.reduce((s, l) => s + l.acceptedKg, 0);
     const tgt = lines.reduce((s, l) => s + l.targetKg, 0);
     targetKgTotal += tgt;
+    execAcceptedKgTotal += acc;
     execByFarmer.set(farmer_id, { acceptedKg: acc, targetKg: tgt });
   }
 
@@ -400,7 +413,9 @@ export async function getCultureAnalytics({
     kpi: {
       acceptedTons: acceptedKgTotal / KG_PER_TON,
       targetTons: targetKgTotal / KG_PER_TON,
-      completionPct: targetKgTotal > 0 ? (acceptedKgTotal / targetKgTotal) * 100 : null,
+      // Выполнение — contract-scoped база (accepted по строкам / план), чтобы сходилось
+      // с execPct поставщиков и дашбордом. acceptedKgTotal (broad) — только для «Принято».
+      completionPct: targetKgTotal > 0 ? (execAcceptedKgTotal / targetKgTotal) * 100 : null,
       avgBrakPct: agg.avgBrakPct,
       positionsCount: agg.positionsCount,
       tripsCount: agg.tripsCount,

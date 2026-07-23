@@ -51,7 +51,7 @@ export function SupplierTable({
             <th className="num">Принято, т</th>
             <th className="num">Выполнение</th>
             <th className="num">Брак</th>
-            <th className="l" style={{ width: 200 }}>
+            <th className="l share" style={{ width: 200 }}>
               Доля в культуре
             </th>
           </tr>
@@ -85,7 +85,7 @@ export function SupplierTable({
                   `${fmtPct1(r.brakPct)}%`
                 )}
               </td>
-              <td className="l">
+              <td className="l share">
                 <div className="sharebar">
                   <div className="trk">
                     <span
@@ -121,7 +121,7 @@ export function SupplierTable({
               )}
             </td>
             <td
-              className="l"
+              className="l share"
               style={{
                 color: "var(--mute)",
                 fontFamily: "var(--font-mono), monospace",
