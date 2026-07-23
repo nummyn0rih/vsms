@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { getSeasonAnalytics } from "@/server/analytics/dashboard";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { fmtTons, fmtPct1 } from "@/lib/format";
@@ -149,7 +151,12 @@ export default async function AnalyticsPage({
               ) : (
                 <div className="an-cbars">
                   {data.completionByCulture.map((c) => (
-                    <div className="an-cbar" key={c.cultureId}>
+                    // клик по культуре → профиль культуры (drill-down), сезон переносим
+                    <Link
+                      className="an-cbar"
+                      key={c.cultureId}
+                      href={`/analytics/culture/${c.cultureId}?season=${season}`}
+                    >
                       <span className="an-cbar-name">
                         <span className="chip" style={{ background: c.color }} />
                         <span className="nm">{c.cultureName}</span>
@@ -166,7 +173,7 @@ export default async function AnalyticsPage({
                         </div>
                       </div>
                       <span className="an-cbar-pct">{Math.round(c.pct)}%</span>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}

@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Аналитика по культуре — профиль за сезон (v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #ffffff;
+    --canvas-soft: #fafafa;
+    --canvas-soft-2: #f5f5f5;
+    --hairline: #ebebeb;
+    --hairline-strong: #a1a1a1;
+    --ink: #171717;
+    --body: #4d4d4d;
+    --mute: #888888;
+    --link: #0070f3;
+    --link-deep: #0761d1;
+
+    /* культуры — в проде Culture.color из курируемой палитры */
+    --cult-tomato: #D4322C;    /* Красный — simple */
+    --cult-cucumber: #2F9E44;  /* Зелёный — calibre */
+    --cult-squash: #7C3AED;    /* Фиолетовый — скудная */
+
+    /* нейтральные метрики (недели) — графит, НЕ статусные цвета */
+    --graf-1: #2f2f2f;
+    --graf-2: #bdbdbd;
+    --grid: #ebebeb;
+    --track: #f0f0f0;
+
+    /* брак — нейтральный янтарь, НЕ алярм-красный */
+    --brak: #cf9a3e;
+    --brak-deep: #9a6a12;
+    --brak-soft: #f6ecd6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Geist", Inter, system-ui, -apple-system, sans-serif;
+    background: var(--canvas-soft);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01";
+    letter-spacing: -0.01em;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { color: var(--link-deep); text-decoration: underline; }
+  .mono { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* ---------------- doc shell ---------------- */
+  .doc { max-width: 1320px; margin: 0 auto; padding: 56px 40px 120px; }
+  .doc-head { margin-bottom: 44px; }
+  .doc-eyebrow { font-family: "Geist Mono", monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mute); margin: 0 0 10px; }
+  .doc-title { font-size: 32px; font-weight: 600; letter-spacing: -0.045em; margin: 0; }
+  .doc-lead { margin: 12px 0 0; color: var(--body); font-size: 15px; line-height: 23px; max-width: 860px; letter-spacing: -0.01em; }
+  .doc-lead b { color: var(--ink); font-weight: 600; }
+
+  .group { margin-top: 54px; }
+  .group-label { display: flex; align-items: center; gap: 12px; margin: 0 0 26px; }
+  .group-label .gl-txt { font-family: "Geist Mono", monospace; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+  .group-label .gl-line { flex: 1; height: 1px; background: var(--hairline); }
+
+  .frame { margin-bottom: 40px; }
+  .frame-cap { display: flex; align-items: baseline; gap: 14px; margin-bottom: 13px; }
+  .frame-num { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--mute); padding-top: 1px; flex-shrink: 0; }
+  .frame-name { font-size: 15px; font-weight: 600; letter-spacing: -0.025em; }
+  .frame-desc { font-size: 13px; color: var(--mute); letter-spacing: -0.01em; margin-top: 3px; line-height: 18px; max-width: 900px; }
+  .frame-desc b { color: var(--body); font-weight: 600; }
+
+  .stage {
+    background: var(--canvas);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a;
+    overflow: hidden;
+  }
+
+  /* ---------------- page head ---------------- */
+  .phead { padding: 20px 26px 18px; border-bottom: 1px solid var(--hairline); }
+  .crumb { font-size: 13px; color: var(--mute); display: flex; align-items: center; gap: 7px; letter-spacing: -0.01em; margin-bottom: 14px; }
+  .crumb a { color: var(--mute); display: inline-flex; align-items: center; gap: 6px; }
+  .crumb a:hover { color: var(--ink); text-decoration: none; }
+  .crumb a svg { width: 14px; height: 14px; }
+  .crumb .sep { color: var(--hairline-strong); }
+  .crumb .cur { color: var(--body); }
+  .phead-row { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+  .phead-l { min-width: 0; }
+  .ptitle-wrap { display: flex; align-items: center; gap: 12px; }
+  .cchip { width: 15px; height: 15px; border-radius: 5px; flex-shrink: 0; }
+  .ptitle { font-size: 26px; font-weight: 600; letter-spacing: -0.04em; line-height: 30px; }
+  .psub { margin-top: 8px; font-size: 13px; color: var(--mute); letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .psub .ro { display: inline-flex; align-items: center; gap: 6px; }
+  .psub .ro svg { width: 12px; height: 12px; opacity: .8; }
+  .psub .sep { width: 1px; height: 12px; background: var(--hairline); }
+  .psub .pill { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--body); background: var(--canvas-soft); border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; letter-spacing: 0; }
+  .phead .spacer { flex: 1; }
+
+  /* culture selector */
+  .cultsel { position: relative; }
+  .cult-btn {
+    height: 38px; padding: 0 12px; border-radius: 6px;
+    border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: -0.02em;
+    display: inline-flex; align-items: center; gap: 9px; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 1px 1px #0000000a;
+  }
+  .cult-btn:hover { background: var(--canvas-soft); }
+  .cult-btn .dot { width: 9px; height: 9px; border-radius: 3px; }
+  .cult-btn .lab { color: var(--body); }
+  .cult-btn svg { width: 15px; height: 15px; color: var(--mute); }
+  .cult-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+    background: var(--canvas); border: 1px solid var(--hairline); border-radius: 8px;
+    box-shadow: 0 1px 1px #00000005, 0 8px 16px -4px #0000000f, 0 24px 32px -8px #0000000f;
+    padding: 5px; min-width: 210px;
+  }
+  .cult-menu .opt { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 14px; letter-spacing: -0.02em; cursor: pointer; color: var(--ink); }
+  .cult-menu .opt:hover { background: var(--canvas-soft); }
+  .cult-menu .opt .dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+  .cult-menu .opt .mono { color: var(--mute); margin-left: auto; font-size: 11px; }
+  .cult-menu .opt.cur { font-weight: 500; }
+  .cult-menu .mnote { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); padding: 7px 10px 4px; border-top: 1px solid var(--hairline); margin-top: 4px; line-height: 14px; }
+  .btn-ghost {
+    height: 38px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--hairline);
+    background: var(--canvas); color: var(--ink); font-family: inherit; font-size: 14px; font-weight: 500;
+    letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; box-shadow: 0 1px 1px #0000000a;
+  }
+  .btn-ghost:hover { background: var(--canvas-soft); }
+  .btn-ghost svg { width: 15px; height: 15px; color: var(--mute); }
+
+  /* ---------------- KPI strip ---------------- */
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; padding: 20px 26px; }
+  .kpi { border: 1px solid var(--hairline); border-radius: 8px; background: var(--canvas-soft); padding: 13px 15px; min-width: 0; }
+  .kpi .k { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); line-height: 14px; }
+  .kpi .v { font-size: 26px; font-weight: 600; letter-spacing: -0.04em; margin-top: 7px; display: flex; align-items: baseline; gap: 4px; line-height: 1; }
+  .kpi .v .u { font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: -0.01em; }
+  .kpi .sub { font-size: 12px; color: var(--mute); margin-top: 6px; letter-spacing: -0.01em; }
+  .kpi .sub b { color: var(--body); font-weight: 500; }
+  .kpi.muted .v { color: var(--hairline-strong); }
+  .kpi.accent .v { color: var(--cult-c); }
+
+  /* ---------------- chart grid ---------------- */
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 6px 26px 20px; }
+  .charts.wide { grid-template-columns: 1fr; }
+  @media (max-width: 980px) { .charts { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .card { border: 1px solid var(--hairline); border-radius: 10px; background: var(--canvas); overflow: hidden; box-shadow: 0 1px 1px #00000005, 0 2px 2px #0000000a; display: flex; flex-direction: column; }
+  .card.span2 { grid-column: 1 / -1; }
+  .card-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--hairline); display: flex; align-items: flex-start; gap: 12px; }
+  .card-head .ch-l { min-width: 0; flex: 1; }
+  .card-title { font-size: 14px; font-weight: 600; letter-spacing: -0.025em; display: flex; align-items: center; gap: 8px; }
+  .card-unit { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); margin-top: 4px; letter-spacing: 0; }
+  .card-hint { font-family: "Geist Mono", monospace; font-size: 10px; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+  .card-body { padding: 16px 18px 18px; flex: 1; }
+
+  /* big single-number brak */
+  .bignum { display: flex; align-items: baseline; gap: 12px; padding: 6px 2px 2px; }
+  .bignum .n { font-size: 46px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; color: var(--brak-deep); }
+  .bignum .n .u { font-size: 20px; color: var(--brak); font-weight: 400; }
+  .bignum .meta { font-size: 12.5px; color: var(--mute); line-height: 17px; letter-spacing: -0.01em; }
+  .bignum .meta b { color: var(--body); font-weight: 500; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--body); letter-spacing: -0.01em; }
+  .legend .sw { width: 20px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .legend .sw.dash { width: 20px; height: 0; border-top: 2px dashed var(--hairline-strong); border-radius: 0; }
+
+  /* svg chart primitives */
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .chart-svg text { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+  .ax-lbl { font-size: 10.5px; fill: var(--mute); }
+  .ax-lbl.x { font-family: "Geist", sans-serif; letter-spacing: -0.02em; }
+  .val-lbl { font-size: 10.5px; fill: var(--body); font-weight: 500; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .axisline { stroke: var(--hairline-strong); stroke-width: 1; opacity: .55; }
+  .planline { stroke: var(--hairline-strong); stroke-width: 1.25; stroke-dasharray: 4 4; opacity: .7; fill: none; }
+
+  /* supplier table */
+  .stbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .stbl thead th { font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); font-weight: 400; text-align: right; padding: 0 0 10px; border-bottom: 1px solid var(--hairline); }
+  .stbl thead th.l { text-align: left; }
+  .stbl tbody td { padding: 11px 0; border-bottom: 1px solid var(--hairline); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .stbl tbody tr:last-child td { border-bottom: none; }
+  .stbl td.l { text-align: left; }
+  .stbl .farmer { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .stbl .farmer .nm { font-weight: 500; letter-spacing: -0.02em; }
+  .stbl .sharebar { display: grid; grid-template-columns: 1fr 42px; align-items: center; gap: 10px; }
+  .stbl .sharebar .trk { height: 7px; border-radius: 4px; background: var(--track); overflow: hidden; position: relative; }
+  .stbl .sharebar .fl { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .stbl .sharebar .pc { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--body); text-align: right; }
+  .stbl .brak-v { color: var(--brak-deep); font-weight: 500; }
+  .stbl .exec-v b { font-weight: 600; }
+  .stbl tfoot td { padding: 11px 0 2px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em; border-top: 2px solid var(--hairline); }
+  .stbl tfoot td.l { text-align: left; color: var(--mute); font-weight: 500; font-size: 12px; }
+  .dash { color: var(--hairline-strong); }
+
+  /* calibre stack */
+  .calbar { height: 30px; border-radius: 6px; overflow: hidden; display: flex; border: 1px solid var(--hairline); }
+  .calbar .seg { display: flex; align-items: center; justify-content: center; font-family: "Geist Mono", monospace; font-size: 11px; color: #fff; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .calbar .seg.reject { background: repeating-linear-gradient(45deg, var(--brak) 0 6px, var(--brak-deep) 6px 12px); }
+  .calleg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 22px; margin-top: 16px; }
+  @media (max-width: 720px){ .calleg { grid-template-columns: 1fr; } }
+  .calleg .row { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: -0.01em; }
+  .calleg .row .sw { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+  .calleg .row .sw.reject { background: repeating-linear-gradient(45deg, var(--brak) 0 4px, var(--brak-deep) 4px 8px); }
+  .calleg .row .nm { color: var(--body); }
+  .calleg .row .val { margin-left: auto; font-family: "Geist Mono", monospace; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .calleg .row .val .sm { color: var(--mute); }
+
+  /* empty chart states */
+  .chart-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px 16px; min-height: 140px; gap: 8px; }
+  .chart-empty .ic { width: 38px; height: 38px; border-radius: 9px; background: var(--canvas-soft); border: 1px solid var(--hairline); display: grid; place-items: center; color: var(--hairline-strong); }
+  .chart-empty .ic svg { width: 18px; height: 18px; }
+  .chart-empty .t { font-size: 13.5px; font-weight: 500; letter-spacing: -0.02em; color: var(--body); }
+  .chart-empty .d { font-size: 12px; color: var(--mute); letter-spacing: -0.01em; max-width: 300px; line-height: 17px; }
+
+  .stage-note { font-family: "Geist Mono", monospace; font-size: 11px; color: var(--mute); padding: 9px 18px; border-top: 1px dashed var(--hairline); background: var(--canvas-soft); display: flex; align-items: center; gap: 8px; }
+  .stage-note svg { width: 13px; height: 13px; flex-shrink: 0; opacity: .8; }
+
+  /* ---------------- decisions ---------------- */
+  .decisions { margin-top: 54px; border-top: 1px solid var(--hairline); padding-top: 28px; }
+  .dec-title { font-size: 16px; font-weight: 600; letter-spacing: -0.03em; margin: 0 0 4px; }
+  .dec-sub { font-size: 13px; color: var(--mute); margin: 0 0 20px; letter-spacing: -0.01em; }
+  .dec { border-left: 2px solid var(--hairline); padding: 0 0 0 16px; margin-bottom: 20px; }
+  .dec .q { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px; }
+  .dec .a { font-size: 13.5px; color: var(--body); line-height: 20px; letter-spacing: -0.01em; }
+  .dec .a b { color: var(--ink); font-weight: 600; }
+  .dec .tag { font-family: "Geist Mono", monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); border: 1px solid var(--hairline); border-radius: 4px; padding: 1px 6px; margin-right: 8px; }
+  .dec .tag.open { color: var(--brak-deep); border-color: var(--brak); background: var(--brak-soft); }
+
+  .endnote { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--hairline); font-size: 12px; color: var(--mute); letter-spacing: -0.01em; line-height: 19px; }
+  .endnote .mono { color: var(--body); }
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="220" y="150" width="30" height="30" rx="8" fill="#D4322C"/>
+    <rect x="270" y="152" width="260" height="26" rx="8" fill="#171717"/>
+    <rect x="220" y="230" width="150" height="80" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="390" y="230" width="150" height="80" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="560" y="230" width="150" height="80" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="220" y="350" width="490" height="230" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <path d="M250,540 L330,470 L410,490 L490,410 L570,440 L650,380" fill="none" stroke="#D4322C" stroke-width="5" stroke-linejoin="round"/>
+    <rect x="740" y="350" width="240" height="230" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="770" y="400" width="180" height="12" rx="6" fill="#D4322C"/>
+    <rect x="770" y="440" width="140" height="12" rx="6" fill="#D4322C" opacity="0.7"/>
+    <rect x="770" y="480" width="90" height="12" rx="6" fill="#D4322C" opacity="0.5"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Аналитика · /analytics/culture/[id] · v1</p>
+    <h1 class="doc-title">Аналитика по культуре</h1>
+    <p class="doc-lead">Drill-down из дашборда <span class="mono">/analytics</span> — <b>профиль одной культуры за сезон</b>: как идёт именно она, кто её поставляет и с каким качеством. Read-only, отдельный шарабельный экран (<span class="mono">?season=</span>) с селектором культуры и «← к дашборду». Агрегат <span class="mono">getCultureAnalytics({season, cultureId})</span> считает на лету (execution по строкам культуры · брак = actual×brak% · приёмка по неделям · калибр из категорий акта) — ничего не хранится. Серия культуры — её <span class="mono">Culture.color</span>; брак — нейтральный янтарь; недели — графит. Год-к-году и деньги-KPI — вне среза. Числа иллюстративные; в проде графики — Recharts.</p>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- A — SIMPLE культура (по весу) — основной вид                 -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">A · Основной вид — культура simple (приёмка по весу)</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">A0</span>
+        <div>
+          <div class="frame-name">Профиль культуры · шапка + KPI + динамика + брак + по поставщикам</div>
+          <div class="frame-desc">Шапка: чип+название (цвет из БД), сезон, тип приёмки, селектор культуры <b>кликабелен</b> + «← к дашборду». KPI-полоса по культуре (принято/план · выполнение · брак · поставок/рейсов · <b>доля в сезоне</b>). Ниже: динамика приёмки по неделям (area, серия — цвет культуры, план пунктиром), % брака по неделям (нейтральный янтарь), таблица по поставщикам (ключевой разрез — кто даёт объём и кто брак). Калибр-блок скрыт — культура simple.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика культуры · Томаты (simple)" style="--cult-c: var(--cult-tomato)">
+        <div class="phead">
+          <div class="crumb">
+            <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Аналитика</a>
+            <span class="sep">/</span><span class="cur">Томаты</span>
+          </div>
+          <div class="phead-row">
+            <div class="phead-l">
+              <div class="ptitle-wrap"><span class="cchip" style="background:var(--cult-tomato)"></span><span class="ptitle">Томаты</span></div>
+              <div class="psub">
+                <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+                <span class="sep"></span><span>Сезон <b style="color:var(--body)">2026</b></span>
+                <span class="sep"></span><span class="pill">приёмка по весу</span>
+              </div>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>К дашборду</button>
+            <div class="cultsel">
+              <button class="cult-btn" id="cultBtn"><span class="dot" style="background:var(--cult-tomato)"></span>Томаты<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+              <div class="cult-menu" id="cultMenu" style="display:none">
+                <div class="opt cur"><span class="dot" style="background:var(--cult-tomato)"></span>Томаты <span class="mono">по весу</span></div>
+                <div class="opt"><span class="dot" style="background:var(--cult-cucumber)"></span>Огурцы <span class="mono">калибр</span></div>
+                <div class="opt"><span class="dot" style="background:#E8730C"></span>Перец <span class="mono">по весу</span></div>
+                <div class="opt"><span class="dot" style="background:var(--cult-squash)"></span>Патиссоны <span class="mono">по весу</span></div>
+                <div class="mnote">переключает весь профиль · URL /culture/[id]</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpis">
+          <div class="kpi">
+            <div class="k">Принято</div>
+            <div class="v"><span class="tnum">142</span><span class="u">т</span></div>
+            <div class="sub">из <b>210&nbsp;т</b> плана</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Выполнение</div>
+            <div class="v"><span class="tnum">68</span><span class="u">%</span></div>
+            <div class="sub">принято / план по контрактам</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Средний брак</div>
+            <div class="v" style="color:var(--brak-deep)"><span class="tnum">3,8</span><span class="u">%</span></div>
+            <div class="sub">взвешенный по факт. весу</div>
+          </div>
+          <div class="kpi">
+            <div class="k">Поставок</div>
+            <div class="v"><span class="tnum">61</span><span class="u">поз.</span></div>
+            <div class="sub"><b>47</b> рейсов · 9 фермеров</div>
+          </div>
+          <div class="kpi accent">
+            <div class="k">Доля в сезоне</div>
+            <div class="v"><span class="tnum">42</span><span class="u">%</span></div>
+            <div class="sub">от всего принятого · 142 / 342&nbsp;т</div>
+          </div>
+        </div>
+
+        <!-- charts row 1 -->
+        <div class="charts">
+          <!-- dynamics -->
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title"><span class="cchip" style="width:10px;height:10px;border-radius:3px;background:var(--cult-tomato)"></span>Динамика приёмки по неделям</div><div class="card-unit">т эффективного веса · ISO-недели</div></div><span class="card-hint">план пунктиром</span></div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика приёмки — Томаты">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">22</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">15</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">7</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- plan line (flat weekly target ~14t) -->
+                <path class="planline" d="M44,120 L604,120"/>
+                <!-- area + line (culture color) -->
+                <path d="M44,188 L114,150 L184,120 L254,92 L324,64 L394,50 L464,78 L534,60 L604,132 L604,212 L44,212 Z" fill="var(--cult-tomato)" fill-opacity="0.10"/>
+                <path d="M44,188 L114,150 L184,120 L254,92 L324,64 L394,50 L464,78 L534,60 L604,132" fill="none" stroke="var(--cult-tomato)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>
+                <g fill="var(--canvas)" stroke="var(--cult-tomato)" stroke-width="1.5">
+                  <circle cx="44" cy="188" r="2.6"/><circle cx="114" cy="150" r="2.6"/><circle cx="184" cy="120" r="2.6"/><circle cx="254" cy="92" r="2.6"/><circle cx="324" cy="64" r="2.6"/><circle cx="394" cy="50" r="2.6"/><circle cx="464" cy="78" r="2.6"/><circle cx="534" cy="60" r="2.6"/><circle cx="604" cy="132" r="2.6"/>
+                </g>
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+              </svg>
+              <div class="legend"><span><span class="sw" style="background:var(--cult-tomato)"></span>приёмка — Томаты</span><span><span class="sw dash"></span>плановый темп (норма/неделя)</span></div>
+            </div>
+          </div>
+
+          <!-- brak by week -->
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title">% брака по неделям</div><div class="card-unit">брак / принято · % · нейтральный янтарь</div></div><span class="card-hint">ср. 3,8%</span></div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Процент брака по неделям — Томаты">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">8</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">6</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">4</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">2</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <!-- avg reference -->
+                <path class="planline" d="M44,118.9 L604,118.9"/>
+                <!-- bars: values 4.6,3.1,3.9,2.8,3.4,4.9,5.5,3.2,3.0 -> y = 212 - v/8*196 -->
+                <g fill="var(--brak)">
+                  <rect x="30" y="99.3" width="34" height="112.7" rx="2"/>
+                  <rect x="100" y="136.0" width="34" height="76.0" rx="2"/>
+                  <rect x="170" y="116.4" width="34" height="95.6" rx="2"/>
+                  <rect x="240" y="143.4" width="34" height="68.6" rx="2"/>
+                  <rect x="310" y="128.7" width="34" height="83.3" rx="2"/>
+                  <rect x="380" y="91.9" width="34" height="120.1" rx="2"/>
+                  <rect x="450" y="77.3" width="34" height="134.7" rx="2"/>
+                  <rect x="520" y="133.6" width="34" height="78.4" rx="2"/>
+                  <rect x="590" y="138.5" width="14" height="73.5" rx="2"/>
+                </g>
+                <text class="ax-lbl x" x="47" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="187" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="327" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="467" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="597" y="230" text-anchor="middle">W28</text>
+              </svg>
+              <div class="legend"><span><span class="sw" style="background:var(--brak)"></span>брак по неделе</span><span><span class="sw dash"></span>средний за сезон (3,8%)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- suppliers -->
+        <div class="charts wide" style="padding-top:0">
+          <div class="card span2">
+            <div class="card-head"><div class="ch-l"><div class="card-title">По поставщикам</div><div class="card-unit">кто даёт объём и кто — брак · сортировка по принятому</div></div><span class="card-hint">9 фермеров</span></div>
+            <div class="card-body">
+              <table class="stbl">
+                <thead><tr><th class="l">Фермер</th><th>Принято, т</th><th>Выполнение</th><th>Брак</th><th class="l" style="width:190px">Доля в культуре</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">Ферма «Заречье»</span></div></td>
+                    <td>48,2</td><td class="exec-v"><b>74%</b></td><td class="brak-v">3,1%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:100%;background:var(--cult-tomato)"></span></div><span class="pc">34%</span></div></td>
+                  </tr>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">КФХ Петров</span></div></td>
+                    <td>31,6</td><td class="exec-v"><b>70%</b></td><td class="brak-v">2,8%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:66%;background:var(--cult-tomato)"></span></div><span class="pc">22%</span></div></td>
+                  </tr>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">Агро-Юг</span></div></td>
+                    <td>24,9</td><td class="exec-v"><b>62%</b></td><td class="brak-v" style="color:var(--brak-deep)">6,4%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:52%;background:var(--cult-tomato)"></span></div><span class="pc">18%</span></div></td>
+                  </tr>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">Ферма «Восход»</span></div></td>
+                    <td>18,4</td><td class="exec-v"><b>81%</b></td><td class="brak-v">3,3%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:38%;background:var(--cult-tomato)"></span></div><span class="pc">13%</span></div></td>
+                  </tr>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">КФХ Сидоренко</span></div></td>
+                    <td>11,3</td><td class="exec-v"><span class="dash">—</span></td><td class="brak-v">4,0%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:23%;background:var(--cult-tomato)"></span></div><span class="pc">8%</span></div></td>
+                  </tr>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-tomato)"></span><span class="nm">Прочие (4)</span></div></td>
+                    <td>7,6</td><td class="exec-v"><span class="dash">—</span></td><td class="brak-v">4,5%</td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:16%;background:var(--cult-tomato)"></span></div><span class="pc">5%</span></div></td>
+                  </tr>
+                </tbody>
+                <tfoot><tr><td class="l">Итого по культуре</td><td>142,0</td><td>68%</td><td class="brak-v">3,8%</td><td class="l" style="color:var(--mute);font-family:'Geist Mono',monospace;font-size:11px">100%</td></tr></tfoot>
+              </table>
+              <div class="legend"><span style="color:var(--mute)">«Выполнение» — только у фермеров со строкой контракта по культуре; у остальных «—» (объём без плана). Брак ≥ 6% выделен тоном.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Кликните селектор культуры — открывается меню. Всё read-only; агрегаты не хранятся. Калибр-блок скрыт: у simple-культуры нет категорий калибра.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- B — CALIBRE культура — с блоком калибра                      -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">B · Культура calibre (приёмка по категориям) — добавлен блок калибра</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B0</span>
+        <div>
+          <div class="frame-name">Профиль культуры calibre · + доли категорий</div>
+          <div class="frame-desc">То же, что simple, но тип приёмки — <b>калибр</b>: KPI, динамика и брак по неделям те же, а внизу добавлен блок <b>Калибр</b> — доли категорий (стек) с «не в зачёт»/браком, из категорий акта (BR-10). Для simple-культур блок отсутствует (см. A). Показан фрагмент — шапка, KPI и калибр-блок.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика культуры · Огурцы (calibre)" style="--cult-c: var(--cult-cucumber)">
+        <div class="phead">
+          <div class="crumb">
+            <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Аналитика</a>
+            <span class="sep">/</span><span class="cur">Огурцы</span>
+          </div>
+          <div class="phead-row">
+            <div class="phead-l">
+              <div class="ptitle-wrap"><span class="cchip" style="background:var(--cult-cucumber)"></span><span class="ptitle">Огурцы</span></div>
+              <div class="psub">
+                <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+                <span class="sep"></span><span>Сезон <b style="color:var(--body)">2026</b></span>
+                <span class="sep"></span><span class="pill">приёмка по калибру</span>
+              </div>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>К дашборду</button>
+            <div class="cultsel">
+              <button class="cult-btn"><span class="dot" style="background:var(--cult-cucumber)"></span>Огурцы<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="k">Принято</div><div class="v"><span class="tnum">98</span><span class="u">т</span></div><div class="sub">из <b>140&nbsp;т</b> плана</div></div>
+          <div class="kpi"><div class="k">Выполнение</div><div class="v"><span class="tnum">70</span><span class="u">%</span></div><div class="sub">принято / план по контрактам</div></div>
+          <div class="kpi"><div class="k">Средний брак</div><div class="v" style="color:var(--brak-deep)"><span class="tnum">2,9</span><span class="u">%</span></div><div class="sub">взвешенный по факт. весу</div></div>
+          <div class="kpi"><div class="k">Поставок</div><div class="v"><span class="tnum">44</span><span class="u">поз.</span></div><div class="sub"><b>34</b> рейсов · 6 фермеров</div></div>
+          <div class="kpi accent"><div class="k">Доля в сезоне</div><div class="v"><span class="tnum">29</span><span class="u">%</span></div><div class="sub">от всего принятого · 98 / 342&nbsp;т</div></div>
+        </div>
+
+        <div class="charts">
+          <!-- dynamics (compact) -->
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title"><span class="cchip" style="width:10px;height:10px;border-radius:3px;background:var(--cult-cucumber)"></span>Динамика приёмки по неделям</div><div class="card-unit">т эффективного веса · ISO-недели</div></div><span class="card-hint">план пунктиром</span></div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика приёмки — Огурцы">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">24</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">18</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">12</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">6</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <path class="planline" d="M44,114 L604,114"/>
+                <path d="M44,196 L114,158 L184,128 L254,100 L324,86 L394,72 L464,96 L534,110 L604,150 L604,212 L44,212 Z" fill="var(--cult-cucumber)" fill-opacity="0.10"/>
+                <path d="M44,196 L114,158 L184,128 L254,100 L324,86 L394,72 L464,96 L534,110 L604,150" fill="none" stroke="var(--cult-cucumber)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>
+                <g fill="var(--canvas)" stroke="var(--cult-cucumber)" stroke-width="1.5">
+                  <circle cx="44" cy="196" r="2.6"/><circle cx="114" cy="158" r="2.6"/><circle cx="184" cy="128" r="2.6"/><circle cx="254" cy="100" r="2.6"/><circle cx="324" cy="86" r="2.6"/><circle cx="394" cy="72" r="2.6"/><circle cx="464" cy="96" r="2.6"/><circle cx="534" cy="110" r="2.6"/><circle cx="604" cy="150" r="2.6"/>
+                </g>
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+              </svg>
+              <div class="legend"><span><span class="sw" style="background:var(--cult-cucumber)"></span>приёмка — Огурцы</span><span><span class="sw dash"></span>плановый темп</span></div>
+            </div>
+          </div>
+
+          <!-- brak single number (alt presentation) -->
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title">% брака за сезон</div><div class="card-unit">брак / принято · взвешенный · нейтральный янтарь</div></div><span class="card-hint">одно число + тренд</span></div>
+            <div class="card-body">
+              <div class="bignum"><div class="n"><span class="tnum">2,9</span><span class="u">%</span></div><div class="meta">взвешенный по факт. весу<br/>тренд к концу сезона <b>↘ снижается</b> (пик W23 — 4,4%)</div></div>
+              <svg class="chart-svg" viewBox="0 0 620 96" role="img" aria-label="Тренд брака — Огурцы" style="margin-top:14px">
+                <line class="axisline" x1="8" y1="88" x2="612" y2="88"/>
+                <path d="M8,40 L83,30 L158,44 L233,18 L308,34 L383,50 L458,58 L533,66 L608,72" fill="none" stroke="var(--brak)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>
+                <g fill="var(--canvas)" stroke="var(--brak)" stroke-width="1.4"><circle cx="8" cy="40" r="2.4"/><circle cx="83" cy="30" r="2.4"/><circle cx="158" cy="44" r="2.4"/><circle cx="233" cy="18" r="2.4"/><circle cx="308" cy="34" r="2.4"/><circle cx="383" cy="50" r="2.4"/><circle cx="458" cy="58" r="2.4"/><circle cx="533" cy="66" r="2.4"/><circle cx="608" cy="72" r="2.4"/></g>
+              </svg>
+              <div class="legend"><span style="color:var(--mute)">спарклайн — тот же ряд «% брака по неделям», сжатый до тренда (см. «Решения»: одно число vs график)</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CALIBRE block -->
+        <div class="charts wide" style="padding-top:0">
+          <div class="card span2">
+            <div class="card-head"><div class="ch-l"><div class="card-title">Калибр — доли категорий за сезон</div><div class="card-unit">% принятого по категориям · из категорий акта (BR-10)</div></div><span class="card-hint">только calibre-культуры</span></div>
+            <div class="card-body">
+              <div class="calbar">
+                <div class="seg" style="width:31%;background:var(--cult-cucumber)">Кат. A · 31%</div>
+                <div class="seg" style="width:38%;background:color-mix(in srgb,var(--cult-cucumber) 72%,#fff)">Кат. B · 38%</div>
+                <div class="seg" style="width:19%;background:color-mix(in srgb,var(--cult-cucumber) 46%,#fff);color:var(--ink)">C · 19%</div>
+                <div class="seg reject" style="width:12%">12%</div>
+              </div>
+              <div class="calleg">
+                <div class="row"><span class="sw" style="background:var(--cult-cucumber)"></span><span class="nm">Категория A — высший калибр</span><span class="val">31%&nbsp;<span class="sm">· 30,4 т</span></span></div>
+                <div class="row"><span class="sw" style="background:color-mix(in srgb,var(--cult-cucumber) 72%,#fff)"></span><span class="nm">Категория B — стандарт</span><span class="val">38%&nbsp;<span class="sm">· 37,2 т</span></span></div>
+                <div class="row"><span class="sw" style="background:color-mix(in srgb,var(--cult-cucumber) 46%,#fff)"></span><span class="nm">Категория C — мелкий</span><span class="val">19%&nbsp;<span class="sm">· 18,6 т</span></span></div>
+                <div class="row"><span class="sw reject"></span><span class="nm">Не в зачёт / брак</span><span class="val">12%&nbsp;<span class="sm">· 11,8 т</span></span></div>
+              </div>
+              <div class="legend"><span style="color:var(--mute)">Категории и признак «в зачёт» — из справочника калибров культуры; проценты усреднены по факт. весу позиций. «Не в зачёт» включает браковую долю.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Блок «Калибр» рендерится только при acceptance_type=calibre. Здесь брак показан альтернативой — одним числом + тренд (в A — график по неделям); финальный вариант — на ревью.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- C — Скудная / ранняя культура                                -->
+  <!-- ============================================================ -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">C · Ранняя / скудная культура — мало приёмок</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C0</span>
+        <div>
+          <div class="frame-name">Данных пока мало — KPI держат «—», графики держат оси</div>
+          <div class="frame-desc">Культура только пошла (W20–W21, две приёмки). KPI показывают что есть, недостающие — прочерк «—» вместо сломанных нулей. Графики держат оси и подписи, вместо серий — аккуратное «данных пока нет». Таблица по поставщикам — то, что уже принято. Ничего не разваливается.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Аналитика культуры · Патиссоны (скудно)" style="--cult-c: var(--cult-squash)">
+        <div class="phead">
+          <div class="crumb">
+            <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Аналитика</a>
+            <span class="sep">/</span><span class="cur">Патиссоны</span>
+          </div>
+          <div class="phead-row">
+            <div class="phead-l">
+              <div class="ptitle-wrap"><span class="cchip" style="background:var(--cult-squash)"></span><span class="ptitle">Патиссоны</span></div>
+              <div class="psub">
+                <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+                <span class="sep"></span><span>Сезон <b style="color:var(--body)">2026</b></span>
+                <span class="sep"></span><span class="pill">приёмка по весу · старт W20</span>
+              </div>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn-ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>К дашборду</button>
+            <div class="cultsel">
+              <button class="cult-btn"><span class="dot" style="background:var(--cult-squash)"></span>Патиссоны<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><div class="k">Принято</div><div class="v"><span class="tnum">4,2</span><span class="u">т</span></div><div class="sub">из <b>70&nbsp;т</b> плана</div></div>
+          <div class="kpi"><div class="k">Выполнение</div><div class="v"><span class="tnum">6</span><span class="u">%</span></div><div class="sub">первые приёмки</div></div>
+          <div class="kpi muted"><div class="k">Средний брак</div><div class="v"><span class="tnum">—</span></div><div class="sub">нет завершённых актов</div></div>
+          <div class="kpi"><div class="k">Поставок</div><div class="v"><span class="tnum">2</span><span class="u">поз.</span></div><div class="sub"><b>2</b> рейса · 1 фермер</div></div>
+          <div class="kpi accent"><div class="k">Доля в сезоне</div><div class="v"><span class="tnum">1</span><span class="u">%</span></div><div class="sub">от всего принятого · 4,2 / 342&nbsp;т</div></div>
+        </div>
+
+        <div class="charts">
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title"><span class="cchip" style="width:10px;height:10px;border-radius:3px;background:var(--cult-squash)"></span>Динамика приёмки по неделям</div><div class="card-unit">т эффективного веса · ISO-недели</div></div></div>
+            <div class="card-body">
+              <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Динамика — данных пока мало">
+                <line class="gridline" x1="44" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">30</text>
+                <line class="gridline" x1="44" y1="65" x2="604" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">22</text>
+                <line class="gridline" x1="44" y1="114" x2="604" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">15</text>
+                <line class="gridline" x1="44" y1="163" x2="604" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">7</text>
+                <line class="axisline" x1="44" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                <circle cx="44" cy="200" r="2.8" fill="var(--cult-squash)"/><circle cx="114" cy="188" r="2.8" fill="var(--cult-squash)"/>
+                <path d="M44,200 L114,188" fill="none" stroke="var(--cult-squash)" stroke-width="1.9" stroke-linecap="round"/>
+                <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                <text class="ax-lbl x" x="184" y="230" text-anchor="middle">W22</text>
+                <text class="ax-lbl x" x="324" y="230" text-anchor="middle">W24</text>
+                <text class="ax-lbl x" x="464" y="230" text-anchor="middle">W26</text>
+                <text class="ax-lbl x" x="604" y="230" text-anchor="middle">W28</text>
+                <text x="360" y="112" text-anchor="middle" style="font-family:Geist,sans-serif;font-size:13px;fill:var(--mute);letter-spacing:-0.02em">Данных пока мало — две приёмки, тренд не строится</text>
+              </svg>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><div class="ch-l"><div class="card-title">% брака по неделям</div><div class="card-unit">брак / принято · % · нейтральный янтарь</div></div></div>
+            <div class="card-body">
+              <div class="chart-empty">
+                <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+                <div class="t">Данных пока нет</div>
+                <div class="d">Брак считается по завершённым актам приёмки — по этой культуре их ещё нет в сезоне.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts wide" style="padding-top:0">
+          <div class="card span2">
+            <div class="card-head"><div class="ch-l"><div class="card-title">По поставщикам</div><div class="card-unit">то, что уже принято · сортировка по объёму</div></div><span class="card-hint">1 фермер</span></div>
+            <div class="card-body">
+              <table class="stbl">
+                <thead><tr><th class="l">Фермер</th><th>Принято, т</th><th>Выполнение</th><th>Брак</th><th class="l" style="width:190px">Доля в культуре</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="l"><div class="farmer"><span class="cchip" style="width:8px;height:8px;border-radius:2px;background:var(--cult-squash)"></span><span class="nm">Ферма «Заречье»</span></div></td>
+                    <td>4,2</td><td class="exec-v"><b>6%</b></td><td class="brak-v"><span class="dash">—</span></td>
+                    <td class="l"><div class="sharebar"><div class="trk"><span class="fl" style="width:100%;background:var(--cult-squash)"></span></div><span class="pc">100%</span></div></td>
+                  </tr>
+                </tbody>
+                <tfoot><tr><td class="l">Итого по культуре</td><td>4,2</td><td>6%</td><td class="brak-v"><span class="dash">—</span></td><td class="l" style="color:var(--mute);font-family:'Geist Mono',monospace;font-size:11px">100%</td></tr></tfoot>
+              </table>
+              <div class="legend"><span style="color:var(--mute)">Единственный поставщик — строка на полную ширину трека, макет не растягивается. Брак «—»: актов ещё нет.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Скудное состояние: KPI без данных — «—», графики держат оси, таблица показывает принятое. Ни одного сломанного нуля.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- DECISIONS                                                     -->
+  <!-- ============================================================ -->
+  <section class="decisions">
+    <h2 class="dec-title">Решения / вопросы</h2>
+    <p class="dec-sub">Открыто на ревью раскладки v1 — до кода на Recharts / <span class="mono">getCultureAnalytics</span>.</p>
+
+    <div class="dec">
+      <div class="q">Отдельный экран, модалка или боковая панель?</div>
+      <div class="a"><span class="tag">склоняемся</span>Отдельный экран <span class="mono">/analytics/culture/[id]?season=</span>: профиль просторный (KPI + 2–3 графика + таблица поставщиков + калибр), ссылка шарабельна, «← к дашборду» возвращает контекст. Модалка/панель зажали бы таблицу и калибр. Утвердить: не нужен ли лёгкий peek-режим (панель) прямо из графика дашборда?</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">По поставщикам — таблица или бар?</div>
+      <div class="a"><span class="tag open">вопрос</span>v1 — <b>таблица</b> (Фермер · принято · выполнение · брак · доля): 4–5 числовых колонок читаются в строку, брак и выполнение рядом видно сразу; доля дана мини-баром внутри строки (гибрид). Чистый бар показал бы только объём, потеряв брак/выполнение. Достаточно ли таблицы, или нужен переключатель «таблица / бар по объёму»?</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Накладывать ли план на динамику?</div>
+      <div class="a"><span class="tag">склоняемся</span>Да — <b>пунктиром</b> плановый темп (норма/неделя из контракта), заливка area — факт цветом культуры. Даёт ответ «идём с опережением / отстаём» без второго графика. Риск: у культур без ровного плана линия вводит в заблуждение — тогда прячем плановую линию (fallback только area).</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">% брака — по неделям или одно число?</div>
+      <div class="a"><span class="tag open">вопрос</span>Показаны оба: A — <b>график по неделям</b> (виден всплеск и когда он был), B — <b>одно число + спарклайн-тренд</b> (компактно, для профилей с калибр-блоком снизу). Для большинства культур брак стабилен — одно число + тренд, вероятно, достаточно; график по неделям — для проблемных. Нужен ли тумблер, или фиксируем одно число?</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">«Выполнение» у поставщика без строки контракта</div>
+      <div class="a"><span class="tag">решено</span>Показываем «—», а не 0% / 100%: объём есть, планового ориентира по этому фермеру нет (контракт на культуру не заведён на него). Итог по культуре считает выполнение от суммарного плана. Так «выполнение» не путается с «принял мало».</div>
+    </div>
+
+    <div class="dec">
+      <div class="q">Калибр — стек долей или отдельные бары категорий?</div>
+      <div class="a"><span class="tag">склоняемся</span><b>Стек 100%</b> (доли категорий одной полосой) + «не в зачёт»/брак штриховкой в конце: сразу читается структура партии и куда «утекает» вес. Отдельные бары дали бы точное сравнение категорий, но потеряли бы «сумму = 100% партии». Только для calibre-культур; у simple блок скрыт.</div>
+    </div>
+  </section>
+
+  <p class="endnote">VSMS · инструмент снабженца. Статичный макет <span class="mono">/analytics/culture/[id]</span> (v1) — раскладка, оси и цвета до кода на Recharts. Read-only, агрегаты на лету (<span class="mono">getCultureAnalytics</span>), ничего не хранится. Серия культуры — <span class="mono">Culture.color</span>; брак — нейтральный янтарь, не алярм-красный; недели — графит. Год-к-году и деньги-KPI — вне этого среза.</p>
+
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('cultBtn');
+  var menu = document.getElementById('cultMenu');
+  if (!btn || !menu) return;
+  function close() { menu.style.display = 'none'; document.removeEventListener('click', onDoc); }
+  function onDoc(e) { if (!menu.contains(e.target) && e.target !== btn) close(); }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (menu.style.display === 'none') {
+      menu.style.display = 'block';
+      setTimeout(function () { document.addEventListener('click', onDoc); }, 0);
+    } else { close(); }
+  });
+})();
+</script>
+</body>
+</html>

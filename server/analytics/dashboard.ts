@@ -50,7 +50,7 @@ export type SeasonAnalytics = {
   seasons: { seasonYear: number; isCurrent: boolean }[];
 };
 
-function weekLabel(week: number): string {
+export function weekLabel(week: number): string {
   return `W${String(week).padStart(2, "0")}`;
 }
 
@@ -76,11 +76,33 @@ export function aggregateActualTripWeight(
 }
 
 // Следующая ISO-неделя (через дату — корректно на границе года).
-function nextIsoWeek(isoYear: number, week: number): { isoYear: number; isoWeek: number } {
+export function nextIsoWeek(
+  isoYear: number,
+  week: number,
+): { isoYear: number; isoWeek: number } {
   const { start } = isoWeekRange(isoYear, week);
   const d = new Date(start);
   d.setUTCDate(d.getUTCDate() + 7);
   return isoWeek(d);
+}
+
+// Сплошная ось ISO-недель min..max по набору присутствующих недель (дырки не пропускаем —
+// иначе график врёт по длительности пауз). Общая для дашборда и профиля культуры.
+export function buildWeekAxis(
+  weeks: { isoYear: number; isoWeek: number }[],
+): { isoYear: number; isoWeek: number; label: string }[] {
+  if (weeks.length === 0) return [];
+  const sorted = [...weeks].sort((a, b) => a.isoYear - b.isoYear || a.isoWeek - b.isoWeek);
+  const last = sorted[sorted.length - 1];
+  const axis: { isoYear: number; isoWeek: number; label: string }[] = [];
+  let cur = { isoYear: sorted[0].isoYear, isoWeek: sorted[0].isoWeek };
+  // защитный предел итераций (сезон ≤ ~60 недель)
+  for (let guard = 0; guard < 70; guard++) {
+    axis.push({ ...cur, label: weekLabel(cur.isoWeek) });
+    if (cur.isoYear === last.isoYear && cur.isoWeek === last.isoWeek) break;
+    cur = nextIsoWeek(cur.isoYear, cur.isoWeek);
+  }
+  return axis;
 }
 
 export async function getSeasonAnalytics({
@@ -208,27 +230,12 @@ export async function getSeasonAnalytics({
   }
 
   // Заполнить дырки недель нулём (сплошная ось между min..max).
-  const acceptanceByWeek: SeasonAnalytics["acceptanceByWeek"] = [];
-  if (weekTons.size > 0) {
-    const present = [...weekTons.values()].sort(
-      (a, b) => a.isoYear - b.isoYear || a.isoWeek - b.isoWeek,
-    );
-    let cur = { isoYear: present[0].isoYear, isoWeek: present[0].isoWeek };
-    const last = present[present.length - 1];
-    // защитный предел итераций (сезон ≤ ~60 недель)
-    for (let guard = 0; guard < 70; guard++) {
-      const key = `${cur.isoYear}-${cur.isoWeek}`;
-      const hit = weekTons.get(key);
-      acceptanceByWeek.push({
-        isoYear: cur.isoYear,
-        isoWeek: cur.isoWeek,
-        label: weekLabel(cur.isoWeek),
-        tons: hit ? hit.tons : 0,
-      });
-      if (cur.isoYear === last.isoYear && cur.isoWeek === last.isoWeek) break;
-      cur = nextIsoWeek(cur.isoYear, cur.isoWeek);
-    }
-  }
+  const acceptanceByWeek: SeasonAnalytics["acceptanceByWeek"] = buildWeekAxis([
+    ...weekTons.values(),
+  ]).map((w) => ({
+    ...w,
+    tons: weekTons.get(`${w.isoYear}-${w.isoWeek}`)?.tons ?? 0,
+  }));
 
   const brakByCulture = [...brakAgg.entries()]
     .map(([cultureId, a]) => ({
