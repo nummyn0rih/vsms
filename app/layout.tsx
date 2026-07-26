@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 // Self-hosted Geist (variable woff2, включает кириллицу) — без внешнего
 // рантайм-fetch. Variable-файл покрывает все нужные веса (400/500/600).
@@ -37,6 +38,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>
+        <SpeedInsights />
       </body>
     </html>
   );
