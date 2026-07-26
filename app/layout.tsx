@@ -24,6 +24,8 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "VSMS",
   description: "Система управления поставками овощного сырья",
+  // Google Translate уважает этот meta наравне с translate="no" на <html>.
+  other: { google: "notranslate" },
 };
 
 export default async function RootLayout({
@@ -38,9 +40,13 @@ export default async function RootLayout({
   const session = await auth();
 
   return (
+    // Интерфейс полностью русский: lang="ru" + translate="no"/notranslate — чтобы
+    // браузер и расширения-переводчики не переписывали текстовые узлы DOM
+    // (переписанный DOM расходится с серверным HTML и ломает гидратацию).
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="ru"
+      translate="no"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased notranslate`}
     >
       <body className="min-h-full flex flex-col">
         <Providers session={session}>{children}</Providers>
