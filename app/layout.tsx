@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { auth } from "@/auth";
 import { Providers } from "./providers";
 
 // Self-hosted Geist (variable woff2, включает кириллицу) — без внешнего
@@ -25,18 +26,24 @@ export const metadata: Metadata = {
   description: "Система управления поставками овощного сырья",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Сессия читается на сервере и отдаётся в SessionProvider — клиентские гейты
+  // (RoleGate, доски приёмки, планировщик) знают роль уже на первом кадре.
+  // Побочный эффект: layout становится динамическим (auth() читает куки) — ожидаемо,
+  // приложение целиком за логином.
+  const session = await auth();
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers session={session}>{children}</Providers>
       </body>
     </html>
   );
