@@ -241,7 +241,8 @@
   - Бэклог фильтров (V1.1-остаток): дашборды тары/ингредиентов, простые справочники (Культуры/ТК/Типы тары/Ингредиенты) — общий FilterCombo уже готов к переиспользованию.
 - [ ] тех-долг: `getActiveAlerts` в `(app)/layout.tsx` = 3 доп. запроса на КАЖДУЮ навигацию сегмента (не только /packaging|/ingredients). Осознанная цена read-only V1.1 без кэша. Дешёвые фиксы: guard «0 правил → skip», агрегировать балансы только по item/location из правил, `cache()`/короткий TTL для дедупа layout+page.
 - [ ] B5-bulk-2 (опц.) — копипаст карточек по дням; тонкий/overlay-скроллбар в «Плане».
-- [ ] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg`.
+- [x] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg` (миграция `cleanup_deprecated_snapshot_columns`, коммит `b8bf61e`; сделано до прод-выката, чтобы первая прод-схема была чистой). Спека `PROMPTS-CLEANUP-DEPRECATED-COLUMNS.md`.
+- [x] prod-preflight — Prisma CLI на `DIRECT_URL`, build = `generate + migrate deploy + next build`, `trustHost` для Vercel (коммит `83fe718`). Спека — `PROD-DEPLOY.md` Фаза 1.
 
 ---
 

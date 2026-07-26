@@ -300,7 +300,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 
 `Shipment` (входящая машина, фермер→завод): id, code, departure_date, arrival_date, status {planned\|sent\|arrived\|accepted}, driver_id (FK), created_by, timestamps.
 
-`ShipmentItem`: id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное).
+`ShipmentItem`: id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал), contract_line_id (FK, nullable до accepted). Принятый вес — не колонка, считается на лету (`computeAcceptedKg`).
 
 `AcceptanceAct` (1:1 к ShipmentItem): id, shipment_item_id (FK), brak_percent, accepted_percent (для simple), comment, act_number, weighed_at.
 

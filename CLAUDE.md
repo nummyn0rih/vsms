@@ -20,7 +20,7 @@ Solo-разработка с AI. Это рабочий инструмент дл
 ## Стек
 
 - **Next.js** (App Router) + **TypeScript**
-- **PostgreSQL** (Neon) + **Prisma** (ORM) — Neon требует ДВЕ строки: pooled `DATABASE_URL` (runtime) + direct `DIRECT_URL` (миграции, `directUrl` в schema.prisma)
+- **PostgreSQL** (Neon) + **Prisma 7** (ORM) — Neon требует ДВЕ строки: pooled `DATABASE_URL` (рантайм, `lib/prisma` + adapter-pg) и direct `DIRECT_URL` (migrate/studio). В Prisma 7 ключ `directUrl` из `datasource` УДАЛЁН, а URL живёт не в schema.prisma: прямой коннект задаётся `datasource.url = env("DIRECT_URL")` в **`prisma.config.ts`**
 - **Auth.js v5** (NextAuth, Credentials) — аутентификация, роль в сессии
 - **Tailwind** + **shadcn/ui** — UI
 - **@dnd-kit** — drag-drop (планировщик)

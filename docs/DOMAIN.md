@@ -20,7 +20,7 @@
 **Три веса позиции (ShipmentItem):**
 - `planned_weight_kg` — приблизительный, при создании отгрузки.
 - `actual_weight_kg` — после сплошной перевески на воротах.
-- `accepted_weight_kg` — производное (одноступенчато, база = факт): **simple** = actual × (1 − brak%); **calibre** = actual × Σ(% принятых категорий). Брак — поле акта у всех (у calibre брак входит в 100% факта наравне с категориями). **Вычисляется на лету (`server/acceptance/accepted.ts` → `computeAcceptedKg`); одноимённая колонка БД — снимок-заглушка, фактически НЕ пишется (deprecated, см. §5). Источник истины — инпуты акта (actual, brak%, CalibreResult.percent).**
+- **принятый вес** — производное (одноступенчато, база = факт): **simple** = actual × (1 − brak%); **calibre** = actual × Σ(% принятых категорий). Брак — поле акта у всех (у calibre брак входит в 100% факта наравне с категориями). **Колонки в БД НЕТ** (снимок снесён миграцией `cleanup_deprecated_snapshot_columns`, см. §5): вычисляется на лету — `server/acceptance/accepted.ts` → `computeAcceptedKg`. Источник истины — инпуты акта (actual, brak%, CalibreResult.percent).
 
 ---
 
@@ -110,7 +110,7 @@ IngredientRecipe: Culture N───N Ingredient (через связку, qty_p
 | Сущность | Атрибуты |
 |---|---|
 | Shipment | id, code, departure_date, arrival_date, status {planned\|sent\|arrived\|accepted}, driver_id (FK), created_by, timestamps. **`accepted` — АВТО** (все позиции приняты, BR-13), руками не выставляется; UI-состояние «частично принята» — производное, не хранится (хранимый статус остаётся `arrived`). |
-| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал; выбор из разрешённых типов культуры), contract_line_id (FK, nullable до accepted), accepted_weight_kg (производное; колонка-снимок DEPRECATED — не пишется, считается на лету) |
+| ShipmentItem | id, shipment_id (FK), farmer_id (FK), culture_id (FK), planned_weight_kg, actual_weight_kg, packaging_type_id (FK, nullable=навал; выбор из разрешённых типов культуры), contract_line_id (FK, nullable до accepted) · _принятый вес — НЕ колонка, считается на лету (`computeAcceptedKg`); колонка-снимок снесена миграцией `cleanup_deprecated_snapshot_columns`_ |
 | AcceptanceAct | id, shipment_item_id (FK), brak_percent, accepted_percent (simple), comment, act_number, weighed_at |
 | CalibreResult | id, acceptance_act_id (FK), calibre_range_id (FK), percent, contract_line_id (FK, nullable) — привязка категории к строке = оплата по этой строке (объём+цена строки); null = только статистика |
 
@@ -231,11 +231,11 @@ null=доставка с завода) и свой транзит `-3` («в п�
 
 ## 5. Производные величины (вычислять, НЕ хранить)
 
-> **Колонки-снимки `ShipmentItem.accepted_weight_kg` и `AcceptanceAct.brak_weight_kg` — DEPRECATED:**
-> фактически НЕ пишутся; принятый/браковый вес выводятся на лету из инпутов акта
-> (`computeAcceptedKg`, `accepted.ts`). Снимок создавал бы второй источник истины и риск
-> рассинхрона при правке акта — противоречит принципу «вычислять, не хранить» (CLAUDE.md §2).
-> Снос колонок — отдельной cleanup-миграцией (этап D), не блокирует C3.
+> **Колонок-снимков `ShipmentItem.accepted_weight_kg` и `AcceptanceAct.brak_weight_kg` БОЛЬШЕ НЕТ:**
+> снесены миграцией `cleanup_deprecated_snapshot_columns` (26.07.2026, до прод-выката). Принятый/браковый вес
+> выводятся на лету из инпутов акта (`computeAcceptedKg`, `accepted.ts`; брак — `computeWeightedBrak`).
+> Снимок создавал бы второй источник истины и риск рассинхрона при правке акта — противоречит принципу
+> «вычислять, не хранить» (CLAUDE.md §2). Возвращать колонки нельзя.
 > _Заметка (на будущее, не C3):_ `is_accepted` берётся из текущей схемы калибров (`CalibreRange`),
 > а не из снимка акта — при правке схемы исторические accepted пересчитаются. Решить
 > «морозить is_accepted в CalibreResult vs живо», когда появится workflow редактирования схем.
