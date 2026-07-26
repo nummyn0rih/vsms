@@ -4,9 +4,11 @@ import "dotenv/config";
 import { defineConfig, env } from "prisma/config";
 
 // Prisma 7: connection URL живёт здесь, не в schema.prisma.
-// Используем pooled DATABASE_URL — Neon-pooler тянет и DDL миграций, и рантайм.
-// DIRECT_URL не задействован: direct-эндпоинт недоступен из текущей сети (WSL),
-// pooler справляется. Если появится прямой коннект — можно вернуть env("DIRECT_URL").
+// CLI (migrate/studio/db seed) ходит ПРЯМЫМ коннектом Neon — env("DIRECT_URL"):
+// pooled PgBouncer ломает DDL и advisory-lock миграций.
+// Рантайм приложения остаётся на pooled DATABASE_URL — см. lib/prisma.ts.
+// Внимание: env() бросает при загрузке конфига, а конфиг грузит ЛЮБАЯ команда CLI
+// (включая prisma generate) → DIRECT_URL нужен во всех окружениях, в т.ч. на Vercel.
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -14,6 +16,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: env("DIRECT_URL"),
   },
 });

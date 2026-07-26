@@ -3,6 +3,10 @@ import type { NextAuthConfig } from "next-auth";
 // Edge-safe конфиг: без prisma/bcrypt — его импортит middleware (edge-рантайм).
 // Провайдеры (с доступом к БД) добавляются в auth.ts.
 export const authConfig = {
+  // Хост берём из заголовка запроса: за прокси Vercel (прод-домен, preview-URL)
+  // иначе ловим host-mismatch. Флаг здесь, а не в auth.ts, — его должен видеть
+  // и edge-инстанс из proxy.ts.
+  trustHost: true,
   pages: { signIn: "/login" },
   session: { strategy: "jwt" },
   providers: [],

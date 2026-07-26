@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "NODE_OPTIONS=--dns-result-order=ipv4first next dev",
-    "build": "NODE_OPTIONS=--dns-result-order=ipv4first next build",
-    "start": "NODE_OPTIONS=--dns-result-order=ipv4first next start",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start",
     "lint": "eslint",
     "db:migrate": "NODE_OPTIONS=--dns-result-order=ipv4first prisma migrate dev",
     "db:studio": "NODE_OPTIONS=--dns-result-order=ipv4first prisma studio",
@@ -44,6 +44,7 @@
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "playwright": "^1.61.1",
