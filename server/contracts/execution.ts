@@ -9,9 +9,10 @@ import { seasonYearOf } from "@/server/shipments/workdays";
 // (после брака). Брак в выполнение НЕ идёт. Округление — только на показе (UI), здесь
 // держим точные Decimal, как computeAcceptedKg.
 //
-// ПРИНЯТЫЙ ВЕС СЧИТАЕТСЯ НА ЛЕТУ, не из ShipmentItem.accepted_weight_kg (та колонка нигде
-// не пишется — accepted везде вычисляется, как в feed-loader). Source of truth формулы —
-// computeAcceptedKg. Для calibre раскладываем по категориям (нужно для разноса по строкам).
+// ПРИНЯТЫЙ ВЕС СЧИТАЕТСЯ НА ЛЕТУ. Колонки-снимка ShipmentItem.accepted_weight_kg больше НЕ
+// существует — снесена миграцией cleanup_deprecated_snapshot_columns; accepted везде
+// вычисляется, как в feed-loader. Source of truth формулы — computeAcceptedKg.
+// Для calibre раскладываем по категориям (нужно для разноса по строкам).
 
 const ZERO = new Prisma.Decimal(0);
 const HUNDRED = new Prisma.Decimal(100);
