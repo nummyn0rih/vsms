@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -17,16 +18,6 @@ import {
 
 const ENTITY = "AlertRule";
 const PATH = "/settings/alert-rules";
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // location_scope из Select (строка) → Farmer.id или null («у любого фермера»).
 function toLocation(v: string): number | null {
@@ -155,7 +146,7 @@ export async function createAlertRule(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать правило" };
+    return failWithLog(e, "Не удалось создать правило");
   }
 }
 
@@ -234,7 +225,7 @@ export async function updateAlertRule(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -261,6 +252,6 @@ export async function deleteAlertRule(id: number): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить правило" };
+    return failWithLog(e, "Не удалось удалить правило");
   }
 }

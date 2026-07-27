@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -21,21 +22,12 @@ function norm(v: string | undefined): string | null {
   return t ? t : null;
 }
 
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим).
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 export async function listTransportCompanies(params?: {
   q?: string;
   includeInactive?: boolean;
 }) {
+  await requireRole();
+
   const q = params?.q?.trim();
   return prisma.transportCompany.findMany({
     where: {
@@ -50,6 +42,8 @@ export async function listTransportCompanies(params?: {
 export async function listTransportCompanyOptions(): Promise<
   TransportCompanyOption[]
 > {
+  await requireRole();
+
   return prisma.transportCompany.findMany({
     where: { active: true },
     select: { id: true, name: true },
@@ -87,7 +81,7 @@ export async function createTransportCompany(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать компанию" };
+    return failWithLog(e, "Не удалось создать компанию");
   }
 }
 
@@ -134,7 +128,7 @@ export async function updateTransportCompany(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -166,6 +160,6 @@ export async function setTransportCompanyActive(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось изменить статус" };
+    return failWithLog(e, "Не удалось изменить статус");
   }
 }

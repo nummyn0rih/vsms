@@ -80,18 +80,6 @@ export type ShipmentItemRow = {
   contract_line_label: string | null;
 };
 
-export type ShipmentListRow = {
-  id: number;
-  code: string;
-  status: "planned" | "sent" | "arrived" | "accepted";
-  departure_date: string | null; // YYYY-MM-DD
-  arrival_date: string | null;
-  driver_name: string | null;
-  transport_company_name: string | null;
-  comment: string | null;
-  items: ShipmentItemRow[];
-};
-
 // Детализация для формы редактирования.
 export type ShipmentDetail = {
   id: number;

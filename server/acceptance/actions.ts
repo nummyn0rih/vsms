@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -24,16 +25,6 @@ const FEED_PATH = "/shipments"; // лента и вид «План» читаю�
 // Дата-only YYYY-MM-DD для ChangeLog old-значений (как в server/shipments/actions).
 function toDateString(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
-}
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
 }
 
 function revalidate() {
@@ -136,7 +127,7 @@ export async function setActualWeight(
     if (result.ok) revalidate();
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить вес" };
+    return failWithLog(e, "Не удалось сохранить вес");
   }
 }
 
@@ -209,6 +200,6 @@ export async function markArrived(input: {
     if (result.ok) revalidate();
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось отметить прибытие" };
+    return failWithLog(e, "Не удалось отметить прибытие");
   }
 }

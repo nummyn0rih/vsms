@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { driverSchema, type DriverInput } from "./schema";
@@ -21,17 +22,6 @@ function norm(v: string | undefined): string | null {
   return t ? t : null;
 }
 
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим).
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 // Сплошной список водителей всех ТК. Фильтры комбинируются (компания + поиск
 // одновременно, оба в where как И-условие).
 export async function listDrivers(params?: {
@@ -39,6 +29,8 @@ export async function listDrivers(params?: {
   companyId?: number;
   includeInactive?: boolean;
 }) {
+  await requireRole();
+
   const q = params?.q?.trim();
   return prisma.driver.findMany({
     where: {
@@ -81,7 +73,7 @@ export async function createDriver(input: DriverInput): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать водителя" };
+    return failWithLog(e, "Не удалось создать водителя");
   }
 }
 
@@ -138,7 +130,7 @@ export async function updateDriver(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -170,6 +162,6 @@ export async function setDriverActive(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось изменить статус" };
+    return failWithLog(e, "Не удалось изменить статус");
   }
 }

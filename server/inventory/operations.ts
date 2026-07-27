@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import type { ActionResult } from "@/lib/action-result";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import {
   FACTORY_LOCATION_ID,
@@ -16,16 +17,6 @@ import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 // - disposal: loc/scrap → null      (вывод из системы; «Итого в системе» уменьшается).
 // Баланс не хранится (Σ движений), может уходить в минус — сверху НЕ ограничиваем.
 // Причина живёт только в ChangeLog (у StockMovement поля reason нет).
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Локация операции: завод (0) или существующий фермер (active ИЛИ архивный — лом мог
 // застрять у деактивированного, отличие от opening). Транзит/null — запрещены.
@@ -114,7 +105,7 @@ export async function scrapTare(input: OpInput): Promise<ActionResult> {
     revalidateStockDashboards();
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось списать в лом" };
+    return failWithLog(e, "Не удалось списать в лом");
   }
 }
 
@@ -168,6 +159,6 @@ export async function disposeTare(input: OpInput): Promise<ActionResult> {
     revalidateStockDashboards();
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось утилизировать" };
+    return failWithLog(e, "Не удалось утилизировать");
   }
 }

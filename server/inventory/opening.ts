@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { ItemKind } from "@/lib/generated/prisma/client";
 import type { ActionResult } from "@/lib/action-result";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import {
   FACTORY_LOCATION_ID,
@@ -21,16 +22,6 @@ import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 // баланс локации = введённому значению.
 
 const PATH = "/settings/opening-stock";
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Обобщено под оба kind (E3): тара (целое, шт) и ингредиент (Decimal, кг/л).
 // columns у ингредиента несут unit (разные колонки для кг и л — не складывать).
@@ -64,6 +55,8 @@ function refByKind(kind: ItemKind, itemId: number) {
 export async function getOpeningBalances(
   kind: ItemKind,
 ): Promise<OpeningBalances> {
+  await requireRole();
+
   const [farmers, columns, movements] = await Promise.all([
     prisma.farmer.findMany({
       where: { active: true },
@@ -217,6 +210,6 @@ export async function setOpeningBalance(input: {
     revalidateStockDashboards();
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }

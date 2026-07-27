@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { seasonYearOf } from "@/server/shipments/workdays";
@@ -24,16 +25,6 @@ const ACT = "AcceptanceAct";
 const PATH = "/acceptance";
 const FEED_PATH = "/shipments";
 
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 function revalidate() {
   revalidatePath(PATH);
   revalidatePath(FEED_PATH);
@@ -51,6 +42,8 @@ export async function getActContext({
 }: {
   shipmentItemId: number;
 }): Promise<ActContext | null> {
+  await requireRole();
+
   const item = await prisma.shipmentItem.findUnique({
     where: { id: shipmentItemId },
     select: {
@@ -459,7 +452,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { ok: false, error: "№ акта занят в этом сезоне (BR-9)" };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить акт" };
+    return failWithLog(e, "Не удалось сохранить акт");
   }
 }
 
@@ -581,7 +574,7 @@ export async function revertAct(input: {
     if (result.ok) revalidate();
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить акт" };
+    return failWithLog(e, "Не удалось откатить акт");
   }
 }
 
@@ -628,6 +621,6 @@ export async function revertShipmentToArrived(
     if (result.ok) revalidate();
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить приёмку" };
+    return failWithLog(e, "Не удалось откатить приёмку");
   }
 }

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { parseDateUTC } from "@/server/shipments/workdays";
@@ -29,17 +30,6 @@ const ENTITY = "MaterialShipment";
 const PATH = "/materials";
 
 type Tx = Prisma.TransactionClient;
-
-// Перехват ошибок RBAC → ActionResult (страницу не валим). Образец shipments.
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 function toDateString(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
@@ -159,7 +149,7 @@ export async function createMaterialShipment(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать рейс" };
+    return failWithLog(e, "Не удалось создать рейс");
   }
 }
 
@@ -245,7 +235,7 @@ export async function updateMaterialShipment(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -275,7 +265,7 @@ export async function deleteMaterialShipment(id: number): Promise<ActionResult> 
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить рейс" };
+    return failWithLog(e, "Не удалось удалить рейс");
   }
 }
 
@@ -324,7 +314,7 @@ export async function sendMaterialShipment(id: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось отправить рейс" };
+    return failWithLog(e, "Не удалось отправить рейс");
   }
 }
 
@@ -400,7 +390,7 @@ export async function markItemArrived(itemId: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось отметить прибытие позиции" };
+    return failWithLog(e, "Не удалось отметить прибытие позиции");
   }
 }
 
@@ -456,7 +446,7 @@ export async function unmarkItemArrived(itemId: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось снять прибытие позиции" };
+    return failWithLog(e, "Не удалось снять прибытие позиции");
   }
 }
 
@@ -508,7 +498,7 @@ export async function markAllArrived(tripId: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось отметить прибытие" };
+    return failWithLog(e, "Не удалось отметить прибытие");
   }
 }
 
@@ -558,7 +548,7 @@ export async function unmarkAllArrived(tripId: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось снять прибытие" };
+    return failWithLog(e, "Не удалось снять прибытие");
   }
 }
 
@@ -604,7 +594,7 @@ export async function revertMaterialToPlanned(id: number): Promise<ActionResult>
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить рейс" };
+    return failWithLog(e, "Не удалось откатить рейс");
   }
 }
 
@@ -648,6 +638,8 @@ function mapItem(item: {
 export async function getMaterialShipment(
   id: number,
 ): Promise<MaterialDetail | null> {
+  await requireRole();
+
   const t = await prisma.materialShipment.findUnique({
     where: { id },
     include: { items: { include: itemInclude, orderBy: { id: "asc" } } },
@@ -667,6 +659,8 @@ export async function getMaterialShipment(
 
 // Опции формы: активные водители (+ТК), активные фермеры, активные типы тары.
 export async function listMaterialOptions(): Promise<MaterialOptions> {
+  await requireRole();
+
   const [drivers, farmers, packagingTypes, ingredients] = await Promise.all([
     prisma.driver.findMany({
       where: { active: true },

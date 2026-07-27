@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { packagingTypeSchema, type PackagingTypeInput } from "./schema";
@@ -19,21 +20,12 @@ function normCapacity(kind: "box" | "barrel", v: string | undefined): string | n
   return t ? t : null;
 }
 
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим).
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 export async function listPackagingTypes(params?: {
   q?: string;
   includeInactive?: boolean;
 }) {
+  await requireRole();
+
   const q = params?.q?.trim();
   return prisma.packagingType.findMany({
     where: {
@@ -75,7 +67,7 @@ export async function createPackagingType(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать тип тары" };
+    return failWithLog(e, "Не удалось создать тип тары");
   }
 }
 
@@ -128,7 +120,7 @@ export async function updatePackagingType(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -160,6 +152,6 @@ export async function setPackagingTypeActive(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось изменить статус" };
+    return failWithLog(e, "Не удалось изменить статус");
   }
 }
