@@ -92,6 +92,7 @@ async function removeNorm(
 }
 
 export async function listNorms(kind: NormKind): Promise<NormCell[]> {
+  await requireRole();
   if (kind === "packaging") {
     const rows = await prisma.packagingNorm.findMany({
       select: {

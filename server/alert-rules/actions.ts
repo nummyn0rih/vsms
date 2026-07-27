@@ -29,6 +29,7 @@ export async function listOptions(): Promise<{
   ingredients: ItemOption[];
   farmers: FarmerOption[];
 }> {
+  await requireRole();
   const [packaging, ingredients, farmers] = await Promise.all([
     prisma.packagingType.findMany({
       where: { active: true },
@@ -50,6 +51,7 @@ export async function listOptions(): Promise<{
 }
 
 export async function listAlertRules(): Promise<AlertRuleRow[]> {
+  await requireRole();
   const [rules, packaging, ingredients, farmers] = await Promise.all([
     prisma.alertRule.findMany({ orderBy: { id: "desc" } }),
     prisma.packagingType.findMany({ select: { id: true, name: true } }),
