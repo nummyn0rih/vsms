@@ -1,6 +1,11 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { computeAcceptedKg, calibreRangeLabel, stripSeasonPrefix } from "./accepted";
+import {
+  computeAcceptedKg,
+  computeSettlement,
+  calibreRangeLabel,
+  stripSeasonPrefix,
+} from "./accepted";
 import { itemCost, type ExecItem } from "@/server/contracts/execution";
 import { seasonYearOf } from "@/server/shipments/workdays";
 import type {
@@ -58,6 +63,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
               select: {
                 act_number: true,
                 brak_percent: true,
+                settlement_percent: true, // BR-33: корректировка расчёта (деньги)
                 calibreResults: {
                   select: {
                     percent: true,
@@ -161,22 +167,33 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       const results = act?.calibreResults ?? [];
 
       // ExecItem для живого расчёта стоимости (C3a, тот же источник, что execution.ts).
+      const settlementPercent = act?.settlement_percent?.toNumber() ?? null;
       const exec: ExecItem = {
         actualKg: it.actual_weight_kg,
         brakPercent,
         contractLineId: it.contract_line_id,
+        settlementPercent,
         calibres: results.map((cr) => ({
           percent: cr.percent.toNumber(),
           isAccepted: cr.calibreRange.is_accepted,
           contractLineId: cr.contract_line_id,
         })),
       };
+      // Стоимость — от ОПЛАЧИВАЕМОГО веса (itemCost уже включает доплату BR-33).
       const cost = itemCost(exec, lineMap).cost;
       machineSum = machineSum.add(cost);
       const costRub = cost.toNumber();
 
+      // Принято (качество/тонны) и к оплате (расчёт) — два разных числа при корректировке.
       const acceptedKg =
         computeAcceptedKg(actualKg, brakPercent, exec.calibres) ?? 0;
+      const settlement = computeSettlement({
+        actualKg,
+        acceptedKg,
+        settlementPercent,
+        itemLineId: it.contract_line_id,
+        calibres: exec.calibres,
+      });
 
       // Чипы калибра: категории + строка «брак» последней. Только для калибра.
       const calibres = results.map((cr) => {
@@ -236,6 +253,9 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
         actualKg,
         brakPercent,
         acceptedKg,
+        settlementPercent,
+        surchargeKg: settlement.surchargeKg,
+        paidKg: settlement.paidKg,
         calibres,
         nonStandard,
         lineLabel: footerLine?.label ?? null,

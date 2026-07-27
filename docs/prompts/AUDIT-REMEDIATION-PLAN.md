@@ -83,7 +83,8 @@ RBAC-кнопки видны, редирект неавторизованног�
 
 | # | Что |
 |---|---|
-| 3.1 | `vitest` + 20–30 юнит-тестов чистого ядра: `workdays.ts` (рабочие дни, UTC, ISO-недели), `calcPackagingUnits`, нетто-агрегации баланса, `calcIngredientConsumption`, `computeAcceptedKg`/`computeWeightedBrak`, `filterBoard`/`filterFeedWeeks` |
+| 3.1 | `vitest` + 20–30 юнит-тестов чистого ядра: `workdays.ts` (рабочие дни, UTC, ISO-недели), `calcPackagingUnits`, нетто-агрегации баланса, `calcIngredientConsumption`, `computeAcceptedKg`/`computeWeightedBrak`/`computeSettlement` (BR-33), `filterBoard`/`filterFeedWeeks` |
+| 3.0 | **Задел уже есть:** `scripts/_stubs/` (подмена `@/auth` и `next/cache` через resolve-хук) — тот самый механизм, которым тестируются гардированные server actions. При переходе на vitest переиспользовать, не переписывать |
 | 3.2 | GitHub Actions: `lint + tsc + test` на push/PR в `dev` и `main` |
 
 **Почему после волн 1–2, а не до:** волна 1 безопасна и без тестов, волна 2 срочна по внешнему риску.

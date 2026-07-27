@@ -8,6 +8,7 @@ import { X, Check, AlertCircle, RotateCcw } from "lucide-react";
 import type { ActContext, ActCalibreRange } from "@/server/acceptance/schema";
 import { setActualWeight } from "@/server/acceptance/actions";
 import { saveAct, revertAct } from "@/server/acceptance/act";
+import { computeSettlement } from "@/server/acceptance/accepted";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import {
   Select,
@@ -154,12 +155,47 @@ export function MobileActDialog({
   const nonAcceptedKg =
     savedWeight != null ? (savedWeight * (sumPct - acceptedPct)) / 100 : null;
 
-  const accepted =
-    savedWeight == null
-      ? null
-      : isCalibre
-        ? Math.round((savedWeight * acceptedPct) / 100)
-        : Math.round(savedWeight * (1 - brak / 100));
+  // Точный принятый вес — база корректировки (BR-33); округление только на показе.
+  const acceptedPctExact = isCalibre ? acceptedPct : 100 - brak;
+  const acceptedExact =
+    savedWeight == null ? null : (savedWeight * acceptedPctExact) / 100;
+  const accepted = acceptedExact == null ? null : Math.round(acceptedExact);
+
+  // --- BR-33: корректировка расчёта (только admin). Пусто = нет корректировки. ---
+  const [settlementStr, setSettlementStr] = useState(
+    context.existing?.settlementPercent != null
+      ? String(context.existing.settlementPercent)
+      : "",
+  );
+  const settlementInput = useMemo(() => {
+    const t = settlementStr.trim().replace(",", ".");
+    if (t === "") return { value: null as number | null, invalid: false };
+    const n = Number(t);
+    return Number.isFinite(n)
+      ? { value: n, invalid: false }
+      : { value: null as number | null, invalid: true };
+  }, [settlementStr]);
+
+  const settlement = computeSettlement({
+    actualKg: savedWeight,
+    acceptedKg: acceptedExact,
+    settlementPercent: settlementInput.value,
+    itemLineId: isCalibre
+      ? context.itemLineId
+      : lineId !== ""
+        ? Number(lineId)
+        : null,
+    calibres: isCalibre
+      ? context.calibreRanges.map((r) => {
+          const b = bindings[r.id] ?? NONE;
+          return {
+            percent: pctNum(r.id),
+            isAccepted: r.isAccepted,
+            contractLineId: b === "" || b === NONE ? null : Number(b),
+          };
+        })
+      : [],
+  });
 
   const calibreBindMissing =
     isCalibre &&
@@ -168,6 +204,10 @@ export function MobileActDialog({
       return r.isAccepted && (b === "" || b === NONE);
     });
   const sumOk = !isCalibre || Math.abs(sumPct + brak - 100) <= 0.01;
+
+  const acceptedPctLabel = acceptedPctExact.toLocaleString("ru-RU", {
+    maximumFractionDigits: 2,
+  });
 
   const blockReason =
     savedWeight == null || savedWeight <= 0
@@ -182,7 +222,14 @@ export function MobileActDialog({
               ? "Сумма категорий и брака = 100% факта"
               : calibreBindMissing
                 ? "Привяжите принятые категории к строке"
-                : null;
+                : settlementInput.invalid
+                  ? "Процент к оплате — число от 0 до 100"
+                  : settlementInput.value != null && settlementInput.value > 100
+                    ? "Процент к оплате не может превышать 100"
+                    : settlementInput.value != null &&
+                        settlementInput.value < acceptedPctExact - 0.01
+                      ? `Процент к оплате не может быть ниже принятого (${acceptedPctLabel}%)`
+                      : null;
 
   async function commitWeight() {
     setWeightEditing(false);
@@ -227,6 +274,8 @@ export function MobileActDialog({
       shipmentItemId: context.shipmentItemId,
       actNumber: actNumber.trim(),
       brakPercent: brak,
+      // BR-33: поле шлёт только admin; иначе undefined — сервер сохранит заданное значение.
+      ...(isAdmin ? { settlementPercent: settlementInput.value } : {}),
       ...(isCalibre
         ? {
             calibres: context.calibreRanges.map((r) => {
@@ -502,12 +551,59 @@ export function MobileActDialog({
         <div className="act-block">
           <div className="act-block-lab">Принятый вес</div>
           <div className="act-line total">
-            <span className="k">К оплате пойдёт</span>
+            <span className="k">Принято (в выполнение)</span>
             <span className="v">
               {accepted != null ? `${formatWeight(accepted)} кг` : "—"}
             </span>
           </div>
         </div>
+
+        {/* BR-33: корректировка расчёта — редактирует только admin; остальным блок
+            виден лишь при уже заданной корректировке (иначе суммы выглядят ошибкой). */}
+        {(isAdmin || context.existing?.settlementPercent != null) && (
+          <div className="act-block">
+            <div className="act-block-lab">% к оплате по договорённости</div>
+            {isAdmin ? (
+              <div className="act-input">
+                <input
+                  inputMode="decimal"
+                  value={settlementStr}
+                  onChange={(e) => setSettlementStr(e.target.value)}
+                  placeholder="нет"
+                  className="w-full bg-transparent text-right tabular-nums outline-none placeholder:text-[#888888]"
+                />
+                <span className="u">%</span>
+              </div>
+            ) : (
+              <div className="act-input readonly">
+                <span>задано администратором</span>
+                <span className="u">{context.existing?.settlementPercent} %</span>
+              </div>
+            )}
+            {acceptedExact != null && settlement.surchargeKg > 0 && (
+              <>
+                <div className="act-line">
+                  <span className="k">Принято</span>
+                  <span className="v">
+                    {acceptedPctLabel} % · {formatWeight(Math.round(acceptedExact))} кг
+                  </span>
+                </div>
+                <div className="act-line">
+                  <span className="k">Доплата</span>
+                  <span className="v">
+                    +{formatWeight(Math.round(settlement.surchargeKg))} кг
+                  </span>
+                </div>
+                <div className="act-line total">
+                  <span className="k">Итого к оплате</span>
+                  <span className="v">
+                    {formatWeight(Math.round(settlement.paidKg))} кг
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {context.isLastUnaccepted && !context.existing && (
           <div className="mt-3 flex items-center gap-2 rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-3 py-2 text-xs leading-4 tracking-tight text-[#1d8e75]">

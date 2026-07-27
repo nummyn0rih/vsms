@@ -72,7 +72,37 @@ function Position({ pos, isAdmin }: { pos: Machine["positions"][number]; isAdmin
         <span className="text-[#a1a1a1]">·</span>
         <span className="text-muted-foreground">брак <b className="font-medium tabular-nums text-[#171717]">{pos.brakPercent}</b> %</span>
         <span className="text-[#a1a1a1]">·</span>
-        <span className="font-semibold tabular-nums text-[#1d8e75]">к оплате {kg(pos.acceptedKg)} кг</span>
+        {/* Принято (качество/тонны) и к оплате (расчёт) — расходятся при BR-33. */}
+        <span
+          className={
+            pos.settlementPercent == null
+              ? "font-semibold tabular-nums text-[#1d8e75]"
+              : "tabular-nums text-muted-foreground"
+          }
+        >
+          принято{" "}
+          <b
+            className={
+              pos.settlementPercent == null
+                ? "font-semibold"
+                : "font-medium text-[#171717]"
+            }
+          >
+            {kg(pos.acceptedKg)}
+          </b>{" "}
+          кг
+        </span>
+        {pos.settlementPercent != null && (
+          <>
+            <span className="text-[#a1a1a1]">·</span>
+            <span className="font-semibold tabular-nums text-[#1d8e75]">
+              к оплате {kg(pos.paidKg)} кг
+            </span>
+            <span className="whitespace-nowrap rounded-[5px] border border-[#ebebeb] bg-white px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#4d4d4d]">
+              {pos.settlementPercent} %
+            </span>
+          </>
+        )}
       </div>
 
       {pos.calibres.length > 0 && (

@@ -96,8 +96,10 @@ export function ActCell({
       {item.accepted && item.acceptedKg != null && (
         <>
           <span className="mx-1 text-muted-foreground">·</span>
+          {/* Именно ПРИНЯТО: это вес выполнения контракта. «К оплате» (BR-33) может
+              отличаться при корректировке расчёта и показывается на доске приёмки. */}
           <span className="text-[#1d8e75]">
-            к оплате {formatWeight(Math.round(item.acceptedKg))}
+            принято {formatWeight(Math.round(item.acceptedKg))}
             <span className="ml-0.5">кг</span>
           </span>
         </>

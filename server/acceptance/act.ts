@@ -93,6 +93,7 @@ export async function getActContext({
         select: {
           act_number: true,
           brak_percent: true,
+          settlement_percent: true,
           calibreResults: {
             select: {
               calibre_range_id: true,
@@ -160,6 +161,10 @@ export async function getActContext({
             item.acceptanceAct.brak_percent != null
               ? item.acceptanceAct.brak_percent.toNumber()
               : 0,
+          settlementPercent:
+            item.acceptanceAct.settlement_percent != null
+              ? item.acceptanceAct.settlement_percent.toNumber()
+              : null,
           contractLineId: item.contract_line_id,
           calibres: item.acceptanceAct.calibreResults.map((c) => ({
             calibreRangeId: c.calibre_range_id,
@@ -186,7 +191,10 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
       };
     }
-    const { shipmentItemId, actNumber, brakPercent } = parsed.data;
+    const { shipmentItemId, actNumber, brakPercent, settlementPercent } = parsed.data;
+    // BR-33: поле не прислано (undefined) → значение в БД не трогаем. Форма оператора
+    // его не шлёт, поэтому сохранение акта оператором не стирает договорённость админа.
+    const settlementProvided = settlementPercent !== undefined;
 
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.shipmentItem.findUnique({
@@ -212,7 +220,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
               departure_date: true,
             },
           },
-          acceptanceAct: { select: { id: true } },
+          acceptanceAct: { select: { id: true, settlement_percent: true } },
         },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
@@ -237,6 +245,9 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
 
       const isCalibre = item.culture.acceptance_type === "calibre";
       let resolvedLineId: number | null = null;
+      // Принятый % от факта — база сравнения для BR-33 (считаем в ветке: is_accepted
+      // известен только здесь, из схемы калибров культуры).
+      let acceptedPct = 0;
       let calibreData: {
         calibre_range_id: number;
         percent: Prisma.Decimal;
@@ -296,6 +307,9 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         if (acceptedCount === 0) {
           return { ok: false as const, error: "Нужна хотя бы одна принятая категория" };
         }
+        acceptedPct = calibres
+          .filter((c) => acceptedById.get(c.calibreRangeId) === true)
+          .reduce((s, c) => s + c.percent, 0);
         calibreData = calibres.map((c) => ({
           calibre_range_id: c.calibreRangeId,
           percent: new Prisma.Decimal(c.percent),
@@ -314,6 +328,35 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           };
         }
         resolvedLineId = lineId;
+        acceptedPct = 100 - brakPercent;
+      }
+
+      // --- BR-33: корректировка расчёта (оплата сверх принятого по договорённости) ---
+      const currentSettlement = item.acceptanceAct?.settlement_percent ?? null;
+      const settlementChanged =
+        settlementProvided &&
+        (currentSettlement == null
+          ? settlementPercent !== null
+          : settlementPercent === null ||
+            !currentSettlement.equals(new Prisma.Decimal(settlementPercent)));
+
+      // RBAC: деньги — зона admin. Оператор может сохранять акт, но НЕ менять процент;
+      // отказываем явно, а не игнорируем присланное значение молча.
+      if (settlementChanged && user.role !== "admin") {
+        return {
+          ok: false as const,
+          error: "Изменять процент к оплате может только администратор (BR-33)",
+        };
+      }
+      // Нижняя граница: скидка (ниже принятого%) запрещена. Верхняя (≤100) — в zod.
+      if (settlementProvided && settlementPercent != null) {
+        if (settlementPercent < acceptedPct - 0.01) {
+          const pct = acceptedPct.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+          return {
+            ok: false as const,
+            error: `Процент к оплате не может быть ниже принятого (${pct}%)`,
+          };
+        }
       }
 
       // № акта уникален в рамках сезона (BR-9): хранится с префиксом года сезона.
@@ -323,16 +366,26 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       const storedActNumber = withSeasonPrefix(actNumber, season);
 
       const isNew = item.acceptanceAct == null;
+      // BR-33: пишем колонку, только если поле прислано (иначе значение сохраняется).
+      const settlementData =
+        settlementProvided
+          ? {
+              settlement_percent:
+                settlementPercent == null ? null : new Prisma.Decimal(settlementPercent),
+            }
+          : {};
       const act = await tx.acceptanceAct.upsert({
         where: { shipment_item_id: shipmentItemId },
         create: {
           shipment_item_id: shipmentItemId,
           act_number: storedActNumber,
           brak_percent: new Prisma.Decimal(brakPercent),
+          ...settlementData,
         },
         update: {
           act_number: storedActNumber,
           brak_percent: new Prisma.Decimal(brakPercent),
+          ...settlementData,
         },
         select: { id: true },
       });
@@ -353,6 +406,17 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           newValue: storedActNumber,
         },
       ];
+
+      // BR-33: правка процента к оплате — в аудит, в ТОЙ ЖЕ транзакции.
+      if (settlementChanged) {
+        entries.push({
+          entity: ACT,
+          entityId: shipmentItemId,
+          field: "settlement_percent",
+          oldValue: currentSettlement != null ? currentSettlement.toString() : null,
+          newValue: settlementPercent != null ? String(settlementPercent) : null,
+        } as (typeof entries)[number]);
+      }
 
       // BR-8: фиксируем привязку строки на позиции, если изменилась. Для калибра —
       // строка первой принятой категории (выполнение C3 читает CalibreResult).

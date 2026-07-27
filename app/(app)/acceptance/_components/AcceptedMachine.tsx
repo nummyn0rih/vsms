@@ -149,13 +149,27 @@ function Position({
         </div>
       </div>
 
-      {/* Метрики: факт · брак · к оплате. */}
+      {/* Метрики: факт · брак · принято [· к оплате, если есть корректировка BR-33]. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 pt-0.5">
         <Metric k="факт" v={`${kg(pos.actualKg)}`} u="кг" />
         <span className="text-[#a1a1a1]">·</span>
         <Metric k="брак" v={`${pos.brakPercent} %`} />
         <span className="text-[#a1a1a1]">·</span>
-        <Metric k="к оплате" v={`${kg(pos.acceptedKg)}`} u="кг" pay />
+        <Metric
+          k="принято"
+          v={`${kg(pos.acceptedKg)}`}
+          u="кг"
+          pay={pos.settlementPercent == null}
+        />
+        {pos.settlementPercent != null && (
+          <>
+            <span className="text-[#a1a1a1]">·</span>
+            <Metric k="к оплате" v={`${kg(pos.paidKg)}`} u="кг" pay />
+            <span className="whitespace-nowrap rounded-[5px] border border-[#ebebeb] bg-white px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-[#4d4d4d]">
+              договорённость {pos.settlementPercent} %
+            </span>
+          </>
+        )}
       </div>
 
       {/* Калибр-разбивка (только калибр-культуры). */}
@@ -211,7 +225,14 @@ function Position({
         <div className="whitespace-nowrap text-right">
           {pos.pricePerKg != null && (
             <span className="mb-0.5 block text-[11.5px] tabular-nums text-[#1d8e75]">
-              {kg(pos.acceptedKg)} кг × {pos.pricePerKg} ₽
+              {/* База денег — оплачиваемый вес (принятый + доплата BR-33). */}
+              {kg(pos.settlementPercent != null ? pos.paidKg : pos.acceptedKg)} кг ×{" "}
+              {pos.pricePerKg} ₽
+              {pos.surchargeKg > 0 && (
+                <span className="ml-1 text-muted-foreground">
+                  (вкл. доплату {kg(pos.surchargeKg)} кг)
+                </span>
+              )}
             </span>
           )}
           <span className="text-lg font-semibold tabular-nums tracking-tight text-[#171717]">

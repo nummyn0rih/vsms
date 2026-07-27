@@ -117,6 +117,13 @@ export function ContractsPanel({ card }: { card: FarmerCard }) {
                     <TableCell className="text-right tabular-nums">{l.price_per_kg}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtNum(l.costRub)}
+                      {/* BR-33: «Принято» — тонны выполнения, стоимость — от
+                          оплачиваемого веса (принятый + доплата). */}
+                      {l.surchargeKg > 0 && (
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          вкл. доплату {fmtNum(l.surchargeKg)} кг
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -167,6 +174,14 @@ export function ContractsPanel({ card }: { card: FarmerCard }) {
               {Math.round(contracts.farmerTotal.pct)}%
             </span>
           </span>
+          {contracts.farmerTotal.surchargeKg > 0 && (
+            <span className="text-sm">
+              <span className="text-muted-foreground">к оплате</span>{" "}
+              <span className="font-semibold tabular-nums">
+                {fmtNum(contracts.farmerTotal.paidKg / 1000, 1)} т
+              </span>
+            </span>
+          )}
           <span className="text-sm">
             <span className="text-muted-foreground">стоимость</span>{" "}
             <span className="font-semibold tabular-nums">

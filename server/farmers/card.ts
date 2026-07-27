@@ -42,7 +42,16 @@ export type FarmerCard = {
   };
   contracts: {
     items: ContractDetailView[];
-    farmerTotal: { acceptedKg: number; targetKg: number; pct: number; costRub: number };
+    // acceptedKg/pct — тонны выполнения (принятый вес); costRub — деньги от
+    // ОПЛАЧИВАЕМОГО веса (paidKg = принятый + доплата BR-33).
+    farmerTotal: {
+      acceptedKg: number;
+      targetKg: number;
+      pct: number;
+      surchargeKg: number;
+      paidKg: number;
+      costRub: number;
+    };
   };
   shipments: {
     weeks: {
@@ -93,16 +102,21 @@ function readContacts(value: Prisma.JsonValue | null): FarmerCard["farmer"]["con
 function sumFarmerTotal(items: ContractDetailView[]): FarmerCard["contracts"]["farmerTotal"] {
   let acceptedKg = 0;
   let targetKg = 0;
+  let surchargeKg = 0;
+  let paidKg = 0;
   let costRub = 0;
   for (const c of items) {
     for (const l of c.lines) {
       acceptedKg += l.acceptedKg;
       targetKg += l.targetKg;
+      surchargeKg += l.surchargeKg;
+      paidKg += l.paidKg;
       costRub += l.costRub;
     }
   }
+  // % выполнения — от ПРИНЯТОГО (доплата BR-33 в тонны не идёт).
   const pct = targetKg > 0 ? (acceptedKg / targetKg) * 100 : 0;
-  return { acceptedKg, targetKg, pct, costRub };
+  return { acceptedKg, targetKg, pct, surchargeKg, paidKg, costRub };
 }
 
 export async function getFarmerCard(farmerId: number): Promise<FarmerCard | null> {

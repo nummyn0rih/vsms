@@ -8,6 +8,7 @@ import { Check, Truck, AlertCircle, RotateCcw } from "lucide-react";
 import type { ActContext, ActCalibreRange } from "@/server/acceptance/schema";
 import { setActualWeight } from "@/server/acceptance/actions";
 import { saveAct, revertAct } from "@/server/acceptance/act";
+import { computeSettlement } from "@/server/acceptance/accepted";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import {
   Dialog,
@@ -163,13 +164,49 @@ export function AcceptanceActDialog({
   const nonAcceptedKg =
     savedWeight != null ? (savedWeight * (sumPct - acceptedPct)) / 100 : null;
 
-  // Принятый вес — производное (база = факт).
-  const accepted =
-    savedWeight == null
-      ? null
-      : isCalibre
-        ? Math.round((savedWeight * acceptedPct) / 100)
-        : Math.round(savedWeight * (1 - brak / 100));
+  // Принятый вес — производное (база = факт). Точное значение — база корректировки
+  // (BR-33), округляем только на показе.
+  const acceptedPctExact = isCalibre ? acceptedPct : 100 - brak;
+  const acceptedExact =
+    savedWeight == null ? null : (savedWeight * acceptedPctExact) / 100;
+  const accepted = acceptedExact == null ? null : Math.round(acceptedExact);
+
+  // --- BR-33: корректировка расчёта (только admin). Пусто = нет корректировки. ---
+  const [settlementStr, setSettlementStr] = useState(
+    context.existing?.settlementPercent != null
+      ? String(context.existing.settlementPercent)
+      : "",
+  );
+  const settlementInput = useMemo(() => {
+    const t = settlementStr.trim().replace(",", ".");
+    if (t === "") return { value: null as number | null, invalid: false };
+    const n = Number(t);
+    return Number.isFinite(n)
+      ? { value: n, invalid: false }
+      : { value: null as number | null, invalid: true };
+  }, [settlementStr]);
+
+  // Тот же расчёт, что на сервере (чистая функция, без дублирования формулы).
+  const settlement = computeSettlement({
+    actualKg: savedWeight,
+    acceptedKg: acceptedExact,
+    settlementPercent: settlementInput.value,
+    itemLineId: isCalibre
+      ? context.itemLineId
+      : lineId !== ""
+        ? Number(lineId)
+        : null,
+    calibres: isCalibre
+      ? context.calibreRanges.map((r) => {
+          const b = bindings[r.id] ?? NONE;
+          return {
+            percent: pctNum(r.id),
+            isAccepted: r.isAccepted,
+            contractLineId: b === "" || b === NONE ? null : Number(b),
+          };
+        })
+      : [],
+  });
 
   const calibreBindMissing =
     isCalibre &&
@@ -179,6 +216,10 @@ export function AcceptanceActDialog({
     });
   // Σ категорий + брак = 100% факта.
   const sumOk = !isCalibre || Math.abs(sumPct + brak - 100) <= 0.01;
+
+  const acceptedPctLabel = acceptedPctExact.toLocaleString("ru-RU", {
+    maximumFractionDigits: 2,
+  });
 
   const blockReason =
     savedWeight == null || savedWeight <= 0
@@ -193,7 +234,14 @@ export function AcceptanceActDialog({
               ? "Сумма категорий и брака = 100% факта"
               : calibreBindMissing
                 ? "Привяжите принятые категории к строке"
-                : null;
+                : settlementInput.invalid
+                  ? "Процент к оплате — число от 0 до 100"
+                  : settlementInput.value != null && settlementInput.value > 100
+                    ? "Процент к оплате не может превышать 100"
+                    : settlementInput.value != null &&
+                        settlementInput.value < acceptedPctExact - 0.01
+                      ? `Процент к оплате не может быть ниже принятого (${acceptedPctLabel}%)`
+                      : null;
 
   async function commitWeight() {
     setWeightEditing(false);
@@ -238,6 +286,9 @@ export function AcceptanceActDialog({
       shipmentItemId: context.shipmentItemId,
       actNumber: actNumber.trim(),
       brakPercent: brak,
+      // BR-33: поле шлёт только admin. Не-admin не шлёт вовсе (undefined) — сервер
+      // сохранит уже заданную корректировку, а не сотрёт её.
+      ...(isAdmin ? { settlementPercent: settlementInput.value } : {}),
       ...(isCalibre
         ? {
             calibres: context.calibreRanges.map((r) => {
@@ -367,6 +418,66 @@ export function AcceptanceActDialog({
       </div>
     </Field>
   );
+
+  // BR-33 «% к оплате по договорённости». Редактирует только admin; остальным блок
+  // виден лишь когда корректировка уже задана (иначе числа стоимости выглядят ошибкой).
+  const settlementBlock =
+    !isAdmin && context.existing?.settlementPercent == null ? null : (
+      <div className="flex flex-col gap-2 rounded-lg border border-[#ebebeb] bg-[#fafafa] px-3.5 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[13px] font-medium tracking-tight text-[#171717]">
+              % к оплате по договорённости
+            </span>
+            <span className="text-[11px] leading-4 tracking-tight text-[#888888]">
+              {isAdmin
+                ? "пусто — нет корректировки; качество не меняется"
+                : "задано администратором; качество не меняется"}
+            </span>
+          </div>
+          {isAdmin ? (
+            <div className="ml-auto flex h-10 w-[96px] shrink-0 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+              <input
+                inputMode="decimal"
+                value={settlementStr}
+                onChange={(e) => setSettlementStr(e.target.value)}
+                placeholder="нет"
+                className="w-full bg-transparent text-right text-sm tabular-nums text-[#171717] outline-none placeholder:text-[#888888]"
+              />
+              <span className="ml-1 shrink-0 text-sm text-[#888888]">%</span>
+            </div>
+          ) : (
+            <span className="ml-auto shrink-0 text-sm font-semibold tabular-nums text-[#171717]">
+              {context.existing?.settlementPercent} %
+            </span>
+          )}
+        </div>
+
+        {/* Разложение: принято (качество) → доплата → итого к оплате (расчёт). */}
+        {acceptedExact != null && settlement.surchargeKg > 0 && (
+          <div className="flex flex-col gap-1 border-t border-[#ebebeb] pt-2 text-[12.5px] tracking-tight">
+            <div className="flex items-center gap-2 text-[#4d4d4d]">
+              <span>Принято</span>
+              <span className="ml-auto tabular-nums">
+                {acceptedPctLabel} % · {formatWeight(Math.round(acceptedExact))} кг
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-[#4d4d4d]">
+              <span>Доплата</span>
+              <span className="ml-auto tabular-nums">
+                +{formatWeight(Math.round(settlement.surchargeKg))} кг
+              </span>
+            </div>
+            <div className="flex items-center gap-2 font-medium text-[#171717]">
+              <span>Итого к оплате</span>
+              <span className="ml-auto text-sm font-semibold tabular-nums">
+                {formatWeight(Math.round(settlement.paidKg))} кг
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -554,6 +665,9 @@ export function AcceptanceActDialog({
                   <span className="text-[10.5px] text-[#888888]">не в зачёт</span>
                 </div>
               )}
+
+              {/* BR-33: корректировка расчёта */}
+              {settlementBlock}
             </>
           ) : (
             <>
@@ -607,6 +721,9 @@ export function AcceptanceActDialog({
                 }
                 note="пойдёт в выполнение контракта"
               />
+
+              {/* BR-33: корректировка расчёта */}
+              {settlementBlock}
             </>
           )}
         </div>

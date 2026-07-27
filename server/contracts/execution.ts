@@ -1,13 +1,20 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { computeAcceptedKg } from "@/server/acceptance/accepted";
+import { computeAcceptedKg, computeSettlement } from "@/server/acceptance/accepted";
 import { requireRole } from "@/server/auth/session";
 import { seasonYearOf } from "@/server/shipments/workdays";
 
 // C3a — живой расчёт СТОИМОСТИ позиций и ВЫПОЛНЕНИЯ строк контракта (BR-1/BR-6).
-// Ничего не хранится: пересчёт на чтение. База стоимости/выполнения = ПРИНЯТЫЙ вес
-// (после брака). Брак в выполнение НЕ идёт. Округление — только на показе (UI), здесь
+// Ничего не хранится: пересчёт на чтение. Округление — только на показе (UI), здесь
 // держим точные Decimal, как computeAcceptedKg.
+//
+// ⚠ ДВЕ РАЗНЫЕ БАЗЫ ВЕСА — НЕ СЛИВАТЬ ОБРАТНО В ОДНО ЧИСЛО (BR-33, DOMAIN §1):
+//   ВЫПОЛНЕНИЕ строки (тонны, % выполнения, остаток) — от ПРИНЯТОГО веса;
+//   СТОИМОСТЬ (деньги) — от ОПЛАЧИВАЕМОГО = принятый + доплата по корректировке расчёта.
+// Без корректировки (settlement_percent = null у всех актов) обе базы равны и поведение
+// ровно такое же, как до BR-33. Разнос принятого — attributeAcceptedToLines, разнос
+// доплаты — attributeSurchargeToLines; это ДВЕ отдельные карты сознательно: попадание
+// доплаты в первую = доплата в тоннах выполнения контракта, что BR-33 запрещает.
 //
 // ПРИНЯТЫЙ ВЕС СЧИТАЕТСЯ НА ЛЕТУ. Колонки-снимка ShipmentItem.accepted_weight_kg больше НЕ
 // существует — снесена миграцией cleanup_deprecated_snapshot_columns; accepted везде
@@ -32,6 +39,7 @@ export type ExecItem = {
   brakPercent: number | null; // AcceptanceAct.brak_percent (для simple-веса)
   contractLineId: number | null; // ShipmentItem.contract_line_id (строка позиции)
   calibres: ItemCalibre[]; // [] для simple-культуры
+  settlementPercent: number | null; // AcceptanceAct.settlement_percent (BR-33), null = нет
 };
 
 // Принятый вес simple-позиции на лету (BR-10) — единый источник формулы computeAcceptedKg.
@@ -41,50 +49,91 @@ function simpleAcceptedKg(item: ExecItem): Prisma.Decimal | null {
   return acc == null ? null : new Prisma.Decimal(acc);
 }
 
-// --- (а) Стоимость одной принятой позиции ---
+// Доплата позиции по корректировке расчёта (BR-33) — обёртка над чистой
+// computeSettlement (единый источник формулы) в Decimal-мир этого файла.
+// Без корректировки → surchargeKg = 0 и пустой allocation.
+function itemSurcharge(item: ExecItem): {
+  surchargeKg: Prisma.Decimal;
+  allocation: { contractLineId: number | null; kg: Prisma.Decimal }[];
+} {
+  if (item.settlementPercent == null || item.actualKg == null) {
+    return { surchargeKg: ZERO, allocation: [] };
+  }
+  const actualKg = item.actualKg.toNumber();
+  const s = computeSettlement({
+    actualKg,
+    acceptedKg: computeAcceptedKg(actualKg, item.brakPercent, item.calibres),
+    settlementPercent: item.settlementPercent,
+    itemLineId: item.contractLineId,
+    calibres: item.calibres,
+  });
+  return {
+    surchargeKg: new Prisma.Decimal(s.surchargeKg),
+    allocation: s.allocation.map((a) => ({
+      contractLineId: a.contractLineId,
+      kg: new Prisma.Decimal(a.kg),
+    })),
+  };
+}
+
+// --- (а) Стоимость одной принятой позиции (ДЕНЬГИ → оплачиваемый вес) ---
 
 // lineMap: line_id → price_per_kg. missingLine=true, если оплачиваемый вес есть, но строки
 // (или цены) для него нет — загрузчик может показать предупреждение.
+// База = ОПЛАЧИВАЕМЫЙ вес: принятый (как раньше) + доплата по BR-33, каждая доля доплаты
+// по цене СВОЕЙ строки. Без корректировки доплата = 0 → число ровно как до BR-33.
 export function itemCost(
   item: ExecItem,
   lineMap: Map<number, Prisma.Decimal>,
 ): { cost: Prisma.Decimal; missingLine: boolean } {
-  // simple: платим по принятому весу позиции (на лету) и строке позиции.
-  if (item.calibres.length === 0) {
-    const acceptedKg = simpleAcceptedKg(item);
-    if (acceptedKg == null || acceptedKg.isZero()) {
-      return { cost: ZERO, missingLine: false };
-    }
-    const price =
-      item.contractLineId != null ? lineMap.get(item.contractLineId) : undefined;
-    if (!price) return { cost: ZERO, missingLine: true };
-    return { cost: acceptedKg.mul(price), missingLine: false };
-  }
-
-  // calibre: Σ по категориям-СО-СТРОКОЙ (actual × percent/100) × цена их строки.
-  // Гейт оплаты — contract_line_id != null, НЕ is_accepted (C3d-2, §5): принятая категория
-  // падает на строку позиции (fallback), нестандарт — ТОЛЬКО на свою явную строку
-  // (объёмы стандарта/нестандарта не смешиваются). acceptedKg тут не используем.
   let cost = ZERO;
   let missingLine = false;
-  const actual = item.actualKg ?? ZERO;
-  for (const c of item.calibres) {
-    const lineId = c.isAccepted ? c.contractLineId ?? item.contractLineId : c.contractLineId;
-    // Нестандарт без строки — статистика, не оплата (и не missingLine).
-    if (!c.isAccepted && lineId == null) continue;
-    const catKg = actual.mul(new Prisma.Decimal(c.percent).div(HUNDRED));
-    if (catKg.isZero()) continue;
-    const price = lineId != null ? lineMap.get(lineId) : undefined;
+
+  if (item.calibres.length === 0) {
+    // simple: платим по принятому весу позиции (на лету) и строке позиции.
+    const acceptedKg = simpleAcceptedKg(item);
+    const price =
+      item.contractLineId != null ? lineMap.get(item.contractLineId) : undefined;
+    if (acceptedKg != null && !acceptedKg.isZero()) {
+      if (price) cost = acceptedKg.mul(price);
+      else missingLine = true;
+    }
+  } else {
+    // calibre: Σ по категориям-СО-СТРОКОЙ (actual × percent/100) × цена их строки.
+    // Гейт оплаты — contract_line_id != null, НЕ is_accepted (C3d-2, §5): принятая категория
+    // падает на строку позиции (fallback), нестандарт — ТОЛЬКО на свою явную строку
+    // (объёмы стандарта/нестандарта не смешиваются). acceptedKg тут не используем.
+    const actual = item.actualKg ?? ZERO;
+    for (const c of item.calibres) {
+      const lineId = c.isAccepted ? c.contractLineId ?? item.contractLineId : c.contractLineId;
+      // Нестандарт без строки — статистика, не оплата (и не missingLine).
+      if (!c.isAccepted && lineId == null) continue;
+      const catKg = actual.mul(new Prisma.Decimal(c.percent).div(HUNDRED));
+      if (catKg.isZero()) continue;
+      const price = lineId != null ? lineMap.get(lineId) : undefined;
+      if (!price) {
+        missingLine = true;
+        continue;
+      }
+      cost = cost.add(catKg.mul(price));
+    }
+  }
+
+  // Доплата по корректировке расчёта (BR-33) — только деньги, в тонны не идёт.
+  for (const a of itemSurcharge(item).allocation) {
+    if (a.kg.isZero()) continue;
+    const price = a.contractLineId != null ? lineMap.get(a.contractLineId) : undefined;
     if (!price) {
       missingLine = true;
       continue;
     }
-    cost = cost.add(catKg.mul(price));
+    cost = cost.add(a.kg.mul(price));
   }
+
   return { cost, missingLine };
 }
 
-// --- (б) Разнос ОПЛАЧИВАЕМОГО веса по строкам (для выполнения) ---
+// --- (б) Разнос ПРИНЯТОГО веса по строкам (для ВЫПОЛНЕНИЯ, тонны) ---
 
 // Возврат: line_id → Σ kg, идущих в выполнение строки. Гейт — наличие строки
 // (contract_line_id != null), не is_accepted (C3d-2, §5): нестандарт-со-строкой тоже
@@ -117,28 +166,55 @@ export function attributeAcceptedToLines(
   return map;
 }
 
+// --- (б-2) Разнос ДОПЛАТЫ по строкам (для ДЕНЕГ, BR-33) ---
+
+// Возврат: line_id → Σ kg доплаты. ОТДЕЛЬНАЯ карта от attributeAcceptedToLines
+// сознательно: доплата идёт только в стоимость, в тонны выполнения — никогда.
+// Доля с contractLineId=null (нет строки) в карту не попадает — как и у принятого.
+export function attributeSurchargeToLines(
+  items: ExecItem[],
+): Map<number, Prisma.Decimal> {
+  const map = new Map<number, Prisma.Decimal>();
+  for (const item of items) {
+    for (const a of itemSurcharge(item).allocation) {
+      if (a.contractLineId == null || a.kg.isZero()) continue;
+      map.set(a.contractLineId, (map.get(a.contractLineId) ?? ZERO).add(a.kg));
+    }
+  }
+  return map;
+}
+
 // --- (в) Выполнение одной строки контракта ---
 
 export type LineExecution = {
-  acceptedKg: Prisma.Decimal;
+  acceptedKg: Prisma.Decimal; // ТОННЫ: принятый вес по строке (без доплаты)
   targetKg: Prisma.Decimal; // volume_tons × 1000
   pct: Prisma.Decimal; // accepted/target×100, БЕЗ округления
   remainingKg: Prisma.Decimal; // может быть отрицательным (перевыполнение)
-  cost: Prisma.Decimal; // accepted × price
+  surchargeKg: Prisma.Decimal; // доплата по строке (BR-33), 0 без корректировки
+  paidKg: Prisma.Decimal; // ДЕНЬГИ: оплачиваемый = accepted + surcharge
+  cost: Prisma.Decimal; // paid × price
 };
 
+// ⚠ Здесь и живёт развод двух баз: выполнение (acceptedKg/pct/remainingKg) считается
+// от ПРИНЯТОГО, стоимость — от ОПЛАЧИВАЕМОГО. Не заменять paidKg на acceptedKg в cost
+// и не добавлять surcharge в pct/remainingKg (BR-33: доплата в тонны не идёт).
 export function lineExecution(
   line: { volumeTons: Prisma.Decimal; price: Prisma.Decimal },
   acceptedKgForLine: Prisma.Decimal,
+  surchargeKgForLine: Prisma.Decimal = ZERO,
 ): LineExecution {
   const targetKg = line.volumeTons.mul(KG_PER_TON);
   const pct = targetKg.isZero() ? ZERO : acceptedKgForLine.div(targetKg).mul(HUNDRED);
+  const paidKg = acceptedKgForLine.add(surchargeKgForLine);
   return {
     acceptedKg: acceptedKgForLine,
     targetKg,
     pct,
     remainingKg: targetKg.sub(acceptedKgForLine),
-    cost: acceptedKgForLine.mul(line.price),
+    surchargeKg: surchargeKgForLine,
+    paidKg,
+    cost: paidKg.mul(line.price),
   };
 }
 
@@ -152,11 +228,13 @@ export type LineExecutionRow = {
   label: string;
   pricePerKg: number;
   volumeTons: number;
-  acceptedKg: number;
+  acceptedKg: number; // тонны выполнения (принятый вес, БЕЗ доплаты)
   targetKg: number;
   pct: number;
   remainingKg: number;
-  cost: number;
+  surchargeKg: number; // доплата по BR-33 (0 без корректировки) — только в деньги
+  paidKg: number; // оплачиваемый вес = accepted + surcharge
+  cost: number; // paidKg × price
   paid: boolean; // оплачено по факту (в строку попал принятый вес)
   items: { itemId: number; cultureName: string; contributionKg: number }[];
 };
@@ -210,6 +288,7 @@ export async function getContractExecution(params: {
       acceptanceAct: {
         select: {
           brak_percent: true,
+          settlement_percent: true, // BR-33: корректировка расчёта (только деньги)
           calibreResults: {
             select: {
               percent: true,
@@ -237,6 +316,7 @@ export async function getContractExecution(params: {
         actualKg: it.actual_weight_kg,
         brakPercent: it.acceptanceAct!.brak_percent?.toNumber() ?? null,
         contractLineId: it.contract_line_id,
+        settlementPercent: it.acceptanceAct!.settlement_percent?.toNumber() ?? null,
         calibres: it.acceptanceAct!.calibreResults.map((cr) => ({
           percent: cr.percent.toNumber(),
           isAccepted: cr.calibreRange.is_accepted,
@@ -251,7 +331,9 @@ export async function getContractExecution(params: {
     lines.map((l) => [l.id, l.price_per_kg]),
   );
   const execItems = items.map((i) => i.exec);
+  // Две независимые карты: принятый (тонны выполнения) и доплата (только деньги, BR-33).
   const acceptedByLine = attributeAcceptedToLines(execItems);
+  const surchargeByLine = attributeSurchargeToLines(execItems);
 
   // Вклад каждой позиции в каждую строку (для списка позиций в строке).
   const contribByLine = new Map<number, Map<number, Prisma.Decimal>>(); // line → (item → kg)
@@ -275,6 +357,7 @@ export async function getContractExecution(params: {
     const exec = lineExecution(
       { volumeTons: l.volume_tons, price: l.price_per_kg },
       acceptedKg,
+      surchargeByLine.get(l.id) ?? ZERO,
     );
     const contrib = contribByLine.get(l.id);
     const lineItems = contrib
@@ -296,6 +379,8 @@ export async function getContractExecution(params: {
       targetKg: exec.targetKg.toNumber(),
       pct: exec.pct.toNumber(),
       remainingKg: exec.remainingKg.toNumber(),
+      surchargeKg: exec.surchargeKg.toNumber(),
+      paidKg: exec.paidKg.toNumber(),
       cost: exec.cost.toNumber(),
       paid: !acceptedKg.isZero(),
       items: lineItems,

@@ -144,6 +144,8 @@ export async function getContractView(
         targetKg: e?.targetKg ?? 0,
         pct: e?.pct ?? 0,
         remainingKg: e?.remainingKg ?? 0,
+        surchargeKg: e?.surchargeKg ?? 0,
+        paidKg: e?.paidKg ?? 0,
         costRub: e?.cost ?? 0,
         paid: e?.paid ?? false,
       };
