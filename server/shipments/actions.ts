@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
+import { retryFailMessage, withUniqueRetry } from "@/server/db/retry";
 import type { ActionResult } from "@/lib/action-result";
 import {
   shipmentSchema,
@@ -34,6 +35,9 @@ import {
 
 const ENTITY = "Shipment";
 const PATH = "/shipments";
+
+// Текст пользователю, когда 3 попытки присвоить номер подряд упёрлись в гонку (П-8).
+const CODE_RACE_MSG = "Не удалось присвоить номер машины, попробуйте ещё раз";
 
 // Date → YYYY-MM-DD (даты храним UTC-полночью, см. parseDateUTC).
 function toDateString(d: Date | null): string | null {
@@ -73,9 +77,15 @@ type Tx = Prisma.TransactionClient;
 
 // Сквозной счётчик по ВСЕМ отгрузкам, не переиспользуется (удаление не сдвигает
 // последующие). code хранится String, значения целые → MAX(code::int)+1.
+// WHERE отсекает нечисловые коды: их оставляют технические скрипты (напр.
+// settlement-rbac-verify пишет "SET-RBAC-<ts>" вне транзакции и убирает в finally).
+// Одна такая строка роняла бы КАЖДОЕ создание отгрузки на касте (22P02). Нумерации
+// фильтр не меняет — рабочие коды всегда числовые.
+// Гонки это не решает: между SELECT и INSERT блокировки нет, дубль ловит @unique на
+// code, а транзакцию целиком повторяет withUniqueRetry в вызывающих (П-8).
 async function getNextCode(tx: Tx): Promise<string> {
   const rows = await tx.$queryRaw<{ max: number }[]>`
-    SELECT COALESCE(MAX(code::int), 0) AS max FROM "Shipment"
+    SELECT COALESCE(MAX(code::int), 0) AS max FROM "Shipment" WHERE code ~ '^[0-9]+$'
   `;
   return String(Number(rows[0]?.max ?? 0) + 1);
 }
@@ -111,40 +121,47 @@ export async function createShipment(
     const driverId = parsed.data.driver_id?.trim();
     const comment = parsed.data.comment?.trim();
 
-    await prisma.$transaction(async (tx) => {
-      const code = await getNextCode(tx);
-      const created = await tx.shipment.create({
-        data: {
-          code,
-          departure_date: parseDateUTC(parsed.data.departure_date),
-          arrival_date: parseDateUTC(parsed.data.arrival_date),
-          status: "planned",
-          driver_id: driverId ? Number(driverId) : null,
-          comment: comment || null,
-          created_by: Number(user.id),
-        },
-      });
+    await withUniqueRetry(
+      () =>
+        prisma.$transaction(async (tx) => {
+          const code = await getNextCode(tx);
+          const created = await tx.shipment.create({
+            data: {
+              code,
+              departure_date: parseDateUTC(parsed.data.departure_date),
+              arrival_date: parseDateUTC(parsed.data.arrival_date),
+              status: "planned",
+              driver_id: driverId ? Number(driverId) : null,
+              comment: comment || null,
+              created_by: Number(user.id),
+            },
+          });
 
-      const itemsSummary = await persistShipmentItems(
-        tx,
-        created.id,
-        parsed.data.items,
-      );
+          const itemsSummary = await persistShipmentItems(
+            tx,
+            created.id,
+            parsed.data.items,
+          );
 
-      await logChange(
-        [
-          { entity: ENTITY, entityId: created.id, field: "created", newValue: code },
-          { entity: ENTITY, entityId: created.id, field: "items", newValue: itemsSummary },
-        ],
-        Number(user.id),
-        tx,
-      );
-    });
+          await logChange(
+            [
+              { entity: ENTITY, entityId: created.id, field: "created", newValue: code },
+              { entity: ENTITY, entityId: created.id, field: "items", newValue: itemsSummary },
+            ],
+            Number(user.id),
+            tx,
+          );
+        }),
+      { message: CODE_RACE_MSG },
+    );
 
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return toValidationFail(e) ?? failWithLog(e, "Не удалось создать отгрузку");
+    return (
+      toValidationFail(e) ??
+      failWithLog(e, retryFailMessage(e, "Не удалось создать отгрузку"))
+    );
   }
 }
 
@@ -251,49 +268,61 @@ export async function createWholeMachines(
       plan.push({ arrival: day, departure });
     }
 
-    const createdIds: number[] = [];
-    await prisma.$transaction(async (tx) => {
-      for (const p of plan) {
-        const code = await getNextCode(tx);
-        const created = await tx.shipment.create({
-          data: {
-            code,
-            departure_date: parseDateUTC(p.departure),
-            arrival_date: parseDateUTC(p.arrival),
-            status: "planned",
-            driver_id: null,
-            created_by: Number(user.id),
-          },
-        });
-        await persistShipmentItems(tx, created.id, [
-          {
-            farmer_id: String(farmerId),
-            culture_id: String(cultureId),
-            planned_weight_kg: String(input.plannedWeightKg),
-            packaging_type_id: packagingTypeId != null ? String(packagingTypeId) : undefined,
-          },
-        ]);
-        createdIds.push(created.id);
-      }
+    const createdCount = await withUniqueRetry(
+      () =>
+        prisma.$transaction(async (tx) => {
+          // Список ВНУТРИ колбэка: при повторе транзакции он обязан начинаться с нуля.
+          // Снаружи он копил бы id из откаченной попытки → в ChangeLog ушли бы записи
+          // на несуществующие машины (entity_id — мягкий указатель, БД не остановит),
+          // а пользователь увидел бы завышенное число созданных.
+          const createdIds: number[] = [];
+          for (const p of plan) {
+            const code = await getNextCode(tx);
+            const created = await tx.shipment.create({
+              data: {
+                code,
+                departure_date: parseDateUTC(p.departure),
+                arrival_date: parseDateUTC(p.arrival),
+                status: "planned",
+                driver_id: null,
+                created_by: Number(user.id),
+              },
+            });
+            await persistShipmentItems(tx, created.id, [
+              {
+                farmer_id: String(farmerId),
+                culture_id: String(cultureId),
+                planned_weight_kg: String(input.plannedWeightKg),
+                packaging_type_id: packagingTypeId != null ? String(packagingTypeId) : undefined,
+              },
+            ]);
+            createdIds.push(created.id);
+          }
 
-      const summary = `${farmer.name} × ${culture.name}, ${weightNum} кг, дни: ${days.join(", ")}`;
-      await logChange(
-        createdIds.map((id) => ({
-          entity: ENTITY,
-          entityId: id,
-          field: "bulk_create",
-          newValue: summary,
-        })),
-        Number(user.id),
-        tx,
-      );
-    });
+          const summary = `${farmer.name} × ${culture.name}, ${weightNum} кг, дни: ${days.join(", ")}`;
+          await logChange(
+            createdIds.map((id) => ({
+              entity: ENTITY,
+              entityId: id,
+              field: "bulk_create",
+              newValue: summary,
+            })),
+            Number(user.id),
+            tx,
+          );
+          return createdIds.length;
+        }),
+      { message: CODE_RACE_MSG },
+    );
 
     revalidatePath("/planner");
     revalidatePath(PATH);
-    return { ok: true, data: { created: createdIds.length } };
+    return { ok: true, data: { created: createdCount } };
   } catch (e) {
-    return toValidationFail(e) ?? failWithLog(e, "Не удалось создать отгрузки");
+    return (
+      toValidationFail(e) ??
+      failWithLog(e, retryFailMessage(e, "Не удалось создать отгрузки"))
+    );
   }
 }
 
@@ -523,46 +552,52 @@ export async function disassembleShipment(shipmentId: number): Promise<ActionRes
       return { ok: true }; // уже одно-фермерская — no-op
     }
 
-    await prisma.$transaction(async (tx) => {
-      const createdCodes: string[] = [];
-      for (const itemIds of byFarmer.values()) {
-        const code = await getNextCode(tx); // последовательно — код уникален
-        const created = await tx.shipment.create({
-          data: {
-            code,
-            departure_date: src.departure_date,
-            arrival_date: src.arrival_date,
-            status: "planned",
-            driver_id: null,
-            created_by: Number(user.id),
-          },
-        });
-        await tx.shipmentItem.updateMany({
-          where: { id: { in: itemIds } },
-          data: { shipment_id: created.id },
-        });
-        createdCodes.push(code);
-      }
-      // Исходная отгрузка опустела — удаляем.
-      await tx.shipment.delete({ where: { id: shipmentId } });
-      await logChange(
-        {
-          entity: ENTITY,
-          entityId: shipmentId,
-          field: "disassemble",
-          oldValue: src.code,
-          newValue: createdCodes.join(", "),
-        },
-        Number(user.id),
-        tx,
-      );
-    });
+    await withUniqueRetry(
+      () =>
+        prisma.$transaction(async (tx) => {
+          // createdCodes живёт внутри колбэка — повтор транзакции начинает с чистого
+          // списка, а удаление исходной машины откатывается вместе с ним.
+          const createdCodes: string[] = [];
+          for (const itemIds of byFarmer.values()) {
+            const code = await getNextCode(tx); // последовательно — код уникален
+            const created = await tx.shipment.create({
+              data: {
+                code,
+                departure_date: src.departure_date,
+                arrival_date: src.arrival_date,
+                status: "planned",
+                driver_id: null,
+                created_by: Number(user.id),
+              },
+            });
+            await tx.shipmentItem.updateMany({
+              where: { id: { in: itemIds } },
+              data: { shipment_id: created.id },
+            });
+            createdCodes.push(code);
+          }
+          // Исходная отгрузка опустела — удаляем.
+          await tx.shipment.delete({ where: { id: shipmentId } });
+          await logChange(
+            {
+              entity: ENTITY,
+              entityId: shipmentId,
+              field: "disassemble",
+              oldValue: src.code,
+              newValue: createdCodes.join(", "),
+            },
+            Number(user.id),
+            tx,
+          );
+        }),
+      { message: CODE_RACE_MSG },
+    );
 
     revalidatePath("/planner");
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return failWithLog(e, "Не удалось разобрать машину");
+    return failWithLog(e, retryFailMessage(e, "Не удалось разобрать машину"));
   }
 }
 
