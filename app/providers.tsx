@@ -3,21 +3,26 @@
 import { SessionProvider } from "next-auth/react";
 import type { Session } from "next-auth";
 
+import { RoleProvider } from "@/components/auth/RoleProvider";
 import { Toaster } from "@/components/ui/sonner";
+import type { Role } from "@/lib/generated/prisma/client";
 
-// Прокидывает сессию в клиентские компоненты (нужно для useSession/RoleGate).
-// session приходит из серверного layout: без пропа SessionProvider стартует в
-// status="loading" и идёт за /api/auth/session — RoleGate успевает мигнуть fallback'ом.
+// SessionProvider оставлен ради клиентского API next-auth (signOut в сайдбаре и мобильном
+// меню), но роль из него больше НЕ читается: его внутреннее состояние фиксируется на
+// монтировании и при клиентской навигации отстаёт от пропа (см. RoleProvider).
+// Гейтинг UI идёт через RoleProvider — роль приходит пропом из серверного layout.
 export function Providers({
   children,
   session,
+  role,
 }: {
   children: React.ReactNode;
   session: Session | null;
+  role: Role | null;
 }) {
   return (
     <SessionProvider session={session}>
-      {children}
+      <RoleProvider role={role}>{children}</RoleProvider>
       <Toaster />
     </SessionProvider>
   );

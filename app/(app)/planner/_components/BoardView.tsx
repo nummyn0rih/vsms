@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import {
   GripVertical,
@@ -40,6 +39,7 @@ import {
 import { moveShipmentToDay } from "@/server/board/actions";
 import { formatTareTotals } from "@/server/shipments/format";
 import { RoleGate } from "@/components/auth/RoleGate";
+import { useRole } from "@/components/auth/RoleProvider";
 import {
   Tooltip,
   TooltipContent,
@@ -641,8 +641,8 @@ export function BoardView({
   reload: () => void | Promise<void>;
   onOpenPlan: () => void;
 }) {
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "admin";
+  const role = useRole();
+  const isAdmin = role === "admin";
 
   // Локальная копия колонок — для оптимистичного переноса. Синк с week делаем в
   // фазе рендера (паттерн React «информация из предыдущего рендера»), а не в effect.
