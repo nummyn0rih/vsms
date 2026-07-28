@@ -33,8 +33,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Сессия читается на сервере и отдаётся в SessionProvider — клиентские гейты
-  // (RoleGate, доски приёмки, планировщик) знают роль уже на первом кадре.
+  // Сессия читается на сервере: роль уходит в RoleProvider пропом и переживает клиентскую
+  // навигацию, сама сессия — в SessionProvider ради signOut. Клиентские гейты (RoleGate,
+  // доски приёмки, планировщик) знают роль уже на первом кадре.
   // Побочный эффект: layout становится динамическим (auth() читает куки) — ожидаемо,
   // приложение целиком за логином.
   const session = await auth();
@@ -49,7 +50,9 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased notranslate`}
     >
       <body className="min-h-full flex flex-col">
-        <Providers session={session}>{children}</Providers>
+        <Providers session={session} role={session?.user?.role ?? null}>
+          {children}
+        </Providers>
       </body>
     </html>
   );

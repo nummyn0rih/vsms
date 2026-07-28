@@ -3,24 +3,14 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { seasonSchema, type SeasonInput, type SeasonRow } from "./schema";
 
 const ENTITY = "SeasonConfig";
 const PATH = "/settings/seasons";
-
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим).
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Нарушение @@unique(season_year) — код Prisma P2002.
 function isUniqueViolation(e: unknown): boolean {
@@ -38,6 +28,8 @@ function toDateStr(d: Date): string {
 }
 
 export async function listSeasons(): Promise<SeasonRow[]> {
+  await requireRole();
+
   const list = await prisma.seasonConfig.findMany({
     orderBy: { season_year: "desc" },
   });
@@ -94,7 +86,7 @@ export async function createSeason(input: SeasonInput): Promise<ActionResult> {
         fieldErrors: { season_year: ["Сезон с таким годом уже есть"] },
       };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось создать сезон" };
+    return failWithLog(e, "Не удалось создать сезон");
   }
 }
 
@@ -175,7 +167,7 @@ export async function updateSeason(
         fieldErrors: { season_year: ["Сезон с таким годом уже есть"] },
       };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -202,6 +194,6 @@ export async function deleteSeason(id: number): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить сезон" };
+    return failWithLog(e, "Не удалось удалить сезон");
   }
 }

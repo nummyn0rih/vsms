@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 
 import type { AcceptanceBoard as Board } from "@/server/acceptance/schema";
@@ -16,6 +15,7 @@ import {
 } from "@/server/acceptance/board-filter";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { downloadXlsx, type XlsxRow } from "@/lib/xlsx-export";
+import { useRole } from "@/components/auth/RoleProvider";
 import { FilterCombo } from "@/components/filters/FilterCombo";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AcceptanceMachine } from "./AcceptanceMachine";
@@ -50,8 +50,8 @@ function EmptyZone({ note }: { note: string }) {
 
 export function AcceptanceBoard({ board }: { board: Board }) {
   const router = useRouter();
-  const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "admin";
+  const role = useRole();
+  const isAdmin = role === "admin";
 
   // Состояние диалога акта держим ЗДЕСЬ (на доске), не в карточке: markArrived
   // перетасовывает зоны (sent→arrived), карточка размонтируется — диалог жил бы внутри

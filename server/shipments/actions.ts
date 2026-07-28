@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
   shipmentSchema,
   type ShipmentInput,
-  type ShipmentListRow,
   type ShipmentDetail,
   type ShipmentItemRow,
   type ShipmentOptions,
@@ -34,17 +34,6 @@ import {
 
 const ENTITY = "Shipment";
 const PATH = "/shipments";
-
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим). Образец contracts.
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Date → YYYY-MM-DD (даты храним UTC-полночью, см. parseDateUTC).
 function toDateString(d: Date | null): string | null {
@@ -155,10 +144,7 @@ export async function createShipment(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return (
-      toValidationFail(e) ??
-      authFail(e) ?? { ok: false, error: "Не удалось создать отгрузку" }
-    );
+    return toValidationFail(e) ?? failWithLog(e, "Не удалось создать отгрузку");
   }
 }
 
@@ -170,6 +156,8 @@ export async function getTripWeightNorm(
   farmerId: number,
   cultureId: number,
 ): Promise<number | null> {
+  await requireRole();
+
   const r = await prisma.tripWeightNorm.findUnique({
     where: { farmer_id_culture_id: { farmer_id: farmerId, culture_id: cultureId } },
   });
@@ -305,10 +293,7 @@ export async function createWholeMachines(
     revalidatePath(PATH);
     return { ok: true, data: { created: createdIds.length } };
   } catch (e) {
-    return (
-      toValidationFail(e) ??
-      authFail(e) ?? { ok: false, error: "Не удалось создать отгрузки" }
-    );
+    return toValidationFail(e) ?? failWithLog(e, "Не удалось создать отгрузки");
   }
 }
 
@@ -398,10 +383,7 @@ export async function updateShipment(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return (
-      toValidationFail(e) ??
-      authFail(e) ?? { ok: false, error: "Не удалось сохранить" }
-    );
+    return toValidationFail(e) ?? failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -433,7 +415,7 @@ export async function deleteShipment(id: number): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить отгрузку" };
+    return failWithLog(e, "Не удалось удалить отгрузку");
   }
 }
 
@@ -509,7 +491,7 @@ export async function assembleShipments(shipmentIds: number[]): Promise<ActionRe
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось собрать машину" };
+    return failWithLog(e, "Не удалось собрать машину");
   }
 }
 
@@ -580,7 +562,7 @@ export async function disassembleShipment(shipmentId: number): Promise<ActionRes
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось разобрать машину" };
+    return failWithLog(e, "Не удалось разобрать машину");
   }
 }
 
@@ -746,7 +728,7 @@ export async function sendShipment(id: number): Promise<ActionResult> {
     return result;
   } catch (e) {
     if (e instanceof ShipmentSendError) return { ok: false, error: e.message };
-    return authFail(e) ?? { ok: false, error: "Не удалось отправить отгрузку" };
+    return failWithLog(e, "Не удалось отправить отгрузку");
   }
 }
 
@@ -848,7 +830,7 @@ export async function revertShipmentToPlanned(id: number): Promise<ActionResult>
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить отгрузку" };
+    return failWithLog(e, "Не удалось откатить отгрузку");
   }
 }
 
@@ -955,7 +937,7 @@ export async function revertShipmentToSent(id: number): Promise<ActionResult> {
     }
     return result;
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось откатить отгрузку" };
+    return failWithLog(e, "Не удалось откатить отгрузку");
   }
 }
 
@@ -995,29 +977,9 @@ const itemInclude = {
   contractLine: { select: { label: true } },
 } as const;
 
-export async function getShipments(): Promise<ShipmentListRow[]> {
-  const shipments = await prisma.shipment.findMany({
-    include: {
-      items: { include: itemInclude, orderBy: { id: "asc" } },
-      driver: { include: { transportCompany: { select: { name: true } } } },
-    },
-    orderBy: { arrival_date: "desc" },
-  });
-
-  return shipments.map((s) => ({
-    id: s.id,
-    code: s.code,
-    status: s.status,
-    departure_date: toDateString(s.departure_date),
-    arrival_date: toDateString(s.arrival_date),
-    driver_name: s.driver?.full_name ?? null,
-    transport_company_name: s.driver?.transportCompany.name ?? null,
-    comment: s.comment,
-    items: s.items.map(mapItem),
-  }));
-}
-
 export async function getShipment(id: number): Promise<ShipmentDetail | null> {
+  await requireRole();
+
   const s = await prisma.shipment.findUnique({
     where: { id },
     include: { items: { include: itemInclude, orderBy: { id: "asc" } } },
@@ -1038,6 +1000,8 @@ export async function getShipment(id: number): Promise<ShipmentDetail | null> {
 // Опции Select'ов формы: активные водители (+ТК), активные фермеры/культуры,
 // строки контрактов ТЕКУЩЕГО сезона (клиент фильтрует по фермеру+культуре).
 export async function listShipmentOptions(): Promise<ShipmentOptions> {
+  await requireRole();
+
   const currentSeason = seasonYearOf(new Date());
 
   const [drivers, farmers, cultures, lines, norms] = await Promise.all([

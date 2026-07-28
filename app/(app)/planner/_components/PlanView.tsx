@@ -7,7 +7,6 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
-import { useSession } from "next-auth/react";
 
 import type { CellProgress, PlanWeek } from "@/server/plan/schema";
 import {
@@ -16,6 +15,7 @@ import {
   convertDaysToWeek,
   convertWeekToDays,
 } from "@/server/plan/actions";
+import { useRole } from "@/components/auth/RoleProvider";
 import { fmtTons } from "@/lib/format";
 import { PlanInput } from "./PlanInput";
 import { barGeometry, PlanBar } from "./plan-bar";
@@ -131,8 +131,8 @@ export function PlanView({
   reload: () => Promise<void>;
   onOpenScope: () => void;
 }) {
-  const { data: session } = useSession();
-  const canEdit = session?.user?.role === "admin";
+  const role = useRole();
+  const canEdit = role === "admin";
 
   const [converting, setConverting] = useState<number | null>(null);
   // Режим выводится из данных (есть строки → день/неделя). Но у пустой культуры

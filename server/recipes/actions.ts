@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -17,16 +18,6 @@ import {
 const ENTITY = "IngredientRecipe";
 const PATH = "/settings/recipes";
 
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 // Нарушение @@unique(culture_id, ingredient_id) — код Prisma P2002.
 function isUniqueViolation(e: unknown): boolean {
   return (
@@ -38,6 +29,8 @@ function isUniqueViolation(e: unknown): boolean {
 }
 
 export async function listCultureOptions(): Promise<CultureOption[]> {
+  await requireRole();
+
   return prisma.culture.findMany({
     where: { active: true },
     select: { id: true, name: true },
@@ -46,6 +39,8 @@ export async function listCultureOptions(): Promise<CultureOption[]> {
 }
 
 export async function listIngredientOptions(): Promise<IngredientOption[]> {
+  await requireRole();
+
   return prisma.ingredient.findMany({
     where: { active: true },
     select: { id: true, name: true, unit: true },
@@ -56,6 +51,8 @@ export async function listIngredientOptions(): Promise<IngredientOption[]> {
 export async function listRecipesByCulture(
   cultureId: number,
 ): Promise<RecipeRow[]> {
+  await requireRole();
+
   const list = await prisma.ingredientRecipe.findMany({
     where: { culture_id: cultureId },
     include: { ingredient: { select: { name: true, unit: true } } },
@@ -111,7 +108,7 @@ export async function addRecipe(input: RecipeInput): Promise<ActionResult> {
         fieldErrors: { ingredient_id: ["Ингредиент уже добавлен к культуре"] },
       };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось добавить строку" };
+    return failWithLog(e, "Не удалось добавить строку");
   }
 }
 
@@ -155,7 +152,7 @@ export async function updateRecipeQty(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -182,6 +179,6 @@ export async function deleteRecipe(id: number): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить строку" };
+    return failWithLog(e, "Не удалось удалить строку");
   }
 }

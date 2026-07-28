@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -24,17 +25,6 @@ import { getContractExecution } from "./execution";
 const ENTITY = "Contract";
 const PATH = "/contracts";
 
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим). Образец cultures.
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 // Ошибка FK при удалении строки, на которую ссылается ShipmentItem/CalibreResult
 // (onDelete: Restrict). P2003 = нарушение FK, P2014 = нарушение обязательной связи.
 function isRestrictError(e: unknown): boolean {
@@ -48,6 +38,8 @@ export async function listContracts(params?: {
   farmerId?: number;
   season?: number;
 }): Promise<ContractListRow[]> {
+  await requireRole();
+
   const contracts = await prisma.contract.findMany({
     where: {
       ...(params?.farmerId ? { farmer_id: params.farmerId } : {}),
@@ -91,6 +83,8 @@ export async function listContracts(params?: {
 }
 
 export async function getContract(id: number): Promise<ContractDetail | null> {
+  await requireRole();
+
   const c = await prisma.contract.findUnique({
     where: { id },
     include: {
@@ -128,6 +122,8 @@ export async function getContract(id: number): Promise<ContractDetail | null> {
 export async function getContractView(
   id: number,
 ): Promise<ContractDetailView | null> {
+  await requireRole();
+
   const detail = await getContract(id);
   if (!detail) return null;
 
@@ -148,6 +144,8 @@ export async function getContractView(
         targetKg: e?.targetKg ?? 0,
         pct: e?.pct ?? 0,
         remainingKg: e?.remainingKg ?? 0,
+        surchargeKg: e?.surchargeKg ?? 0,
+        paidKg: e?.paidKg ?? 0,
         costRub: e?.cost ?? 0,
         paid: e?.paid ?? false,
       };
@@ -161,6 +159,8 @@ export async function listContractOptions(): Promise<{
   seasons: SeasonOption[];
   cultures: CultureOption[];
 }> {
+  await requireRole();
+
   const [farmers, seasons, cultures] = await Promise.all([
     prisma.farmer.findMany({
       where: { active: true },
@@ -227,7 +227,7 @@ export async function createContract(
     if (isRestrictError(e)) {
       return { ok: false, error: "Строка используется в отгрузках/приёмке, удалить нельзя" };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось создать контракт" };
+    return failWithLog(e, "Не удалось создать контракт");
   }
 }
 
@@ -298,7 +298,7 @@ export async function updateContract(
     if (isRestrictError(e)) {
       return { ok: false, error: "Строка используется в отгрузках/приёмке, удалить нельзя" };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -325,6 +325,6 @@ export async function deleteContract(id: number): Promise<ActionResult> {
     if (isRestrictError(e)) {
       return { ok: false, error: "Контракт используется в отгрузках/приёмке, удалить нельзя" };
     }
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить контракт" };
+    return failWithLog(e, "Не удалось удалить контракт");
   }
 }

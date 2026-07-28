@@ -1,7 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-
+import { useRole } from "@/components/auth/RoleProvider";
 import type { Role } from "@/lib/generated/prisma/client";
 
 // Клиентское скрытие UI по роли. ВНИМАНИЕ: это только UX —
@@ -15,8 +14,7 @@ export function RoleGate({
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }) {
-  const { data: session } = useSession();
-  const role = session?.user?.role;
+  const role = useRole();
 
   if (!role || !allow.includes(role)) return <>{fallback}</>;
   return <>{children}</>;

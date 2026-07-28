@@ -41,6 +41,16 @@ export const saveActSchema = z.object({
     .max(100, "Брак 0–100%"),
   contractLineId: z.number().int().positive().optional(), // simple
   calibres: z.array(calibreEntrySchema).optional(), // calibre
+  // BR-33, корректировка расчёта (только admin). undefined = поле не прислано, значение
+  // в БД НЕ трогаем (форма оператора его не шлёт); null = снять корректировку;
+  // число = задать. Нижняя граница (≥ принятого%) проверяется в saveAct: здесь неизвестен
+  // is_accepted категорий — он живёт в CalibreRange в БД.
+  settlementPercent: z
+    .number()
+    .min(0, "Процент к оплате 0–100")
+    .max(100, "Процент к оплате не может превышать 100")
+    .nullable()
+    .optional(),
 });
 
 export type SaveActInput = z.infer<typeof saveActSchema>;
@@ -88,6 +98,7 @@ export type ActContext = {
   existing: {
     actNumber: string;
     brakPercent: number;
+    settlementPercent: number | null; // BR-33: % к оплате по договорённости (admin)
     contractLineId: number | null;
     calibres: {
       calibreRangeId: number;
@@ -163,12 +174,16 @@ export type AcceptedPosition = {
   actNumber: string | null;
   actualKg: number;
   brakPercent: number;
-  acceptedKg: number; // computeAcceptedKg (BR-10), к оплате
+  acceptedKg: number; // computeAcceptedKg (BR-10) — ПРИНЯТО (качество/тонны)
+  // BR-33: корректировка расчёта. null = нет (тогда paidKg = acceptedKg, surchargeKg = 0).
+  settlementPercent: number | null; // итоговый % к оплате от факта
+  surchargeKg: number; // доплата сверх принятого
+  paidKg: number; // К ОПЛАТЕ = принятый + доплата (база денег)
   calibres: AcceptedCalibreChip[]; // [] для simple; иначе категории + «брак» последней
   nonStandard: AcceptedNonStandard[]; // непринятые категории со своей строкой
   lineLabel: string | null; // строка контракта для футера (основная)
   pricePerKg: number | null; // цена основной строки (null → «× цена» не показываем)
-  costRub: number; // itemCost (C3a)
+  costRub: number; // itemCost (C3a) — от ОПЛАЧИВАЕМОГО веса
 };
 
 export type AcceptedMachine = {

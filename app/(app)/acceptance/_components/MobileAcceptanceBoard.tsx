@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Filter, PackageOpen } from "lucide-react";
 
@@ -14,6 +13,7 @@ import {
   boardOptions,
   anyAcceptanceFilterActive,
 } from "@/server/acceptance/board-filter";
+import { useRole } from "@/components/auth/RoleProvider";
 import { writeUrlParam } from "@/app/(app)/shipments/_components/week-format";
 import { MobileAcceptanceCard } from "./MobileAcceptanceCard";
 import { MobileAcceptedCard } from "./MobileAcceptedCard";
@@ -46,8 +46,7 @@ export function MobileAcceptanceBoard({
   initialZone: ZoneKey;
 }) {
   const router = useRouter();
-  const { data: session } = useSession();
-  const role = session?.user?.role;
+  const role = useRole();
   const canEdit = role === "operator" || role === "admin";
   const isAdmin = role === "admin";
 

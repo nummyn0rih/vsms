@@ -1,7 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
@@ -27,16 +28,6 @@ import {
   type PlanWeek,
 } from "./schema";
 import { getPlanWeek } from "./board";
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Дробь после запятой в Decimal(12,3) — 3 знака. Считаем в милли-тоннах (целых),
 // чтобы суммы/распределение были точными (без float-погрешности).
@@ -179,7 +170,7 @@ export async function upsertPlanTarget(
 
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить цель" };
+    return failWithLog(e, "Не удалось сохранить цель");
   }
 }
 
@@ -217,7 +208,7 @@ export async function deletePlanTarget(
 
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить цель" };
+    return failWithLog(e, "Не удалось удалить цель");
   }
 }
 
@@ -281,7 +272,7 @@ export async function convertDaysToWeek(input: PlanKey): Promise<ActionResult> {
 
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сменить гранулярность" };
+    return failWithLog(e, "Не удалось сменить гранулярность");
   }
 }
 
@@ -361,7 +352,7 @@ export async function convertWeekToDays(input: PlanKey): Promise<ActionResult> {
     if (result === false) return { ok: true }; // недельной строки не было
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сменить гранулярность" };
+    return failWithLog(e, "Не удалось сменить гранулярность");
   }
 }
 
@@ -402,7 +393,7 @@ export async function addCultureToScope(input: AddScopeInput): Promise<ActionRes
 
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось обновить состав" };
+    return failWithLog(e, "Не удалось обновить состав");
   }
 }
 
@@ -437,6 +428,6 @@ export async function removeCultureFromScope(
 
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось обновить состав" };
+    return failWithLog(e, "Не удалось обновить состав");
   }
 }

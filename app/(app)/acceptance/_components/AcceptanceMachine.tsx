@@ -1,9 +1,8 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-
 import type { AcceptanceMachine as Machine } from "@/server/acceptance/schema";
 import { RoleGate } from "@/components/auth/RoleGate";
+import { useRole } from "@/components/auth/RoleProvider";
 import {
   StatusBadge,
   STATUS_STYLE,
@@ -77,8 +76,7 @@ export function AcceptanceMachine({
   ) => void;
   pendingId: number | null;
 }) {
-  const { data: session } = useSession();
-  const role = session?.user?.role;
+  const role = useRole();
   const canEdit = role === "operator" || role === "admin";
   const zoneBg = STATUS_STYLE[machine.status].zone;
   const isSent = machine.status === "sent";

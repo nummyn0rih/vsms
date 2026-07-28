@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { parseDateUTC, seasonYearOf, subtractWorkdays } from "@/server/shipments/workdays";
@@ -11,17 +12,6 @@ import { getBoardWeek } from "./board";
 import type { BoardWeek } from "./schema";
 
 const ENTITY = "Shipment";
-
-// Перехват RBAC → ActionResult (страницу не валим). Образец shipments/actions.
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "UNAUTHENTICATED" ? "Требуется вход" : "Недостаточно прав",
-    };
-  }
-  return null;
-}
 
 function isoOf(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -114,6 +104,6 @@ export async function moveShipmentToDay(
     revalidatePath("/shipments");
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось перенести отгрузку" };
+    return failWithLog(e, "Не удалось перенести отгрузку");
   }
 }

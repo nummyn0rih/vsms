@@ -82,11 +82,13 @@ export type ContractDetail = {
 // Строка с живым выполнением/стоимостью (C3d). Поля 1-в-1 из LineExecutionRow.
 // Расчёт — getContractExecution (C3a), ничего не хранится.
 export type ContractLineView = ContractLineRow & {
-  acceptedKg: number; // принято на строку (живой)
+  acceptedKg: number; // ТОННЫ: принято на строку (живой, БЕЗ доплаты BR-33)
   targetKg: number; // volume_tons × 1000
   pct: number; // выполнение, без округления (округлять на показе)
   remainingKg: number; // может быть < 0 (перевыполнение)
-  costRub: number; // accepted × price
+  surchargeKg: number; // доплата по корректировке расчёта (0 без неё) — только деньги
+  paidKg: number; // ДЕНЬГИ: оплачиваемый = accepted + surcharge
+  costRub: number; // paidKg × price
   paid: boolean; // в строку попал принятый вес
 };
 

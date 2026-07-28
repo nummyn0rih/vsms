@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useSession } from "next-auth/react";
 
 import type { ScopePickerItem } from "@/server/plan/schema";
 import { addCultureToScope, removeCultureFromScope } from "@/server/plan/actions";
+import { useRole } from "@/components/auth/RoleProvider";
 
 // Combobox состава недели (B4c, BR-23). Кнопка «Культуры · N» + поповер с поиском и
 // чекбоксами. Разметка/классы — вербатим из plan-scope-b4c.html. Механика (open/Esc/
@@ -98,8 +98,8 @@ export function ScopeCombo({
   setOpen,
   reload,
 }: ScopeComboProps) {
-  const { data: session } = useSession();
-  const canEdit = session?.user?.role === "admin";
+  const role = useRole();
+  const canEdit = role === "admin";
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [shakeId, setShakeId] = useState<number | null>(null);

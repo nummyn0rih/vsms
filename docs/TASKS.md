@@ -300,6 +300,18 @@
 
 ---
 
+## Корректировка расчёта с поставщиком (BR-33)
+
+- [x] **settlement-adjustment** — оплата сверх принятого веса по договорённости (`AcceptanceAct.settlement_percent`,
+  миграция `settlement_percent`, аддитивная nullable-колонка). Разведены две базы: **тонны выполнения — от принятого,
+  деньги — от оплачиваемого** (`server/contracts/execution.ts`: `attributeSurchargeToLines` + `lineExecution(accepted,
+  surcharge)`). Чистая `computeSettlement` в `server/acceptance/accepted.ts`; правка процента — только admin, с
+  ChangeLog в транзакции; качество (percent/is_accepted/brak_percent, аналитика качества) не затронуто.
+  Спека — `PROMPTS-SETTLEMENT-ADJUSTMENT.md`, проверки — `scripts/settlement-verify.ts` (24 ok) и
+  `scripts/settlement-rbac-verify.ts` (17 ok). ⚠ На прод — с `pg_dump` ДО деплоя (первая прод-миграция после запуска).
+
+---
+
 ## Этап G — Поздние задачи
 
 Блоки: Импорт исторических данных · Резервное копирование БД (автоматическое).

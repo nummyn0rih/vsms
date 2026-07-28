@@ -116,7 +116,17 @@ export function FarmerCardHeader({ card }: { card: FarmerCard }) {
           value={String(kpi.tareOnBalance)}
           sub={kpi.tareByType.map((t) => `${t.qty} ${t.name.toLowerCase()}`).join(" · ") || "нет тары"}
         />
-        <Kpi label="Стоимость сезона" value={costLabel} sub="по принятому весу" />
+        {/* BR-33: деньги — от оплачиваемого веса. Без корректировок он равен принятому,
+            поэтому подпись меняется только когда доплата реально есть. */}
+        <Kpi
+          label="Стоимость сезона"
+          value={costLabel}
+          sub={
+            contracts.farmerTotal.surchargeKg > 0
+              ? `по весу к оплате · +${Math.round(contracts.farmerTotal.surchargeKg).toLocaleString("ru-RU")} кг доплаты`
+              : "по принятому весу"
+          }
+        />
       </div>
     </div>
   );

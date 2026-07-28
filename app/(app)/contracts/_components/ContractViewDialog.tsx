@@ -107,6 +107,13 @@ export function ContractViewDialog({ id }: { id: number }) {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {Math.round(l.costRub).toLocaleString("ru-RU")}
+                      {/* BR-33: деньги считаются от оплачиваемого веса (принятый + доплата),
+                          выполнение слева — от принятого. Поясняем расхождение. */}
+                      {l.surchargeKg > 0 && (
+                        <span className="block text-[11px] font-normal text-muted-foreground">
+                          вкл. доплату {Math.round(l.surchargeKg).toLocaleString("ru-RU")} кг
+                        </span>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

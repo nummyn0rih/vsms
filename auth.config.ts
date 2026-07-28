@@ -8,7 +8,10 @@ export const authConfig = {
   // и edge-инстанс из proxy.ts.
   trustHost: true,
   pages: { signIn: "/login" },
-  session: { strategy: "jwt" },
+  // Дефолт Auth.js — 30 дней; для внутренней системы это слишком долго. 12 часов =
+  // рабочий день: утром вход, к вечеру сессия истекает. jwt.maxAge наследуется от
+  // session.maxAge, поэтому срок жизни самого токена ограничен той же строкой.
+  session: { strategy: "jwt", maxAge: 60 * 60 * 12 },
   providers: [],
   callbacks: {
     // Пускаем только залогиненных; иначе NextAuth редиректит на pages.signIn.

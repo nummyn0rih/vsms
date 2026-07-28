@@ -3,22 +3,13 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { KIND_META, normValueSchema, type NormCell, type NormKind } from "./schema";
 
 const PATH = "/settings/norms";
-
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
 
 // Норма тары — по тройке (фермер×культура×тип), вес рейса — по паре. packagingTypeId
 // обязателен для packaging, игнорируется для trip.
@@ -101,6 +92,7 @@ async function removeNorm(
 }
 
 export async function listNorms(kind: NormKind): Promise<NormCell[]> {
+  await requireRole();
   if (kind === "packaging") {
     const rows = await prisma.packagingNorm.findMany({
       select: {
@@ -182,7 +174,7 @@ export async function upsertNorm(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -213,6 +205,6 @@ export async function deleteNorm(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось удалить норму" };
+    return failWithLog(e, "Не удалось удалить норму");
   }
 }

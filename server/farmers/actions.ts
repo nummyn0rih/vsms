@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, AuthError } from "@/server/auth/session";
+import { requireRole } from "@/server/auth/session";
+import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { farmerSchema, type FarmerContacts, type FarmerInput } from "./schema";
@@ -32,21 +33,12 @@ function contactsLog(v: unknown): string | null {
   return v == null ? null : JSON.stringify(v);
 }
 
-// Единый перехват ошибок RBAC → ActionResult (страницу не валим).
-function authFail(e: unknown): { ok: false; error: string } | null {
-  if (e instanceof AuthError) {
-    return {
-      ok: false,
-      error: e.code === "FORBIDDEN" ? "Нет прав" : "Требуется вход",
-    };
-  }
-  return null;
-}
-
 export async function listFarmers(params?: {
   q?: string;
   includeInactive?: boolean;
 }) {
+  await requireRole();
+
   const q = params?.q?.trim();
   return prisma.farmer.findMany({
     where: {
@@ -87,7 +79,7 @@ export async function createFarmer(input: FarmerInput): Promise<ActionResult> {
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось создать фермера" };
+    return failWithLog(e, "Не удалось создать фермера");
   }
 }
 
@@ -142,7 +134,7 @@ export async function updateFarmer(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось сохранить" };
+    return failWithLog(e, "Не удалось сохранить");
   }
 }
 
@@ -175,6 +167,6 @@ export async function setFarmerActive(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return authFail(e) ?? { ok: false, error: "Не удалось изменить статус" };
+    return failWithLog(e, "Не удалось изменить статус");
   }
 }
