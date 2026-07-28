@@ -78,6 +78,8 @@ Solo-разработка с AI. Это рабочий инструмент дл
 - Названия сущностей в коде — как в DOMAIN.md (Shipment, ShipmentItem, StockMovement…).
 - Не использовать localStorage/sessionStorage — состояние в React state или БД.
 - **Verify-скрипты (`scripts/*-verify.ts`) и их стабы (`scripts/_stubs/`) — часть репозитория, НЕ gitignore.** Стабы (`@/auth`, `next/cache`) подменяются per-script через Node `registerHooks` (resolve-хук) — это осознанно opt-in. **Никогда** не заводить стабы глобальным алиасом в `tsconfig`/`next.config`: `_stubs/auth.ts` заставляет `requireRole` пропускать любого пользователя, и попадание такого алиаса в сборку = дыра в RBAC. Импортов из `app/`/`server/` в `_stubs` быть не должно.
+- **Юнит-тесты (audit-w3):** vitest, файлы `<модуль>.test.ts` **рядом с исходником** (co-located), запуск `npm run test` (watch — `npm run test:watch`). Покрываем ЧИСТЫЕ функции ядра расчётов; `describe/it/expect` импортировать явно из `"vitest"` (без `globals`, иначе `tsc`/`next build` потребуют доп. типов). Тесты фиксируют **инварианты** (четыре базы веса, UTC-дисциплина дат, ceil тары, точность Decimal), а не процент покрытия. Расхождение теста с реализацией — повод для разбора, а не для правки теста «под код». Всё, что ходит в БД, остаётся за verify-скриптами.
+- **CI (`.github/workflows/ci.yml`):** `lint` + `typecheck` + `test` на push/PR в `dev` и `main`. **`npm run build` в CI не запускать** — в нём `prisma migrate deploy`, который полез бы в реальную БД; вместо этого отдельный шаг `npx prisma generate` (без него `tsc` падает на импортах Prisma-типов) с фиктивным `DIRECT_URL`: `prisma.config.ts` зовёт `env("DIRECT_URL")` при загрузке, а конфиг грузит любая команда CLI.
 
 ## Данные: dev vs прод (правило проекта)
 

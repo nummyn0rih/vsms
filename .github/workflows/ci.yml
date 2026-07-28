@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  check:
+    name: lint · types · tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # Prisma-клиент генерится в lib/generated (в .gitignore) — без него падает tsc
+      # на импортах Prisma-типов. Отдельным шагом, а НЕ через `npm run build`: в build
+      # зашит `prisma migrate deploy`, который полез бы в реальную БД.
+      #
+      # DIRECT_URL нужен потому, что prisma.config.ts зовёт env("DIRECT_URL") при
+      # загрузке, а конфиг грузит любая команда CLI, включая generate. Значение
+      # фиктивное и не секрет: generate только читает схему, коннекта не делает.
+      - run: npx prisma generate
+        env:
+          DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm run test
