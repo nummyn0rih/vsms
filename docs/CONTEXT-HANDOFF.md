@@ -36,9 +36,11 @@
 - **Проект:** VSMS — внутренняя веб-система учёта поставок овощного сырья на консервный завод (замена Excel/Sheets).
   Solo-разработка через AI. Стек: Next.js (App Router) + TS · PostgreSQL (Neon) + Prisma · Auth.js v5 · Tailwind +
   shadcn · @dnd-kit · **Recharts** · **SheetJS (xlsx)**.
-- **Версии стека:** Next **16.2.7** (⚠ middleware-конвенция = корневой **`proxy.ts`**, НЕ `middleware.ts`) ·
-  React 19.2.4 · Prisma **7.8** (+`@prisma/adapter-pg`; URL в `prisma.config.ts`, не в schema) · Auth.js
-  5.0.0-beta.31 · zod 4 · Tailwind 4 · Recharts 3 · SheetJS 0.18.
+- **Версии стека:** Next **16.2.12** (⚠ middleware-конвенция = корневой **`proxy.ts`**, НЕ `middleware.ts`;
+  на 16.3.x НЕ обновляться — в реестре только preview) · React 19.2.4 · Prisma **7.8** (+`@prisma/adapter-pg`;
+  URL в `prisma.config.ts`, не в schema) · Auth.js **5.0.0-beta.32** (+`@auth/core` 0.41.3; ⚠ тег `latest` у
+  `next-auth` указывает на **4.x** — ставить только точной версией!) · zod 4 · Tailwind 4 · Recharts 3 · SheetJS 0.18.
+- **Сессия:** `session.maxAge` = 12 ч (было 30 дней по дефолту).
 - **Процесс (двухуровневый, заведён в этой сессии):** PM-ассистент (этот контекст) пишет спеки/дизайн-спеки, ведёт
   память; **Claude Code (CLI)** реализует. Артефакты обмена — `docs/prompts/PROMPTS-*.md` (код-спеки),
   `docs/prompts/DESIGN-*.md` (брифы для Claude Design → прототипы в `docs/prototypes/`). Repo-агенты
@@ -143,6 +145,13 @@
   экспорт из `"use server"`-модуля — самостоятельный POST-эндпойнт, доступный в обход `(app)/layout.tsx`.
   Роли на чтениях НЕ ужесточать (сломает UX). Исключение: внутренние хелперы, принимающие `tx` — гард внутри
   них сломает вложенные вызовы; их правильное лечение — вынос из `"use server"`-модулей (волна 5).
+- **Роль для клиентского UI — собственный `RoleProvider`/`useRole` (`components/auth/RoleProvider.tsx`),
+  НЕ `useSession`.** Значение течёт пропом из серверного `app/layout.tsx` на каждом рендере — **без**
+  `useState`/`useEffect`. Причина: `SessionProvider` (next-auth v5) кладёт проп `session` в `useState`-инициализатор,
+  из-за чего при КЛИЕНТСКОЙ навигации роль не доезжала и весь admin-UI пропадал (после F5 работал — там страница
+  рендерится на сервере). Дефект был унаследованным, нашли смоуком волны 2. Нельзя: возвращать чтение роли через
+  `useSession`; заводить состояние внутри `RoleProvider`. `SessionProvider` оставлен смонтированным (нужен для
+  `signOut`). Серверный `requireRole` — источник правды, клиентский гейт только UX.
 - **Сессия прокидывается из СЕРВЕРНОГО `app/layout.tsx` в `SessionProvider` (`session={session}`).** Причина:
   без пропа клиентские компоненты видят `useSession() === undefined` при SSR, и весь RBAC-зависимый UI
   (`RoleGate`, `canEdit`/`isAdmin` на досках приёмки, планировщик, `ScopeCombo`) появляется только после
@@ -208,7 +217,10 @@
 Экспорт Excel `lib/xlsx-export`. Палитра `CULTURE_PALETTE`.
 
 **Гарантированно работает:** свежие срезы прошли `invariant-review` (инвариантов не нарушают) + `test-runner`
-(tsc/lint/build; тест-фреймворка нет — проверки ad-hoc `tsx` rolled-back + сборка).
+(tsc/lint/build). **Тестовая сетка есть (audit-w3):** vitest, 129 юнит-тестов чистого ядра в 9 файлах
+`*.test.ts` рядом с модулями (`npm run test`) — четыре базы веса, эталон BR-33, UTC/ISO-недели, ceil тары,
+микродозы Decimal(15,6), фильтры ленты и приёмки. CI `.github/workflows/ci.yml` гоняет lint+typecheck+test
+на push/PR в `dev`/`main`. Интеграционные проверки против dev-БД — по-прежнему verify-скрипты `scripts/*`.
 
 **Не реализовано (фичи, ПОСЛЕ прода):** календарь; сравнение сезонов (нужна история, этап G); печать акта
 позиции; Excel Аналитики-таблиц; снос deprecated-колонок. **Инфраструктура:** прод-выкат ещё не сделан —

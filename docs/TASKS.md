@@ -243,6 +243,23 @@
 - [ ] B5-bulk-2 (опц.) — копипаст карточек по дням; тонкий/overlay-скроллбар в «Плане».
 - [x] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg` (миграция `cleanup_deprecated_snapshot_columns`, коммит `b8bf61e`; сделано до прод-выката, чтобы первая прод-схема была чистой). Спека `PROMPTS-CLEANUP-DEPRECATED-COLUMNS.md`.
 - [x] prod-preflight — Prisma CLI на `DIRECT_URL`, build = `generate + migrate deploy + next build`, `trustHost` для Vercel (коммит `83fe718`). Спека — `PROD-DEPLOY.md` Фаза 1.
+- [x] **Прод запущен** (Vercel + Neon `vsms-prod`/`vsms-dev`, раздельные проекты). Runbook — `PROD-DEPLOY.md`.
+- [x] **BR-33 — корректировка расчёта с поставщиком** (`AcceptanceAct.settlement_percent`): оплата части нестандарта сверх принятого без искажения качества; тонны от принятого, деньги от оплачиваемого. Спека `PROMPTS-SETTLEMENT-ADJUSTMENT.md`.
+- [x] **Аудит, волна 1** — `failWithLog`/логирование, гарды читающих actions, README, security-заголовки (+FIX на 3 пропущенных гарда).
+- [x] **Аудит, волна 2** — `next 16.2.12`, `next-auth 5.0.0-beta.32`, `maxAge` 12 ч. Остался известный долг `xlsx` (П-3).
+- [x] **role-context-FIX** — роль для UI через `RoleProvider`/`useRole` вместо `useSession` (унаследованный баг: admin-UI пропадал при клиентской навигации).
+- [x] **Аудит, волна 3** — vitest + 129 юнит-тестов чистого ядра (9 файлов `*.test.ts` рядом с модулями: workdays, accepted/BR-33, ingredients, board-filter, feed, packaging, format, validators, nav), CI на GitHub Actions (`lint` + `typecheck` + `test` на push/PR в `dev` и `main`). Прикладной код не менялся. Спека — `PROMPTS-AUDIT-W3-TESTS.md`. Предусловие волны 4 — снято.
+- [~] **Аудит, волна 4** — часть A закрыта, часть B (SQL-агрегация балансов, П-13) впереди.
+  - [x] **w4a — индексы + уникальность кодов машин** (П-14, П-8). Миграция `indexes_and_unique_codes`, data-preserving,
+    6 операторов: 4 индекса (`Shipment.arrival_date`, `ShipmentItem.shipment_id`, `StockMovement(source_doc_type,
+    source_doc_id)`, `ChangeLog(entity, entity_id)`) + `@unique` на `Shipment.code` и `MaterialShipment.code`.
+    Гонку `MAX(code::int)+1` теперь ловит БД, а `withUniqueRetry` (`server/db/retry.ts`) молча повторяет ВСЮ
+    транзакцию до 3 раз; исчерпание → человеческий текст через `failWithLog`. `getNextCode`/`getNextMaterialCode`
+    получили `WHERE code ~ '^[0-9]+$'` (нечисловой код от тех-скриптов ронял каст 22P02). Спека —
+    `PROMPTS-AUDIT-W4A-INDEXES.md`, 16 юнит-тестов `server/db/retry.test.ts` (всего 145).
+    ⚠ На прод — только после `pg_dump` и пред-проверки на дубли кодов.
+  - [ ] **w4b — SQL-агрегация балансов** (П-13) + кэш `getActiveAlerts` в `(app)/layout.tsx`.
+- [ ] **Аудит, волна 5** — нетто-гард ингредиентов (П-11), гонка авто-`accepted` (П-9), `todayLocalISO(tz)` (П-10), вынос tx-хелперов из `"use server"`.
 
 ---
 

@@ -302,7 +302,10 @@ model ContractLine {
 
 model Shipment {
   id             Int            @id @default(autoincrement())
-  code           String
+  // @unique — защита от гонки нумерации: getNextCode = MAX(code::int)+1 без блокировки,
+  // два параллельных создания читают один MAX. Констрейнт ловит дубль, retry повторяет
+  // транзакцию (server/db/retry.ts). Нумерация MaterialShipment.code — отдельная.
+  code           String         @unique
   departure_date DateTime?
   arrival_date   DateTime?
   status         ShipmentStatus @default(planned)
@@ -315,6 +318,9 @@ model Shipment {
 
   driver Driver?        @relation(fields: [driver_id], references: [id], onDelete: Restrict)
   items  ShipmentItem[]
+
+  // Лента, доска и приёмка фильтруют по дню прибытия — самая горячая выборка.
+  @@index([arrival_date])
 }
 
 model ShipmentItem {
@@ -334,6 +340,9 @@ model ShipmentItem {
   packagingType PackagingType? @relation(fields: [packaging_type_id], references: [id], onDelete: Restrict)
   contractLine  ContractLine?  @relation(fields: [contract_line_id], references: [id], onDelete: Restrict)
   acceptanceAct AcceptanceAct? // 1:1
+
+  // Postgres не индексирует FK сам: загрузка позиций машины шла seq scan'ом.
+  @@index([shipment_id])
 }
 
 model AcceptanceAct {
@@ -374,7 +383,9 @@ model CalibreResult {
 
 model MaterialShipment {
   id               Int            @id @default(autoincrement())
-  code             String
+  // @unique — та же гонка, что у Shipment.code (getNextMaterialCode = MAX+1).
+  // Нумерация своя, индекс независимый.
+  code             String         @unique
   departure_date   DateTime?
   arrival_date     DateTime?
   status           ShipmentStatus @default(planned)
@@ -484,6 +495,8 @@ model StockMovement {
   @@index([kind, ingredient_id])
   @@index([from_location_id])
   @@index([to_location_id])
+  // По документу-источнику читают ВСЕ откаты и нетто-гарды плеч (CLAUDE.md, правило 7).
+  @@index([source_doc_type, source_doc_id])
 }
 
 // =====================================================================
@@ -510,4 +523,7 @@ model ChangeLog {
   user_id   Int?
   user      User?    @relation(fields: [user_id], references: [id])
   timestamp DateTime @default(now())
+
+  // История правок сущности — (entity, entity_id) мягкий указатель без FK.
+  @@index([entity, entity_id])
 }

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
+import { retryFailMessage, withUniqueRetry } from "@/server/db/retry";
 import type { ActionResult } from "@/lib/action-result";
 import { parseDateUTC } from "@/server/shipments/workdays";
 import {
@@ -29,6 +30,9 @@ import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 const ENTITY = "MaterialShipment";
 const PATH = "/materials";
 
+// Текст пользователю, когда 3 попытки присвоить номер подряд упёрлись в гонку (П-8).
+const CODE_RACE_MSG = "Не удалось присвоить номер рейса, попробуйте ещё раз";
+
 type Tx = Prisma.TransactionClient;
 
 function toDateString(d: Date | null): string | null {
@@ -37,9 +41,13 @@ function toDateString(d: Date | null): string | null {
 
 // Сквозной счётчик по рейсам тары. ОТДЕЛЬНАЯ нумерация — не пересекается с
 // отгрузками (своя таблица). code хранится String, значения целые → MAX(code::int)+1.
+// WHERE отсекает нечисловые коды технических скриптов — иначе одна такая строка
+// роняет КАЖДОЕ создание рейса на касте (22P02). Нумерации фильтр не меняет.
+// Гонку ловит @unique на code + withUniqueRetry вокруг транзакции (П-8) — как в
+// server/shipments/actions.ts.
 async function getNextMaterialCode(tx: Tx): Promise<string> {
   const rows = await tx.$queryRaw<{ max: number }[]>`
-    SELECT COALESCE(MAX(code::int), 0) AS max FROM "MaterialShipment"
+    SELECT COALESCE(MAX(code::int), 0) AS max FROM "MaterialShipment" WHERE code ~ '^[0-9]+$'
   `;
   return String(Number(rows[0]?.max ?? 0) + 1);
 }
@@ -117,39 +125,43 @@ export async function createMaterialShipment(
     const source = await resolveTransferSource(prisma, parsed.data.source_farmer_id);
     if (!source.ok) return { ok: false, error: source.error };
 
-    await prisma.$transaction(async (tx) => {
-      const code = await getNextMaterialCode(tx);
-      const created = await tx.materialShipment.create({
-        data: {
-          code,
-          departure_date: parseDateUTC(parsed.data.departure_date),
-          arrival_date: parseDateUTC(parsed.data.arrival_date),
-          status: "planned",
-          driver_id: Number(parsed.data.driver_id),
-          source_farmer_id: source.id,
-        },
-      });
+    await withUniqueRetry(
+      () =>
+        prisma.$transaction(async (tx) => {
+          const code = await getNextMaterialCode(tx);
+          const created = await tx.materialShipment.create({
+            data: {
+              code,
+              departure_date: parseDateUTC(parsed.data.departure_date),
+              arrival_date: parseDateUTC(parsed.data.arrival_date),
+              status: "planned",
+              driver_id: Number(parsed.data.driver_id),
+              source_farmer_id: source.id,
+            },
+          });
 
-      const itemsSummary = await persistMaterialItems(
-        tx,
-        created.id,
-        parsed.data.items,
-      );
+          const itemsSummary = await persistMaterialItems(
+            tx,
+            created.id,
+            parsed.data.items,
+          );
 
-      await logChange(
-        [
-          { entity: ENTITY, entityId: created.id, field: "created", newValue: code },
-          { entity: ENTITY, entityId: created.id, field: "items", newValue: itemsSummary },
-        ],
-        Number(user.id),
-        tx,
-      );
-    });
+          await logChange(
+            [
+              { entity: ENTITY, entityId: created.id, field: "created", newValue: code },
+              { entity: ENTITY, entityId: created.id, field: "items", newValue: itemsSummary },
+            ],
+            Number(user.id),
+            tx,
+          );
+        }),
+      { message: CODE_RACE_MSG },
+    );
 
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
-    return failWithLog(e, "Не удалось создать рейс");
+    return failWithLog(e, retryFailMessage(e, "Не удалось создать рейс"));
   }
 }
 
