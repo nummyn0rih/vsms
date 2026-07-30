@@ -82,6 +82,9 @@ export function AcceptanceActDialog({
   const isCalibre = context.acceptanceType === "calibre";
 
   // Вес — то же поле actual_weight_kg (setActualWeight), один источник (BR-25).
+  // Появился акт → поле read-only: расход ингредиентов уже списан по этому весу, правка
+  // отклоняется сервером (гард в setActualWeight). Здесь блокировка — только UX.
+  const weightLocked = context.existing != null;
   const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
   const [weightStr, setWeightStr] = useState(
     context.actualKg != null ? String(context.actualKg) : "",
@@ -403,26 +406,46 @@ export function AcceptanceActDialog({
   const weightField = (
     <Field
       label="Фактический вес"
-      tag={savedWeight != null && !weightEditing ? "из перевески" : "вводится здесь"}
+      tag={
+        weightLocked
+          ? "зафиксирован актом"
+          : savedWeight != null && !weightEditing
+            ? "из перевески"
+            : "вводится здесь"
+      }
     >
-      <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
-        <input
-          inputMode="decimal"
-          value={weightDisplay}
-          onFocus={() => {
-            setWeightEditing(true);
-            setWeightStr(savedWeight != null ? String(savedWeight) : "");
-          }}
-          onChange={(e) => setWeightStr(e.target.value)}
-          onBlur={commitWeight}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-          }}
-          placeholder="не перевешивали"
-          className="w-full bg-transparent text-[18px] font-medium tabular-nums text-[#171717] outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-[#888888]"
-        />
-        <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
-      </div>
+      {weightLocked ? (
+        <>
+          <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-[#fafafa] px-3">
+            <span className="w-full text-[18px] font-medium tabular-nums text-[#171717]">
+              {savedWeight != null ? formatWeight(savedWeight) : "—"}
+            </span>
+            <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
+          </div>
+          <p className="text-[11.5px] leading-4 text-[#888888]">
+            Вес зафиксирован актом. Чтобы изменить — откатите приёмку позиции.
+          </p>
+        </>
+      ) : (
+        <div className="flex h-12 items-center rounded-md border border-[#ebebeb] bg-white px-3 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717]">
+          <input
+            inputMode="decimal"
+            value={weightDisplay}
+            onFocus={() => {
+              setWeightEditing(true);
+              setWeightStr(savedWeight != null ? String(savedWeight) : "");
+            }}
+            onChange={(e) => setWeightStr(e.target.value)}
+            onBlur={commitWeight}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            placeholder="не перевешивали"
+            className="w-full bg-transparent text-[18px] font-medium tabular-nums text-[#171717] outline-none placeholder:text-[15px] placeholder:font-normal placeholder:text-[#888888]"
+          />
+          <span className="ml-1.5 shrink-0 text-sm text-[#888888]">кг</span>
+        </div>
+      )}
     </Field>
   );
 

@@ -57,12 +57,27 @@ export async function setActualWeight(
         where: { id: shipmentItemId },
         select: {
           actual_weight_kg: true,
+          acceptanceAct: { select: { id: true } },
           shipment: {
             select: { id: true, status: true, arrival_date: true },
           },
         },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
+
+      // Правило: actual_weight_kg позиции С АКТОМ — read-only. Расход ингредиентов уже
+      // списан по ЭТОМУ весу (CLAUDE.md «четыре базы веса»: ингредиенты — по фактическому),
+      // а нетто-гард saveAct при живом акте (нетто ≠ 0) повторное списание пропустит →
+      // леджер молча разойдётся с перевеской. Тот же класс, что BR-32: правка после точки
+      // невозврата — только через откат. Чтение и update — в ОДНОЙ транзакции, иначе
+      // приёмка, успевшая между ними, пропустила бы правку веса мимо гарда.
+      if (item.acceptanceAct != null) {
+        return {
+          ok: false as const,
+          error:
+            "Позиция уже принята — вес не редактируется. Откатите приёмку позиции, измените вес и примите заново.",
+        };
+      }
 
       const oldValue =
         item.actual_weight_kg != null ? item.actual_weight_kg.toString() : null;

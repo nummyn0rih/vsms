@@ -77,6 +77,9 @@ export function MobileActDialog({
   const router = useRouter();
   const isCalibre = context.acceptanceType === "calibre";
 
+  // Появился акт → поле веса read-only (то же правило, что в AcceptanceActDialog):
+  // расход ингредиентов уже списан по этому весу, правку отклоняет setActualWeight.
+  const weightLocked = context.existing != null;
   const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
   const [weightStr, setWeightStr] = useState(
     context.actualKg != null ? String(context.actualKg) : "",
@@ -416,23 +419,37 @@ export function MobileActDialog({
           </div>
           <div className="act-field">
             <div className="act-field-lab">Факт. вес</div>
-            <div className="act-input">
-              <input
-                inputMode="decimal"
-                value={weightDisplay}
-                onFocus={() => {
-                  setWeightEditing(true);
-                  setWeightStr(savedWeight != null ? String(savedWeight) : "");
-                }}
-                onChange={(e) => setWeightStr(e.target.value)}
-                onBlur={commitWeight}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-                placeholder="не перевешивали"
-              />
-              <span className="u">кг</span>
-            </div>
+            {weightLocked ? (
+              <>
+                <div className="act-input readonly">
+                  <span className="tabular-nums">
+                    {savedWeight != null ? formatWeight(savedWeight) : "—"}
+                  </span>
+                  <span className="u">кг</span>
+                </div>
+                <p className="mt-1.5 text-[11.5px] leading-4 text-[#888888]">
+                  Вес зафиксирован актом. Чтобы изменить — откатите приёмку позиции.
+                </p>
+              </>
+            ) : (
+              <div className="act-input">
+                <input
+                  inputMode="decimal"
+                  value={weightDisplay}
+                  onFocus={() => {
+                    setWeightEditing(true);
+                    setWeightStr(savedWeight != null ? String(savedWeight) : "");
+                  }}
+                  onChange={(e) => setWeightStr(e.target.value)}
+                  onBlur={commitWeight}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  placeholder="не перевешивали"
+                />
+                <span className="u">кг</span>
+              </div>
+            )}
           </div>
           {!isCalibre && (
             <div className="act-field">

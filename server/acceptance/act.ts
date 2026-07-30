@@ -293,6 +293,14 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
 
       // BR-25: без фактического веса приёмка невозможна.
+      //
+      // Гарда «вес не менять» здесь нет намеренно: actual_weight_kg не входит в
+      // saveActSchema и в этой функции НЕ пишется — вес читается только как база расчётов.
+      // Единственный писатель — setActualWeight, где стоит гард «есть акт → отказ»
+      // (actions.ts): вес позиции с актом read-only, потому что расход ингредиентов уже
+      // списан по нему (CLAUDE.md «четыре базы веса», BR-32 — правка только через откат).
+      // Второй путь очистки веса, revertShipmentToSent, уже отклоняется при наличии акта.
+      // Поэтому пересохранение акта (проценты/брак/settlement_percent) остаётся штатным.
       if (item.actual_weight_kg == null) {
         return { ok: false as const, error: "Сначала внесите фактический вес" };
       }
