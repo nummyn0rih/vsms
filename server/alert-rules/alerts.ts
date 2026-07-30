@@ -143,6 +143,9 @@ export function computeIngredientAlerts(
   return out.sort(sortByRelativeDeficit);
 }
 
+const EMPTY_TARE: TareBalances = { types: [], locations: [], cells: [] };
+const EMPTY_ING: IngredientBalances = { columns: [], locations: [], cells: [] };
+
 // Для мест, где нужны ОБА списка сразу (сайдбар-бейджи в layout.tsx). На
 // /packaging и /ingredients баланс уже загружен для матрицы — там используйте
 // compute*Alerts() напрямую, не дублируйте Prisma-запрос баланса.
@@ -153,10 +156,26 @@ export async function getActiveAlerts(): Promise<{
   ingredientCount: number;
   total: number;
 }> {
-  const [rules, tareBal, ingBal] = await Promise.all([
-    listAlertRules(),
-    getTareBalances(),
-    getIngredientBalances(),
+  // audit-w4b: этот загрузчик висит на layout (app) — т.е. на КАЖДОЙ навигации.
+  // Правила читаем первыми: нет порогов → нет и дефицита, к балансам не идём вовсе.
+  const rules = await listAlertRules();
+  if (rules.length === 0) {
+    return { tare: [], ingredient: [], tareCount: 0, ingredientCount: 0, total: 0 };
+  }
+
+  // Σ движений считаем только по позициям, на которые есть порог. Сужается ВЫБОРКА,
+  // не смысл: правило с location_scope=null по-прежнему разворачивается по фермерам,
+  // у которых есть ячейка по этому item — такой фермер в сужённый баланс попадает.
+  const packIds = [
+    ...new Set(rules.filter((r) => r.item_kind === "packaging").map((r) => r.item_id)),
+  ];
+  const ingIds = [
+    ...new Set(rules.filter((r) => r.item_kind === "ingredient").map((r) => r.item_id)),
+  ];
+
+  const [tareBal, ingBal] = await Promise.all([
+    packIds.length > 0 ? getTareBalances(packIds) : EMPTY_TARE,
+    ingIds.length > 0 ? getIngredientBalances(ingIds) : EMPTY_ING,
   ]);
   const tare = computePackagingAlerts(rules, tareBal);
   const ingredient = computeIngredientAlerts(rules, ingBal);
