@@ -239,7 +239,7 @@
 - [x] V1.1 · карточка поставщика — страница `/reference/farmers/[id]`, 4 вкладки (Основное+Контакты · Контракты · Отгрузки · Тара/ингр.), Качество/Аналитика disabled «скоро». Агрегатор `server/farmers/card.ts` на переиспользовании (`getContractExecution` — единый источник выполнения; balances с фильтром по фермеру; транзит per-farmer отдельными выборками — исходящий из леджера, не пересчётом нормы; `computeAcceptedKg`). Вкладка в URL `?tab=`. Прототип `farmer-card-v1.html`, спека `PROMPTS-FARMER-CARD.md`. Коммит `5ebb946`.
 - [x] V1.1 · фильтры (/materials) — `FilterCombo` вынесен в shared (`components/filters/`), лента импортирует оттуда (без регресса); на /materials три фильтра Фермер·Вид·Статус (вкл. производный «Частично»), чистая `tripVisible`, подытоги из видимого набора, клиентский Set-стейт. Спека `PROMPTS-FILTERS-MATERIALS.md`. Коммиты `b1bb581` + `0e72adc` (align-фикс).
   - Бэклог фильтров (V1.1-остаток): дашборды тары/ингредиентов, простые справочники (Культуры/ТК/Типы тары/Ингредиенты) — общий FilterCombo уже готов к переиспользованию.
-- [ ] тех-долг: `getActiveAlerts` в `(app)/layout.tsx` = 3 доп. запроса на КАЖДУЮ навигацию сегмента (не только /packaging|/ingredients). Осознанная цена read-only V1.1 без кэша. Дешёвые фиксы: guard «0 правил → skip», агрегировать балансы только по item/location из правил, `cache()`/короткий TTL для дедупа layout+page.
+- [x] тех-долг: `getActiveAlerts` в `(app)/layout.tsx` — закрыт в audit-w4b (guard «0 правил → skip» + агрегация балансов только по item из правил). Кэш (`cache()`/TTL) сознательно НЕ вводился: после переезда Σ на `groupBy` узкое место снято, а стейл-остатки дороже выигрыша.
 - [ ] B5-bulk-2 (опц.) — копипаст карточек по дням; тонкий/overlay-скроллбар в «Плане».
 - [x] cleanup-миграция — снос deprecated `accepted_weight_kg`/`brak_weight_kg` (миграция `cleanup_deprecated_snapshot_columns`, коммит `b8bf61e`; сделано до прод-выката, чтобы первая прод-схема была чистой). Спека `PROMPTS-CLEANUP-DEPRECATED-COLUMNS.md`.
 - [x] prod-preflight — Prisma CLI на `DIRECT_URL`, build = `generate + migrate deploy + next build`, `trustHost` для Vercel (коммит `83fe718`). Спека — `PROD-DEPLOY.md` Фаза 1.
@@ -249,7 +249,7 @@
 - [x] **Аудит, волна 2** — `next 16.2.12`, `next-auth 5.0.0-beta.32`, `maxAge` 12 ч. Остался известный долг `xlsx` (П-3).
 - [x] **role-context-FIX** — роль для UI через `RoleProvider`/`useRole` вместо `useSession` (унаследованный баг: admin-UI пропадал при клиентской навигации).
 - [x] **Аудит, волна 3** — vitest + 129 юнит-тестов чистого ядра (9 файлов `*.test.ts` рядом с модулями: workdays, accepted/BR-33, ingredients, board-filter, feed, packaging, format, validators, nav), CI на GitHub Actions (`lint` + `typecheck` + `test` на push/PR в `dev` и `main`). Прикладной код не менялся. Спека — `PROMPTS-AUDIT-W3-TESTS.md`. Предусловие волны 4 — снято.
-- [~] **Аудит, волна 4** — часть A закрыта, часть B (SQL-агрегация балансов, П-13) впереди.
+- [x] **Аудит, волна 4** — части A и B закрыты.
   - [x] **w4a — индексы + уникальность кодов машин** (П-14, П-8). Миграция `indexes_and_unique_codes`, data-preserving,
     6 операторов: 4 индекса (`Shipment.arrival_date`, `ShipmentItem.shipment_id`, `StockMovement(source_doc_type,
     source_doc_id)`, `ChangeLog(entity, entity_id)`) + `@unique` на `Shipment.code` и `MaterialShipment.code`.
@@ -258,8 +258,37 @@
     получили `WHERE code ~ '^[0-9]+$'` (нечисловой код от тех-скриптов ронял каст 22P02). Спека —
     `PROMPTS-AUDIT-W4A-INDEXES.md`, 16 юнит-тестов `server/db/retry.test.ts` (всего 145).
     ⚠ На прод — только после `pg_dump` и пред-проверки на дубли кодов.
-  - [ ] **w4b — SQL-агрегация балансов** (П-13) + кэш `getActiveAlerts` в `(app)/layout.tsx`.
-- [ ] **Аудит, волна 5** — нетто-гард ингредиентов (П-11), гонка авто-`accepted` (П-9), `todayLocalISO(tz)` (П-10), вынос tx-хелперов из `"use server"`.
+  - [x] **w4b — агрегация балансов в БД** (П-13). Миграции нет. Свёртка Σ движений переехала из JS в
+    `prisma.groupBy` — новый `server/inventory/cells.ts` (`aggregateStockCells` + `listLedgerItemIds`,
+    БЕЗ `"use server"`: это примитив, а не Server Action, и его должен видеть verify-скрипт). Две
+    выборки на плечо (`to_*` плюсом, `from_*` минусом), ключи ячеек и знаки 1:1 с прежней свёрткой,
+    счёт в `Prisma.Decimal` (микродозы `Decimal(15,6)`), транзит-сентинелы `-1/-2/-3` не фильтруются.
+    `findMany` по леджеру из балансов убран; `cells` теперь отдаются в детерминированном порядке
+    (карточка поставщика рендерит их «как пришли»). `getActiveAlerts`: сначала правила, при нуле —
+    выход до балансов; иначе Σ только по позициям из правил (`itemIds`), чистые `compute*Alerts` не
+    тронуты. Кэш не вводился (см. тех-долг выше). Спека — `PROMPTS-AUDIT-W4B-BALANCES.md`, сверка —
+    `scripts/w4b-balance-parity-verify.ts` (20 проверок: parity Decimal↔Decimal, витрины end-to-end,
+    гард алертов, «сужение не меняет смысла») + стаб-счётчик `scripts/_stubs/prisma-spy.ts`.
+- [~] **Аудит, волна 5** — часть A закрыта, часть B в очереди.
+  - [x] **w5a — инварианты приёмки** (П-11, П-9 + гард BR-33). Миграции нет, формула BR-33 не менялась.
+    **П-11:** гард расхода ингредиентов в `saveAct` переведён с `count > 0` на НЕТТО группы по ключу
+    `ingredient×фермер` (`Prisma.Decimal.isZero()`, та же свёртка, что в сторно `revertActItemWithin`) —
+    правило 7 CLAUDE.md; списание применяется поингредиентно, только где нетто = 0.
+    **П-9:** новый `reconcileShipmentAcceptedWithin` — `SELECT … FOR UPDATE` по строке машины ДО пересчёта
+    (следующий `count` берёт свежий снапшот READ COMMITTED и видит акт параллельной транзакции), затем
+    статус по BR-13 «accepted ⟺ все позиции приняты». Идемпотентен (статус совпал → ни `update`, ни
+    ChangeLog), покрывает и обратный переход. Единая точка смены статуса для `saveAct`, `revertAct`,
+    `revertShipmentToArrived`.
+    **Гард BR-33 × C3d-2:** комбинация «непринятая категория со строкой контракта + `settlement_percent`»
+    отклоняется на сервере (двойной счёт — реальный дефект прод-данных). Чистые `findSettlementConflict` /
+    `settlementConflictMessage` в `server/acceptance/accepted.ts` — один текст на сервер и оба диалога акта
+    (десктоп + мобильный: `blockReason` + предупреждение у поля процента). Проверка идёт по ЭФФЕКТИВНОМУ
+    проценту, поэтому оператор не протащит строку сохранением без поля. `computeSettlement` и
+    `contracts/execution.ts` не тронуты — C3d-2 в силе для актов без процента.
+    Спека — `PROMPTS-AUDIT-W5A-INVARIANTS.md`, проверки — `scripts/w5a-verify.ts` (32 ok: полный цикл
+    приёмка→сторно→приёмка, гонка двумя параллельными `saveAct`, три кейса гарда) + 7 юнит-тестов
+    (152 всего).
+  - [ ] **w5b — гигиена**: `todayLocalISO(tz)` (П-10), П-20, `listAlertRules`, вынос tx-хелперов из `"use server"`.
 
 ---
 

@@ -1,8 +1,8 @@
 "use server";
 
-import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
+import { aggregateStockCells, listLedgerItemIds } from "@/server/inventory/cells";
 import {
   FACTORY_LOCATION_ID,
   TRANSIT_TO_FACTORY,
@@ -68,24 +68,16 @@ function isTransit(loc: number | null): boolean {
   );
 }
 
-const cellKey = (loc: number, type: number, state: TareState) =>
-  `${loc}:${type}:${state}`;
-
-export async function getTareBalances(): Promise<TareBalances> {
+// itemIds — сужение выборки ДЛЯ АЛЕРТОВ (считать Σ только по типам, на которые есть
+// порог). Матрица /packaging, доска и карточка поставщика зовут без аргумента и
+// получают полную картину. На состав активных типов/фермеров фильтр не влияет.
+export async function getTareBalances(itemIds?: number[]): Promise<TareBalances> {
   await requireRole();
 
-  const [movements, activeTypes, activeFarmers] = await Promise.all([
-    prisma.stockMovement.findMany({
-      where: { kind: "packaging" },
-      select: {
-        packaging_type_id: true,
-        quantity: true,
-        from_location_id: true,
-        to_location_id: true,
-        from_state: true,
-        to_state: true,
-      },
-    }),
+  // Σ движений по (локация, тип, состояние) — агрегирует БД (audit-w4b, cells.ts).
+  const [balances, ledgerTypeIds, activeTypes, activeFarmers] = await Promise.all([
+    aggregateStockCells("packaging", itemIds),
+    listLedgerItemIds("packaging", itemIds),
     prisma.packagingType.findMany({
       where: { active: true },
       select: { id: true, name: true, kind: true, capacity_kg: true },
@@ -97,25 +89,6 @@ export async function getTareBalances(): Promise<TareBalances> {
       orderBy: { name: "asc" },
     }),
   ]);
-
-  // Агрегация Σ движений. +qty в (to, type, to_state); −qty в (from, type, from_state).
-  // null-локацию/состояние пропускаем (opening: from=null → только приход). Знаки —
-  // как applyInboundArrivedTareLeg в shipments/packaging.ts.
-  const balances = new Map<string, Prisma.Decimal>();
-  const add = (
-    loc: number | null,
-    type: number | null,
-    state: "good" | "scrap" | null,
-    delta: Prisma.Decimal,
-  ) => {
-    if (loc == null || type == null || state == null) return;
-    const k = cellKey(loc, type, state);
-    balances.set(k, (balances.get(k) ?? new Prisma.Decimal(0)).plus(delta));
-  };
-  for (const m of movements) {
-    add(m.to_location_id, m.packaging_type_id, m.to_state, m.quantity);
-    add(m.from_location_id, m.packaging_type_id, m.from_state, m.quantity.neg());
-  }
 
   // Типы: активные ∪ встреченные в движениях (деактивированные не теряем).
   const typeMap = new Map<number, TareType>(
@@ -129,11 +102,7 @@ export async function getTareBalances(): Promise<TareBalances> {
       },
     ]),
   );
-  const seenTypeIds = new Set<number>();
-  for (const m of movements) {
-    if (m.packaging_type_id != null) seenTypeIds.add(m.packaging_type_id);
-  }
-  const extraTypeIds = [...seenTypeIds].filter((id) => !typeMap.has(id));
+  const extraTypeIds = ledgerTypeIds.filter((id) => !typeMap.has(id));
   if (extraTypeIds.length > 0) {
     const extra = await prisma.packagingType.findMany({
       where: { id: { in: extraTypeIds } },
@@ -219,6 +188,14 @@ export async function getTareBalances(): Promise<TareBalances> {
       quantity: v.toNumber(),
     });
   }
+  // Порядок ячеек фиксируем: карточка поставщика (server/farmers/card.ts) строит
+  // видимые списки прямо в порядке обхода cells, а порядок групп из БД не определён.
+  cells.sort(
+    (a, b) =>
+      a.locationId - b.locationId ||
+      a.packagingTypeId - b.packagingTypeId ||
+      a.state.localeCompare(b.state),
+  );
 
   return { types, locations, cells };
 }
@@ -403,8 +380,8 @@ export async function getTareMovements(
 // E4: витрина остатков ИНГРЕДИЕНТОВ — зеркало tare-функций выше, но проще:
 // ингредиент всегда good (нет state/scrap), один транзит -2 (TRANSIT_TO_FARMER;
 // -1 ингредиента не касается), колонки несут единицу (кг/л), количества —
-// Decimal (микродозы, не округлять). Σ-агрегацию дублируем локально: ключ другой
-// арности (loc:ing вместо loc:type:state), параметризовать tare-код не стоит.
+// Decimal (микродозы, не округлять). Σ-агрегация — общая с тарой (cells.ts,
+// audit-w4b), различие только в арности ключа (loc:ing вместо loc:type:state).
 // =====================================================================
 
 export type IngredientCol = {
@@ -443,21 +420,16 @@ export type IngredientMovement = {
   srcRef: string;
 };
 
-const ingCellKey = (loc: number, ing: number) => `${loc}:${ing}`;
-
-export async function getIngredientBalances(): Promise<IngredientBalances> {
+// itemIds — сужение выборки ДЛЯ АЛЕРТОВ (см. getTareBalances).
+export async function getIngredientBalances(
+  itemIds?: number[],
+): Promise<IngredientBalances> {
   await requireRole();
 
-  const [movements, activeIngredients, activeFarmers] = await Promise.all([
-    prisma.stockMovement.findMany({
-      where: { kind: "ingredient" },
-      select: {
-        ingredient_id: true,
-        quantity: true,
-        from_location_id: true,
-        to_location_id: true,
-      },
-    }),
+  // Σ движений по (локация, ингредиент) — агрегирует БД (audit-w4b, cells.ts).
+  const [balances, ledgerIngIds, activeIngredients, activeFarmers] = await Promise.all([
+    aggregateStockCells("ingredient", itemIds),
+    listLedgerItemIds("ingredient", itemIds),
     prisma.ingredient.findMany({
       where: { active: true },
       select: { id: true, name: true, unit: true },
@@ -470,19 +442,6 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
     }),
   ]);
 
-  // Σ движений: +qty в (to, ing); −qty в (from, ing). null-сторону пропускаем
-  // (opening: from=null → приход; consumption: to=null → расход). Состояния нет.
-  const balances = new Map<string, Prisma.Decimal>();
-  const add = (loc: number | null, ing: number | null, delta: Prisma.Decimal) => {
-    if (loc == null || ing == null) return;
-    const k = ingCellKey(loc, ing);
-    balances.set(k, (balances.get(k) ?? new Prisma.Decimal(0)).plus(delta));
-  };
-  for (const m of movements) {
-    add(m.to_location_id, m.ingredient_id, m.quantity);
-    add(m.from_location_id, m.ingredient_id, m.quantity.neg());
-  }
-
   // Колонки: активные ингредиенты ∪ встреченные в движениях (деактивированные не
   // теряем — дозагружаем по id), unit из БД.
   const colMap = new Map<number, IngredientCol>(
@@ -491,11 +450,7 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
       { id: i.id, name: i.name, unit: i.unit as "kg" | "l" },
     ]),
   );
-  const seenIngIds = new Set<number>();
-  for (const m of movements) {
-    if (m.ingredient_id != null) seenIngIds.add(m.ingredient_id);
-  }
-  const extraIngIds = [...seenIngIds].filter((id) => !colMap.has(id));
+  const extraIngIds = ledgerIngIds.filter((id) => !colMap.has(id));
   if (extraIngIds.length > 0) {
     const extra = await prisma.ingredient.findMany({
       where: { id: { in: extraIngIds } },
@@ -573,6 +528,10 @@ export async function getIngredientBalances(): Promise<IngredientBalances> {
       quantity: v.toNumber(),
     });
   }
+  // Детерминированный порядок — см. комментарий в getTareBalances.
+  cells.sort(
+    (a, b) => a.locationId - b.locationId || a.ingredientId - b.ingredientId,
+  );
 
   return { columns, locations, cells };
 }

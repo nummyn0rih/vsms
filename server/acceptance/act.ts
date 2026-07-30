@@ -2,14 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma, type ShipmentStatus } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
 import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import { seasonYearOf } from "@/server/shipments/workdays";
-import { withSeasonPrefix, stripSeasonPrefix } from "./accepted";
+import {
+  withSeasonPrefix,
+  stripSeasonPrefix,
+  calibreRangeLabel,
+  findSettlementConflict,
+  settlementConflictMessage,
+  type SettlementConflictCalibre,
+} from "./accepted";
 import { calcIngredientConsumption } from "./ingredients";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 import {
@@ -176,6 +183,58 @@ export async function getActContext({
   };
 }
 
+// Пересчёт статуса машины по BR-13: «accepted ⟺ все позиции приняты». Зовётся из ЛЮБОЙ
+// операции над актами (saveAct / откаты) в их транзакции.
+//
+// SELECT … FOR UPDATE по строке машины — до подсчёта, и это принципиально: параллельная
+// приёмка блокируется на этой строке до нашего коммита, а её count выполнится уже
+// СЛЕДУЮЩИМ statement'ом, то есть со свежим снапшотом READ COMMITTED, где наш акт виден.
+// Без блокировки обе транзакции видели «ещё есть непринятые» и машина навсегда оставалась
+// arrived при всех принятых позициях (П-9). Prisma не даёт row-lock API — только raw
+// (в интерактивной транзакции он идёт по тому же соединению).
+//
+// Идемпотентно: статус уже соответствует → ни update, ни ChangeLog. Обратный переход
+// (accepted → arrived) закрывает случай «позиций стало больше / откат акта».
+// planned/sent не трогаем — приёмки там ещё нет.
+async function reconcileShipmentAcceptedWithin(
+  tx: Prisma.TransactionClient,
+  shipmentId: number,
+): Promise<ChangeEntry[]> {
+  const locked = await tx.$queryRaw<{ status: ShipmentStatus }[]>`
+    SELECT status FROM "Shipment" WHERE id = ${shipmentId} FOR UPDATE
+  `;
+  const current = locked[0]?.status;
+  if (current == null) return []; // машины нет — решает вызывающий
+
+  // Последовательно, не Promise.all: внутри транзакции все запросы идут по ОДНОМУ
+  // соединению, параллельный запуск драйвер считает ошибкой использования.
+  const total = await tx.shipmentItem.count({ where: { shipment_id: shipmentId } });
+  const unaccepted = await tx.shipmentItem.count({
+    where: { shipment_id: shipmentId, acceptanceAct: null },
+  });
+  // Машина без позиций «принятой» не становится (иначе пустой каркас ушёл бы в accepted).
+  const want = total > 0 && unaccepted === 0 ? "accepted" : "arrived";
+
+  const move =
+    want === "accepted" && current === "arrived"
+      ? "accepted"
+      : want === "arrived" && current === "accepted"
+        ? "arrived"
+        : null;
+  if (move == null) return [];
+
+  await tx.shipment.update({ where: { id: shipmentId }, data: { status: move } });
+  return [
+    {
+      entity: SHIPMENT,
+      entityId: shipmentId,
+      field: "status",
+      oldValue: current,
+      newValue: move,
+    },
+  ];
+}
+
 // Приёмка позиции актом (C1, simple+calibre). operator/admin. Принятый вес —
 // производное, не пишем (BR-10). При приёмке ПОСЛЕДНЕЙ позиции машина авто-→accepted
 // (BR-13). Калибр: Σ% категорий = 100% годного, CalibreResult на каждую категорию.
@@ -208,17 +267,25 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
             select: {
               acceptance_type: true,
               calibreScheme: {
-                select: { ranges: { select: { id: true, is_accepted: true } } },
+                select: {
+                  ranges: {
+                    // label/min_cm/max_cm — для НАЗВАНИЯ категории в тексте гарда BR-33.
+                    select: {
+                      id: true,
+                      is_accepted: true,
+                      label: true,
+                      min_cm: true,
+                      max_cm: true,
+                    },
+                  },
+                },
               },
             },
           },
+          // status не выбираем: он читается под блокировкой в
+          // reconcileShipmentAcceptedWithin — прочитанное здесь значение устарело бы.
           shipment: {
-            select: {
-              id: true,
-              status: true,
-              arrival_date: true,
-              departure_date: true,
-            },
+            select: { id: true, arrival_date: true, departure_date: true },
           },
           acceptanceAct: { select: { id: true, settlement_percent: true } },
         },
@@ -253,6 +320,9 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         percent: Prisma.Decimal;
         contract_line_id: number | null;
       }[] = [];
+      // Вход гарда BR-33 (подпись + is_accepted + строка). Для simple остаётся пустым —
+      // конфликта «нестандарт со строкой» там не бывает.
+      let conflictCalibres: SettlementConflictCalibre[] = [];
 
       if (isCalibre) {
         // Калибр (BR-10, одноступенчато): Σ% категорий + brak% = 100% от факта;
@@ -263,6 +333,16 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         }
         const ranges = item.culture.calibreScheme?.ranges ?? [];
         const acceptedById = new Map(ranges.map((r) => [r.id, r.is_accepted]));
+        const labelById = new Map(
+          ranges.map((r) => [
+            r.id,
+            calibreRangeLabel(
+              r.min_cm != null ? r.min_cm.toNumber() : null,
+              r.max_cm != null ? r.max_cm.toNumber() : null,
+              r.label,
+            ),
+          ]),
+        );
 
         for (const c of calibres) {
           if (!acceptedById.has(c.calibreRangeId)) {
@@ -315,6 +395,11 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           percent: new Prisma.Decimal(c.percent),
           contract_line_id: c.contractLineId,
         }));
+        conflictCalibres = calibres.map((c) => ({
+          label: labelById.get(c.calibreRangeId) ?? String(c.calibreRangeId),
+          isAccepted: acceptedById.get(c.calibreRangeId) === true,
+          contractLineId: c.contractLineId,
+        }));
       } else {
         // simple (BR-8): одна строка на позицию.
         const lineId = parsed.data.contractLineId;
@@ -359,6 +444,22 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         }
       }
 
+      // BR-33 × C3d-2: непринятая категория со СВОЕЙ строкой контракта уже оплачивается
+      // целиком (гейт оплаты в execution.ts — contract_line_id, не is_accepted). Вместе с
+      // процентом к оплате тот же вес считается дважды — комбинацию запрещаем.
+      // Сравниваем ЭФФЕКТИВНОЕ значение процента: оператор поле не шлёт (settlementProvided
+      // = false), но заданная админом корректировка остаётся в БД — иначе привязку строки к
+      // нестандарту можно было бы протащить сохранением от оператора.
+      const effectiveSettlement = settlementProvided
+        ? settlementPercent ?? null
+        : currentSettlement != null
+          ? currentSettlement.toNumber()
+          : null;
+      const conflictLabel = findSettlementConflict(effectiveSettlement, conflictCalibres);
+      if (conflictLabel != null) {
+        return { ok: false as const, error: settlementConflictMessage(conflictLabel) };
+      }
+
       // № акта уникален в рамках сезона (BR-9): хранится с префиксом года сезона.
       const refDate =
         item.shipment.arrival_date ?? item.shipment.departure_date ?? new Date();
@@ -398,7 +499,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         });
       }
 
-      const entries = [
+      const entries: ChangeEntry[] = [
         {
           entity: ACT,
           entityId: shipmentItemId,
@@ -415,7 +516,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           field: "settlement_percent",
           oldValue: currentSettlement != null ? currentSettlement.toString() : null,
           newValue: settlementPercent != null ? String(settlementPercent) : null,
-        } as (typeof entries)[number]);
+        });
       }
 
       // BR-8: фиксируем привязку строки на позиции, если изменилась. Для калибра —
@@ -431,80 +532,93 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           field: "contract_line_id",
           oldValue: item.contract_line_id != null ? String(item.contract_line_id) : null,
           newValue: resolvedLineId != null ? String(resolvedLineId) : null,
-        } as (typeof entries)[number]);
+        });
       }
 
-      // BR-13: все позиции машины приняты → авто-accepted.
-      const stillUnaccepted = await tx.shipmentItem.count({
-        where: { shipment_id: item.shipment.id, acceptanceAct: null },
-      });
-      if (stillUnaccepted === 0 && item.shipment.status === "arrived") {
-        await tx.shipment.update({
-          where: { id: item.shipment.id },
-          data: { status: "accepted" },
-        });
-        entries.push({
-          entity: SHIPMENT,
-          entityId: item.shipment.id,
-          field: "status",
-          oldValue: "arrived",
-          newValue: "accepted",
-        } as (typeof entries)[number]);
-      }
+      // BR-13: все позиции машины приняты → авто-accepted. Пересчёт под блокировкой
+      // строки машины (см. reconcileShipmentAcceptedWithin) — иначе две параллельные
+      // приёмки последних позиций обе увидят «ещё есть непринятые».
+      entries.push(...(await reconcileShipmentAcceptedWithin(tx, item.shipment.id)));
 
       // C2 (BR-4): авто-расход ингредиентов по рецептуре культуры. База = ФАКТ
       // перевески (item.actual_weight_kg, не null по BR-25 выше). Списание у фермера
-      // позиции (from=farmer, to=null — уходит в производство). Идемпотентно:
-      // actual_weight у принятой позиции read-only, расход инвариантен — повторный
-      // saveAct не дублирует движения. Культура без рецептуры → движений нет.
+      // позиции (from=farmer, to=null — уходит в производство). Культура без
+      // рецептуры → движений нет.
       const recipe = await tx.ingredientRecipe.findMany({
         where: { culture_id: item.culture_id },
         select: { ingredient_id: true, qty_per_kg_product: true },
       });
-      let movementsCount = 0;
-      const already = await tx.stockMovement.count({
+      // Гард — по НЕТТО группы, не по существованию движений (правило 7 CLAUDE.md).
+      // Откат — нетто-сторно append'ом, оригиналы остаются в леджере навсегда, поэтому
+      // «if (count > 0) skip» после полного цикла приёмка→откат→приёмка молча
+      // блокирует легитимное повторное списание — дословный баг materials-fix.
+      // Нетто считаем ТЕМ ЖЕ ключом ingredient×фермер, что и сторно в
+      // revertActItemWithin: оригинал (to=null) плюс, сторно (from=null) минус.
+      // Нетто = 0 → расход неактивен, применяем; нетто ≠ 0 → уже активен, пропускаем.
+      const existingMovements = await tx.stockMovement.findMany({
         where: {
           source_doc_type: "acceptance_act",
           source_doc_id: act.id,
           kind: "ingredient",
         },
+        select: {
+          ingredient_id: true,
+          quantity: true,
+          from_location_id: true,
+          to_location_id: true,
+        },
       });
-      if (already === 0) {
-        const consumption = calcIngredientConsumption(
-          item.actual_weight_kg,
-          recipe.map((r) => ({
-            ingredientId: r.ingredient_id,
-            qtyPerKgProduct: r.qty_per_kg_product,
-          })),
+      const netByIngredient = new Map<number, Prisma.Decimal>();
+      for (const m of existingMovements) {
+        const isOriginal = m.to_location_id == null;
+        const farmerId = isOriginal ? m.from_location_id : m.to_location_id;
+        if (m.ingredient_id == null || farmerId !== item.farmer_id) continue;
+        const cur = netByIngredient.get(m.ingredient_id) ?? new Prisma.Decimal(0);
+        netByIngredient.set(
+          m.ingredient_id,
+          isOriginal ? cur.plus(m.quantity) : cur.minus(m.quantity),
         );
-        if (consumption.length > 0) {
-          await tx.stockMovement.createMany({
-            data: consumption.map((m) => ({
-              date: refDate,
-              kind: "ingredient" as const,
-              ingredient_id: m.ingredientId,
-              quantity: m.quantity,
-              from_location_id: item.farmer_id,
-              to_location_id: null,
-              from_state: null,
-              to_state: null,
-              movement_type: "consumption" as const,
-              source_doc_type: "acceptance_act" as const,
-              source_doc_id: act.id,
-            })),
-          });
-          movementsCount = consumption.length;
-        }
+      }
+
+      const consumption = calcIngredientConsumption(
+        item.actual_weight_kg,
+        recipe.map((r) => ({
+          ingredientId: r.ingredient_id,
+          qtyPerKgProduct: r.qty_per_kg_product,
+        })),
+      );
+      const toApply = consumption.filter((m) =>
+        (netByIngredient.get(m.ingredientId) ?? new Prisma.Decimal(0)).isZero(),
+      );
+      const skipped = consumption.length - toApply.length;
+      if (toApply.length > 0) {
+        await tx.stockMovement.createMany({
+          data: toApply.map((m) => ({
+            date: refDate,
+            kind: "ingredient" as const,
+            ingredient_id: m.ingredientId,
+            quantity: m.quantity,
+            from_location_id: item.farmer_id,
+            to_location_id: null,
+            from_state: null,
+            to_state: null,
+            movement_type: "consumption" as const,
+            source_doc_type: "acceptance_act" as const,
+            source_doc_id: act.id,
+          })),
+        });
       }
       entries.push({
         entity: ACT,
         entityId: shipmentItemId,
         field: "movements",
         newValue:
-          already > 0
-            ? "расход ингр.: 0 движ. (уже списано)"
-            : `расход ингр.: ${movementsCount} движ.`,
-      } as (typeof entries)[number]);
+          skipped === 0
+            ? `расход ингр.: ${toApply.length} движ.`
+            : toApply.length === 0
+              ? "расход ингр.: 0 движ. (уже активен, нетто≠0)"
+              : `расход ингр.: ${toApply.length} движ. (${skipped} пропущено: нетто≠0)`,
+      });
 
       await logChange(entries, Number(user.id), tx);
       return { ok: true as const };
@@ -610,26 +724,16 @@ export async function revertAct(input: {
     const result = await prisma.$transaction(async (tx) => {
       const item = await tx.shipmentItem.findUnique({
         where: { id: shipmentItemId },
-        select: { shipment: { select: { id: true, status: true } } },
+        select: { shipment: { select: { id: true } } },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
 
       const entries = await revertActItemWithin(tx, shipmentItemId);
       if (entries.length === 0) return { ok: true as const }; // акта не было
 
-      if (item.shipment.status === "accepted") {
-        await tx.shipment.update({
-          where: { id: item.shipment.id },
-          data: { status: "arrived" },
-        });
-        entries.push({
-          entity: SHIPMENT,
-          entityId: item.shipment.id,
-          field: "status",
-          oldValue: "accepted",
-          newValue: "arrived",
-        });
-      }
+      // Тот же пересчёт под блокировкой, что на приёмке: откат одной позиции,
+      // идущий параллельно с приёмкой последней, иначе оставил бы машину accepted.
+      entries.push(...(await reconcileShipmentAcceptedWithin(tx, item.shipment.id)));
 
       await logChange(entries, Number(user.id), tx);
       return { ok: true as const };
@@ -666,17 +770,9 @@ export async function revertShipmentToArrived(
         entries.push(...(await revertActItemWithin(tx, it.id)));
       }
 
-      await tx.shipment.update({
-        where: { id: shipmentId },
-        data: { status: "arrived" },
-      });
-      entries.push({
-        entity: SHIPMENT,
-        entityId: shipmentId,
-        field: "status",
-        oldValue: "accepted",
-        newValue: "arrived",
-      });
+      // Акты сняты со всех позиций → пересчёт вернёт машину в arrived (и запишет
+      // ChangeLog). Единая точка смены статуса — та же, что на приёмке.
+      entries.push(...(await reconcileShipmentAcceptedWithin(tx, shipmentId)));
 
       await logChange(entries, Number(user.id), tx);
       return { ok: true as const };

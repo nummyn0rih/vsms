@@ -196,13 +196,24 @@ auth.ts, lib/prisma.ts, .env.example. Prisma/Auth.js v5/Next 16 — сверит
 
 - **Свой `pg_dump`** прод-БД — не опция, а необходимость. Хранить вне Neon (локально/облако), несколько поколений.
   ```bash
-  /opt/homebrew/opt/postgresql@18/bin/pg_dump "$PROD_URL" -Fc -f vsms-prod-$(date +%F).dump
+  source ~/.config/neon/env
+  /usr/local/opt/postgresql@18/bin/pg_dump "$PGURL_PROD" -Fc -f vsms-prod-$(date +%F).dump
   ```
+  ⚠ **Машина Ivan — iMac15,1 (Intel x86_64), Homebrew в `/usr/local`**, НЕ `/opt/homebrew` (это Apple Silicon).
+  Все команды писать с `/usr/local/opt/...`.
+  ⚠ **Строки подключения — из `~/.config/neon/env`**: `PGURL_PROD` и `PGURL_DEV`. Любая инструкция начинается с
+  `source ~/.config/neon/env`, дальше — только `"$PGURL_PROD"` / `"$PGURL_DEV"`. Строки в открытом виде не писать.
+  🚨 **Проверить содержимое `PGURL_DEV` перед использованием.** Обнаружено (28.07.2026): переменная указывала не на
+  рабочую `neondb` проекта `vsms-dev`, а на **остаточную shadow-БД Prisma** (`prisma_migrate_shadow_db_…`).
+  Последствие: ручные `psql`-сверки по dev молча смотрели в пустую базу и возвращали «0 строк» — ложное «всё чисто».
+  На `prisma migrate`/`migrate status` не влияет (те берут URL из `.env`, не из этой переменной).
+  Лечение: поправить `~/.config/neon/env` на `neondb`; осиротевшую shadow-БД в Neon удалить (она пережила
+  прерванный `migrate dev` и занимает место). **Правило: сверку, вернувшую 0 строк, подтверждать контрольным
+  запросом** (напр. `SELECT COUNT(*) FROM "Shipment";` — на рабочей dev-базе должно быть > 0).
   ⚠ **Версия клиента должна быть ≥ версии сервера.** Neon на PG **18.4**; системный `pg_dump` 16.x падает с
   `server version mismatch` (обратной совместимости в эту сторону нет; пулер ни при чём). Ставится
-  `brew install postgresql@18`, зовётся полным путём (Intel-мак: `/usr/local/opt/...`). `pg_restore` —
-  из того же каталога, формат `-Fc` тоже завязан на версию.
-  ⚠ **Строку подключения передавать переменной** (`"$PROD_URL"`), не вставлять текстом в чаты/issue/логи —
+  `brew install postgresql@18`. `pg_restore` — из того же каталога, формат `-Fc` тоже завязан на версию.
+  ⚠ **Строку подключения передавать переменной** (`"$PGURL_PROD"` после `source ~/.config/neon/env`), не вставлять текстом в чаты/issue/логи —
   в ней пароль. Если засветилась — сменить пароль роли в Neon и обновить обе переменные в Vercel + передеплой.
   Восстановление: `pg_restore -d '<целевой-URL>' --clean --if-exists vsms-prod-<дата>.dump`.
 - **Частота:** в сезон — ежедневно (данные вводятся каждый день, потеря дня = потеря рабочего дня);

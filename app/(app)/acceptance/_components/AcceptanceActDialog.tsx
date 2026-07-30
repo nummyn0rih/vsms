@@ -3,12 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Truck, AlertCircle, RotateCcw } from "lucide-react";
+import { Check, Truck, AlertCircle, RotateCcw, TriangleAlert } from "lucide-react";
 
 import type { ActContext, ActCalibreRange } from "@/server/acceptance/schema";
 import { setActualWeight } from "@/server/acceptance/actions";
 import { saveAct, revertAct } from "@/server/acceptance/act";
-import { computeSettlement } from "@/server/acceptance/accepted";
+import {
+  computeSettlement,
+  findSettlementConflict,
+  settlementConflictMessage,
+} from "@/server/acceptance/accepted";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import {
   Dialog,
@@ -214,6 +218,22 @@ export function AcceptanceActDialog({
       const b = bindings[r.id] ?? NONE;
       return r.isAccepted && (b === "" || b === NONE);
     });
+
+  // BR-33 × C3d-2: нестандарт со строкой контракта уже оплачивается целиком — вместе
+  // с процентом к оплате его вес считался бы дважды. Тот же хелпер, что на сервере.
+  const settlementConflict = findSettlementConflict(
+    settlementInput.value,
+    isCalibre
+      ? context.calibreRanges.map((r) => {
+          const b = bindings[r.id] ?? NONE;
+          return {
+            label: rangeText(r) ?? r.label,
+            isAccepted: r.isAccepted,
+            contractLineId: b === "" || b === NONE ? null : Number(b),
+          };
+        })
+      : [],
+  );
   // Σ категорий + брак = 100% факта.
   const sumOk = !isCalibre || Math.abs(sumPct + brak - 100) <= 0.01;
 
@@ -241,7 +261,9 @@ export function AcceptanceActDialog({
                     : settlementInput.value != null &&
                         settlementInput.value < acceptedPctExact - 0.01
                       ? `Процент к оплате не может быть ниже принятого (${acceptedPctLabel}%)`
-                      : null;
+                      : settlementConflict != null
+                        ? settlementConflictMessage(settlementConflict)
+                        : null;
 
   async function commitWeight() {
     setWeightEditing(false);
@@ -452,6 +474,15 @@ export function AcceptanceActDialog({
             </span>
           )}
         </div>
+
+        {/* BR-33 × C3d-2: подсказка ДО отправки — иначе оператор увидит только отказ
+            сервера и не поймёт, какое из двух полей чинить. */}
+        {settlementConflict != null && (
+          <div className="flex items-start gap-2 rounded-md border border-[#ffefcf] bg-[#fff6e3] px-2.5 py-2 text-[12.5px] leading-4 tracking-tight text-[#ab570a]">
+            <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+            <span>{settlementConflictMessage(settlementConflict)}</span>
+          </div>
+        )}
 
         {/* Разложение: принято (качество) → доплата → итого к оплате (расчёт). */}
         {acceptedExact != null && settlement.surchargeKg > 0 && (

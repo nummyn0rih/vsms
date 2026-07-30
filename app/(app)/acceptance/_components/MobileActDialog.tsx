@@ -3,12 +3,16 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { X, Check, AlertCircle, RotateCcw } from "lucide-react";
+import { X, Check, AlertCircle, RotateCcw, TriangleAlert } from "lucide-react";
 
 import type { ActContext, ActCalibreRange } from "@/server/acceptance/schema";
 import { setActualWeight } from "@/server/acceptance/actions";
 import { saveAct, revertAct } from "@/server/acceptance/act";
-import { computeSettlement } from "@/server/acceptance/accepted";
+import {
+  computeSettlement,
+  findSettlementConflict,
+  settlementConflictMessage,
+} from "@/server/acceptance/accepted";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import {
   Select,
@@ -205,6 +209,22 @@ export function MobileActDialog({
     });
   const sumOk = !isCalibre || Math.abs(sumPct + brak - 100) <= 0.01;
 
+  // BR-33 × C3d-2: нестандарт со строкой контракта уже оплачивается целиком — вместе
+  // с процентом к оплате его вес считался бы дважды. Тот же хелпер, что на сервере.
+  const settlementConflict = findSettlementConflict(
+    settlementInput.value,
+    isCalibre
+      ? context.calibreRanges.map((r) => {
+          const b = bindings[r.id] ?? NONE;
+          return {
+            label: rangeText(r) ?? r.label,
+            isAccepted: r.isAccepted,
+            contractLineId: b === "" || b === NONE ? null : Number(b),
+          };
+        })
+      : [],
+  );
+
   const acceptedPctLabel = acceptedPctExact.toLocaleString("ru-RU", {
     maximumFractionDigits: 2,
   });
@@ -229,7 +249,9 @@ export function MobileActDialog({
                     : settlementInput.value != null &&
                         settlementInput.value < acceptedPctExact - 0.01
                       ? `Процент к оплате не может быть ниже принятого (${acceptedPctLabel}%)`
-                      : null;
+                      : settlementConflict != null
+                        ? settlementConflictMessage(settlementConflict)
+                        : null;
 
   async function commitWeight() {
     setWeightEditing(false);
@@ -578,6 +600,13 @@ export function MobileActDialog({
               <div className="act-input readonly">
                 <span>задано администратором</span>
                 <span className="u">{context.existing?.settlementPercent} %</span>
+              </div>
+            )}
+            {/* BR-33 × C3d-2: подсказка ДО отправки — иначе виден только отказ сервера. */}
+            {settlementConflict != null && (
+              <div className="mt-2 flex items-start gap-2 rounded-md border border-[#ffefcf] bg-[#fff6e3] px-2.5 py-2 text-[12.5px] leading-4 tracking-tight text-[#ab570a]">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                <span>{settlementConflictMessage(settlementConflict)}</span>
               </div>
             )}
             {acceptedExact != null && settlement.surchargeKg > 0 && (

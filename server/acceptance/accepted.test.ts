@@ -6,6 +6,8 @@ import {
   computeAcceptedPercent,
   computeSettlement,
   computeWeightedBrak,
+  findSettlementConflict,
+  settlementConflictMessage,
   type SettlementCalibre,
 } from "./accepted";
 
@@ -236,5 +238,46 @@ describe("calibreRangeLabel", () => {
 
   it("безразмерная категория показывается своим label", () => {
     expect(calibreRangeLabel(null, null, "Пульпа")).toBe("Пульпа");
+  });
+});
+
+// --- BR-33 × C3d-2: два механизма оплаты нестандарта взаимоисключающие ---
+// Гейт оплаты в execution.ts — contract_line_id, НЕ is_accepted: нестандарт со строкой
+// оплачивается целиком по своей строке. Доплата BR-33 считается от факта и накрывает тот
+// же вес ещё раз → двойной счёт (реальный дефект прод-данных). Комбинация запрещается.
+describe("findSettlementConflict — BR-33 × C3d-2", () => {
+  const NS_WITH_LINE = { label: ">12 см", isAccepted: false, contractLineId: 103 };
+  const NS_NO_LINE = { label: ">12 см", isAccepted: false, contractLineId: null };
+  const STD = { label: "6–9 см", isAccepted: true, contractLineId: LINE_69 };
+
+  it("нестандарт со строкой + процент к оплате → конфликт с подписью категории", () => {
+    expect(findSettlementConflict(97, [STD, NS_WITH_LINE])).toBe(">12 см");
+  });
+
+  it("тот же набор без процента → конфликта нет (C3d-2 продолжает работать)", () => {
+    expect(findSettlementConflict(null, [STD, NS_WITH_LINE])).toBeNull();
+  });
+
+  it("нестандарт БЕЗ строки + процент → конфликта нет (эталон BR-33)", () => {
+    expect(findSettlementConflict(97, [STD, NS_NO_LINE])).toBeNull();
+  });
+
+  it("принятая категория со строкой + процент → конфликта нет", () => {
+    expect(findSettlementConflict(97, [STD])).toBeNull();
+  });
+
+  it("simple (категорий нет) → конфликта нет", () => {
+    expect(findSettlementConflict(97, [])).toBeNull();
+  });
+
+  it("процент 0 — это заданная корректировка, а не «нет»: конфликт ловится", () => {
+    expect(findSettlementConflict(0, [NS_WITH_LINE])).toBe(">12 см");
+  });
+
+  it("сообщение называет конкретную категорию и оба выхода", () => {
+    const msg = settlementConflictMessage(">12 см");
+    expect(msg).toContain("«>12 см»");
+    expect(msg).toContain("Уберите строку контракта");
+    expect(msg).toContain("очистите процент");
   });
 });

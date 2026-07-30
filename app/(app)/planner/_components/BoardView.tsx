@@ -390,25 +390,17 @@ function MachineCard({
       } ${isDragging ? "dragging" : ""}`}
       onClick={() => onOpen(card.shipmentId)}
     >
+      {/* строка 1: статус, даты, хват — как в одно-фермерской карточке */}
       <div className="card-top">
-        <span className="mtag">
-          <Truck />
-          Машина
+        <span className={`badge s-${card.status}`}>
+          <span className="dot" />
+          {STATUS_LABEL[card.status]}
         </span>
-        {card.arrivalOnly ? (
-          <span className={`badge s-${card.status}`} style={{ marginLeft: "auto" }}>
-            <span className="dot" />
-            {STATUS_LABEL[card.status]}
-          </span>
-        ) : (
-          <>
-            <Dates card={card} />
-            {handle}
-          </>
-        )}
+        <Dates card={card} />
+        {handle}
       </div>
 
-      {/* sent: маркер «перенос только прибытия» + даты/хват во второй строке */}
+      {/* строка 2: только у sent — маркер «перенос только прибытия» */}
       {card.arrivalOnly && (
         <div className="card-top" style={{ paddingTop: 7 }}>
           <span
@@ -418,19 +410,21 @@ function MachineCard({
             <RefreshCcw />
             перенос: только прибытие
           </span>
-          <Dates card={card} />
-          {handle}
         </div>
       )}
 
       <div className="card-body">
-        <div className="farmers-line">
-          {card.farmers.map((f, i) => (
-            <span key={f.farmerId}>
-              {i > 0 && <span className="sepdot">·</span>}
-              {f.farmerName}
+        {/* фермеры — в таблице .frows ниже, здесь только водитель (как в SingleCard) */}
+        <div>
+          {card.driverName ? (
+            <span className="driver">
+              {driverShort(card.driverName)}
+              {card.transportCompanyName ? ` · ${card.transportCompanyName}` : ""}
+              <Info className="i" />
             </span>
-          ))}
+          ) : (
+            <span className="driver driver-none">водитель не назначен</span>
+          )}
         </div>
         <div className="frows">
           {card.farmers.map((f) => (
