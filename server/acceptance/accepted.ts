@@ -101,6 +101,40 @@ export function computeSettlement(input: {
   };
 }
 
+// --- BR-33 × C3d-2: несовместимость двух механизмов оплаты нестандарта ---
+
+// Категория для проверки конфликта. label — ГОТОВАЯ подпись для сообщения
+// (calibreRangeLabel на сервере, rangeText в диалогах).
+export type SettlementConflictCalibre = {
+  label: string;
+  isAccepted: boolean;
+  contractLineId: number | null;
+};
+
+// Непринятая категория оплачивается ЛИБО своей строкой контракта (C3d-2: гейт оплаты —
+// contract_line_id != null, см. contracts/execution.ts), ЛИБО через settlement_percent
+// (BR-33: доплата от факта). Вместе — двойной счёт: нестандарт попадает и в стоимость
+// своей строки, и внутрь доплаты. Реальный дефект прод-данных (+712,4 кг / +39 894 ₽ на
+// одной партии), поэтому комбинация запрещается валидацией, а не «складывается аккуратнее».
+// Возвращает подпись ПЕРВОЙ конфликтной категории или null, если конфликта нет.
+export function findSettlementConflict(
+  settlementPercent: number | null,
+  calibres: SettlementConflictCalibre[],
+): string | null {
+  if (settlementPercent == null) return null;
+  const bad = calibres.find((c) => !c.isAccepted && c.contractLineId != null);
+  return bad ? bad.label : null;
+}
+
+// Единый текст отказа — один источник для сервера (saveAct) и подсказки в форме акта.
+export function settlementConflictMessage(label: string): string {
+  return (
+    `Нельзя одновременно: категория «${label}» оплачивается по строке контракта ` +
+    `и задан процент к оплате. Уберите строку контракта у непринятой категории ` +
+    `или очистите процент — иначе вес оплатится дважды.`
+  );
+}
+
 // Принятый % от факта — база сравнения для валидации settlement_percent (BR-33) и
 // для показа в форме. simple: 100 − brak% · calibre: Σ percent принятых категорий.
 export function computeAcceptedPercent(
