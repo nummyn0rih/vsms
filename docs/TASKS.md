@@ -288,7 +288,28 @@
     Спека — `PROMPTS-AUDIT-W5A-INVARIANTS.md`, проверки — `scripts/w5a-verify.ts` (32 ok: полный цикл
     приёмка→сторно→приёмка, гонка двумя параллельными `saveAct`, три кейса гарда) + 7 юнит-тестов
     (152 всего).
-  - [ ] **w5b — гигиена**: `todayLocalISO(tz)` (П-10), П-20, `listAlertRules`, вынос tx-хелперов из `"use server"`.
+  - [~] **w5b — гигиена**: сделано три из четырёх пунктов, остался вынос tx-хелперов из `"use server"`.
+    **П-10 — единое локальное «сегодня»:** `FACTORY_TZ = "Europe/Moscow"` + чистая `todayLocalISO(tz)` в
+    `server/shipments/workdays.ts` (через `Intl.DateTimeFormat.formatToParts`, без библиотек дат и ручной
+    арифметики часов). Раньше 7 мест считали дату как `new Date().toISOString().slice(0,10)`: на Vercel
+    серверная TZ = UTC, и с 00:00 до 03:00 МСК «сегодня» было ещё вчера — гард «нельзя в прошлый день»
+    пропускал вчерашнюю дату, авто-`arrival_date` (BR-24а) и смарт-дефолт (BR-24б) уезжали на сутки.
+    Заменены все 7: `shipments/actions.ts`, `acceptance/accepted.ts`, `acceptance/actions.ts`,
+    `board/actions.ts` (сверх спеки — серверная пара к клиентскому гарду `BoardView.tsx:129`, иначе UI
+    разрешал бы drop, который сервер отклоняет), оба клиентских `planner/_components/*` и
+    `scripts/acceptance-autodate-verify.ts`. **Хранение дат не тронуто:** в БД по-прежнему UTC-полночь,
+    `parseDateUTC` без изменений — меняется только вычисление «какое сегодня число».
+    **П-20 — сверка записи ChangeLog:** `logChange` сличает `createMany().count` с `list.length` и бросает
+    при расхождении (зовут всегда внутри `$transaction` → откатится и само изменение); пустой `entries` —
+    по-прежнему `return`, но с `console.warn` и кадром вызывающего из стека.
+    **Остаток w4b — `listAlertRules`:** правила читаются первыми, при нуле — ранний `return []` без трёх
+    запросов справочников имён (они нужны только для рендера строк панели). Холодный путь `layout (app)`,
+    отрабатывающий на КАЖДОЙ навигации, — 1 запрос вместо 4; комментарий в `layout.tsx` приведён к факту.
+    Проверки: 13 новых юнит-тестов (165 всего) — `todayLocalISO` на замороженном времени, ключевой кейс
+    00:30 МСК при UTC-вчера, и `server/changelog.test.ts` на фейковом `db` (рассинхрон count → throw);
+    `scripts/w4b-balance-parity-verify.ts` дополнен проверкой «0 правил → ровно 1 запрос, справочники не
+    читаются» (22 ✓) + прогон `acceptance-autodate-verify` (9 OK) и `w5a-verify` (32 ✓) на реальном
+    `createMany`. Спека — `PROMPTS-AUDIT-W5B-HYGIENE.md`.
 
 ---
 

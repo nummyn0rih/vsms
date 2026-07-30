@@ -14,7 +14,7 @@ import {
   type SetActualWeightInput,
 } from "./schema";
 import { applyInboundArrivedTareLeg } from "@/server/shipments/packaging";
-import { parseDateUTC } from "@/server/shipments/workdays";
+import { parseDateUTC, todayLocalISO } from "@/server/shipments/workdays";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 
 const SHIPMENT = "Shipment";
@@ -105,7 +105,7 @@ export async function setActualWeight(
         // Фактическая дата прибытия = сегодня (BR-24а): первая перевеска и есть факт
         // прибытия. Молча, в том же переходе. Второй вес сюда не входит (status уже
         // arrived) → дата не перезаписывается.
-        const today = new Date().toISOString().slice(0, 10);
+        const today = todayLocalISO();
         await tx.shipment.update({
           where: { id: item.shipment.id },
           data: { status: "arrived", arrival_date: parseDateUTC(today) },

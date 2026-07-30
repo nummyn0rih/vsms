@@ -1,3 +1,5 @@
+import { todayLocalISO } from "@/server/shipments/workdays";
+
 // Чистые хелперы приёмки (без prisma) — переиспользуются лентой и сервером.
 
 // Принятый вес позиции из акта (BR-10, одноступенчато: база = факт). Считается из ТОЧНЫХ
@@ -178,7 +180,7 @@ export function arrivalDateDefault(plannedArrivalDate: string | null): {
   plannedIsPast: boolean;
   defaultChoice: "planned" | "today";
 } {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalISO();
   const planned = plannedArrivalDate ?? null;
   const plannedIsPast = planned != null && planned < today;
   return {
