@@ -934,13 +934,9 @@ table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
 .mcard.s-arrived { border-left-color: #f5a623; }
 .mcard.s-accepted { border-left-color: #29bc9b; }
 .mcard .card-strip { display: none; }
-/* шапка машины (метка+бейдж / даты+хват) переносит строку, а не обрезается краем карточки:
-   колонка дня — minmax(0,1fr), у .card стоит overflow:hidden */
-.mcard .card-top { padding-top: 10px; flex-wrap: wrap; row-gap: 7px; }
-.mtag { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; letter-spacing: -0.02em; }
-.mtag svg { width: 15px; height: 15px; color: var(--body); }
-.farmers-line { font-size: 12.5px; color: var(--body); letter-spacing: -0.01em; line-height: 17px; }
-.farmers-line .sepdot { color: var(--hairline-strong); margin: 0 2px; }
+/* шапка машины — тот же состав, что у одно-фермерской (бейдж · даты · хват),
+   без переноса; +1px сверху компенсирует скрытый .card-strip */
+.mcard .card-top { padding-top: 10px; }
 .frows { display: flex; flex-direction: column; border: 1px solid var(--hairline); border-radius: 7px; overflow: hidden; }
 .frow { display: flex; align-items: center; gap: 8px; padding: 6px 9px; font-size: 12.5px; letter-spacing: -0.01em; }
 .frow + .frow { border-top: 1px solid var(--hairline); }
@@ -957,15 +953,17 @@ table.hm th, table.hm td { border-bottom: 1px solid var(--hairline); }
 .btn-disassemble:hover:not(:disabled) { background: var(--canvas-soft); color: var(--ink); border-color: var(--hairline-strong); }
 .btn-disassemble:disabled { opacity: .5; cursor: not-allowed; }
 
-/* sent — маркер «перенос только прибытия» */
+/* sent — маркер «перенос только прибытия». На узкой колонке чип сжимается и переносит
+   подпись (min-width:auto не пускает ниже min-content → текст не режется), высота растёт
+   от min-height: в одну строку вид прежний, в две — чип выше. */
 .arronly {
-  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
-  height: 21px; padding: 0 7px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 21px; padding: 2px 7px; border-radius: 6px;
   border: 1px dashed color-mix(in srgb, var(--link) 40%, var(--hairline));
   background: color-mix(in srgb, var(--link) 6%, var(--canvas));
   font-family: "Geist Mono", monospace; font-size: 10px; letter-spacing: 0; color: #0761d1;
 }
-.arronly svg { width: 11px; height: 11px; }
+.arronly svg { width: 11px; height: 11px; flex-shrink: 0; }
 
 /* призрак под курсором при переносе */
 .drag-ghost {
