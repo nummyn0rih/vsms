@@ -390,27 +390,21 @@ function MachineCard({
       } ${isDragging ? "dragging" : ""}`}
       onClick={() => onOpen(card.shipmentId)}
     >
+      {/* строка 1: метка машины + статус (бейдж — при любом статусе) */}
       <div className="card-top">
         <span className="mtag">
           <Truck />
           Машина
         </span>
-        {card.arrivalOnly ? (
-          <span className={`badge s-${card.status}`} style={{ marginLeft: "auto" }}>
-            <span className="dot" />
-            {STATUS_LABEL[card.status]}
-          </span>
-        ) : (
-          <>
-            <Dates card={card} />
-            {handle}
-          </>
-        )}
+        <span className={`badge s-${card.status}`}>
+          <span className="dot" />
+          {STATUS_LABEL[card.status]}
+        </span>
       </div>
 
-      {/* sent: маркер «перенос только прибытия» + даты/хват во второй строке */}
-      {card.arrivalOnly && (
-        <div className="card-top" style={{ paddingTop: 7 }}>
+      {/* строка 2: даты и хват всегда; sent — ещё маркер «перенос только прибытия» */}
+      <div className="card-top" style={{ paddingTop: 7 }}>
+        {card.arrivalOnly && (
           <span
             className="arronly"
             title="Перенос меняет только дату прибытия — отправление зафиксировано"
@@ -418,10 +412,10 @@ function MachineCard({
             <RefreshCcw />
             перенос: только прибытие
           </span>
-          <Dates card={card} />
-          {handle}
-        </div>
-      )}
+        )}
+        <Dates card={card} />
+        {handle}
+      </div>
 
       <div className="card-body">
         <div className="farmers-line">
