@@ -388,6 +388,23 @@
   Спека — `PROMPTS-SETTLEMENT-ADJUSTMENT.md`, проверки — `scripts/settlement-verify.ts` (24 ok) и
   `scripts/settlement-rbac-verify.ts` (17 ok). ⚠ На прод — с `pg_dump` ДО деплоя (первая прод-миграция после запуска).
 
+- [x] **settlement-sheet** — вкладка «Расчёты» на карточке поставщика: свод по строкам контракта с раскрытием
+  по партиям, за сезон или период. **Миграции нет, новых формул нет** — те же `computeAcceptedKg`,
+  `computeSettlement`, `attribute*ToLines`, `lineExecution`, поэтому за сезон лист сходится с карточкой контракта
+  в ноль. Чистая часть `execution.ts` вынесена в **`server/contracts/execution-core.ts`** (prisma-free, ре-экспорт
+  из `execution.ts` → существующие импорты не тронуты) — иначе ядро листа не покрыть юнит-тестами.
+  Ядро — `server/farmers/settlement-agg.ts` + client-safe `settlement-period.ts`, загрузчик — `settlement.ts`
+  (без арифметики, `requireRole()`), считается ЛЕНИВО при `?tab=settlement`.
+  **Два скоупа в одном листе:** деньги и веса — за период, «Заявлено»/«Выполнение»/«Осталось» — всегда за сезон
+  (`volume_tons` задан на сезон). **Sentinel-разбиение** (`UNBOUND_LINE = -1`) гарантирует, что ни один
+  оплачиваемый килограмм не потерян: `∈ lineMap` → строки листа, `-1` → «без привязки», прочее → «строка вне
+  листа» (чужой контракт/сезон). Плюс блок «Ожидают приёмки» (позиции без акта — иначе молча исчезали).
+  Период — в URL (`?period=season|month|week|custom&from=&to=`), стрелки `‹ ›` сдвигают месяц/неделю.
+  Экспорт/печать — вне среза. Проверки: `server/farmers/settlement-agg.test.ts` (39 тестов) и
+  `scripts/settlement-sheet-verify.ts` (11 ok, read-only на dev-БД: построчная сверка с `getContractExecution`,
+  итоги против `getFarmerCard`, Σ по 12 месяцам = сезон, полнота разбиения, RBAC).
+  Спека — `PROMPTS-SETTLEMENT-SHEET.md`.
+
 ---
 
 ## Этап G — Поздние задачи
