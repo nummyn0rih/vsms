@@ -60,6 +60,7 @@ export const NAV: NavItem[] = [
       { href: "/settings/opening-stock", label: "Начальные остатки", enabled: true },
       { href: "/settings/recipes", label: "Рецептуры", enabled: true },
       { href: "/settings/alert-rules", label: "Пороги алертов", enabled: true },
+      { href: "/settings/changelog", label: "Журнал изменений", enabled: true },
     ],
   },
 ];
