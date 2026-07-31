@@ -36,6 +36,15 @@ import {
 // Radix Select не допускает value="" — сентинел для «— не в зачёт».
 const NONE = "__none__";
 
+// Дефолт привязки к строке контракта (BR-10): строка позиции отгрузки → иначе
+// единственная строка контракта → иначе пусто. Один источник для simple-поля и для
+// привязок принятых калибр-категорий (см. AcceptanceActDialog).
+function defaultLineOf(ctx: ActContext): string {
+  if (ctx.itemLineId != null) return String(ctx.itemLineId);
+  if (ctx.autoLineId != null) return String(ctx.autoLineId);
+  return "";
+}
+
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
@@ -77,6 +86,9 @@ export function MobileActDialog({
   const router = useRouter();
   const isCalibre = context.acceptanceType === "calibre";
 
+  // Появился акт → поле веса read-only (то же правило, что в AcceptanceActDialog):
+  // расход ингредиентов уже списан по этому весу, правку отклоняет setActualWeight.
+  const weightLocked = context.existing != null;
   const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
   const [weightStr, setWeightStr] = useState(
     context.actualKg != null ? String(context.actualKg) : "",
@@ -89,23 +101,16 @@ export function MobileActDialog({
     context.existing ? String(context.existing.brakPercent) : "",
   );
 
+  // simple: приоритет — сохранённая в акте строка → дефолт (BR-10).
   const [lineId, setLineId] = useState<string>(
     context.existing?.contractLineId != null
       ? String(context.existing.contractLineId)
-      : context.autoLineId != null
-        ? String(context.autoLineId)
-        : "",
+      : defaultLineOf(context),
   );
+  // Плашка «авто» — только когда выбрана именно единственная сезонная строка.
+  const lineAuto = context.autoLineId != null && lineId === String(context.autoLineId);
 
-  const defaultBind = useMemo(
-    () =>
-      context.itemLineId != null
-        ? String(context.itemLineId)
-        : context.autoLineId != null
-          ? String(context.autoLineId)
-          : "",
-    [context.itemLineId, context.autoLineId],
-  );
+  const defaultBind = defaultLineOf(context);
   const existingCal = useMemo(
     () => new Map(context.existing?.calibres.map((c) => [c.calibreRangeId, c]) ?? []),
     [context.existing],
@@ -122,12 +127,14 @@ export function MobileActDialog({
     const o: Record<number, string> = {};
     for (const r of context.calibreRanges) {
       const ex = existingCal.get(r.id);
-      o[r.id] =
-        ex?.contractLineId != null
-          ? String(ex.contractLineId)
-          : r.isAccepted
-            ? defaultBind || NONE
-            : NONE;
+      if (ex) {
+        // Сохранённый акт показывает СВОИ привязки, включая явное «— не в зачёт» (null).
+        o[r.id] = ex.contractLineId != null ? String(ex.contractLineId) : NONE;
+        continue;
+      }
+      // Дефолт — только принятым: нестандарт со строкой + settlement_percent = двойной
+      // счёт (гард BR-33×C3d-2).
+      o[r.id] = r.isAccepted ? defaultBind || NONE : NONE;
     }
     return o;
   });
@@ -416,23 +423,37 @@ export function MobileActDialog({
           </div>
           <div className="act-field">
             <div className="act-field-lab">Факт. вес</div>
-            <div className="act-input">
-              <input
-                inputMode="decimal"
-                value={weightDisplay}
-                onFocus={() => {
-                  setWeightEditing(true);
-                  setWeightStr(savedWeight != null ? String(savedWeight) : "");
-                }}
-                onChange={(e) => setWeightStr(e.target.value)}
-                onBlur={commitWeight}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                }}
-                placeholder="не перевешивали"
-              />
-              <span className="u">кг</span>
-            </div>
+            {weightLocked ? (
+              <>
+                <div className="act-input readonly">
+                  <span className="tabular-nums">
+                    {savedWeight != null ? formatWeight(savedWeight) : "—"}
+                  </span>
+                  <span className="u">кг</span>
+                </div>
+                <p className="mt-1.5 text-[11.5px] leading-4 text-[#888888]">
+                  Вес зафиксирован актом. Чтобы изменить — откатите приёмку позиции.
+                </p>
+              </>
+            ) : (
+              <div className="act-input">
+                <input
+                  inputMode="decimal"
+                  value={weightDisplay}
+                  onFocus={() => {
+                    setWeightEditing(true);
+                    setWeightStr(savedWeight != null ? String(savedWeight) : "");
+                  }}
+                  onChange={(e) => setWeightStr(e.target.value)}
+                  onBlur={commitWeight}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  }}
+                  placeholder="не перевешивали"
+                />
+                <span className="u">кг</span>
+              </div>
+            )}
           </div>
           {!isCalibre && (
             <div className="act-field">
@@ -535,7 +556,7 @@ export function MobileActDialog({
         ) : (
           <div className="act-block">
             <div className="act-block-lab">Строка контракта</div>
-            {context.autoLineId != null ? (
+            {lineAuto ? (
               <div className="act-input readonly">
                 <span className="truncate">
                   {priceLabel(context.contractLines[0], context.cultureName)}

@@ -30,6 +30,7 @@ import {
   parseDateUTC,
   seasonYearOf,
   subtractWorkdays,
+  todayLocalISO,
   weekdayName,
 } from "./workdays";
 
@@ -241,7 +242,7 @@ export async function createWholeMachines(
     }
 
     // Каждый день: не в прошлом + рабочий день завода. departure = прибытие − 2 раб. дня.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocalISO();
     const cfgBySeason = new Map<number, Awaited<ReturnType<typeof prisma.seasonConfig.findUnique>>>();
     const plan: { arrival: string; departure: string }[] = [];
     for (const day of days) {

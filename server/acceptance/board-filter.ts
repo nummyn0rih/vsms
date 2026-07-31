@@ -22,9 +22,10 @@ type Row = {
   farmerName: string;
   cultureName: string;
   color: string;
+  actNumber: string | null;
 };
 
-function rowsOf(m: AcceptanceMachine | AcceptedMachine): Row[] {
+export function rowsOf(m: AcceptanceMachine | AcceptedMachine): Row[] {
   return "items" in m ? m.items : m.positions;
 }
 
@@ -44,14 +45,18 @@ function machineVisible<M extends AcceptanceMachine | AcceptedMachine>(
     return false;
   if (f.cultureSel.size && !rows.some((r) => f.cultureSel.has(r.cultureId)))
     return false;
+  // Оси поиска: водитель · ТК · фермер · культура · № акта. Кода машины здесь НЕТ —
+  // это внутренний идентификатор БД, на экране он не показывается.
   if (q) {
     const hit =
-      m.code.toLowerCase().includes(q) ||
       (m.driverName?.toLowerCase().includes(q) ?? false) ||
+      (m.transportCompanyName?.toLowerCase().includes(q) ?? false) ||
       rows.some(
         (r) =>
           r.farmerName.toLowerCase().includes(q) ||
-          r.cultureName.toLowerCase().includes(q),
+          r.cultureName.toLowerCase().includes(q) ||
+          // № акта хранится с сезонным префиксом («2026-42») — includes ловит и «42».
+          (r.actNumber?.toLowerCase().includes(q) ?? false),
       );
     if (!hit) return false;
   }

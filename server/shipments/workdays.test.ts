@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   compareIsoWeek,
+  FACTORY_TZ,
   formatWeekParam,
   isFactoryWorkday,
   isoWeek,
@@ -11,6 +12,7 @@ import {
   seasonWeekBounds,
   seasonYearOf,
   subtractWorkdays,
+  todayLocalISO,
   weekdayName,
   workdaysOfWeek,
   type SeasonWorkdays,
@@ -47,6 +49,60 @@ describe("parseDateUTC — UTC-дисциплина", () => {
     // сместилась бы на субботу, и isFactoryWorkday вернул бы true.
     expect(weekdayName(parseDateUTC("2026-07-05"))).toBe("воскресенье");
     expect(weekdayName(parseDateUTC("2026-07-04"))).toBe("суббота");
+  });
+});
+
+describe("todayLocalISO — заводская TZ (П-10)", () => {
+  // Морозим время: без этого тест зависел бы от момента запуска. tz передаём ЯВНО —
+  // машина разработчика уже в Europe/Moscow, и проверка на TZ рантайма прошла бы
+  // вхолостую, ничего не доказав.
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+  function freeze(iso: string) {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(iso));
+  }
+
+  it("00:30 по местному времени, когда в UTC ещё вчера — берётся местная дата", () => {
+    freeze("2026-08-01T21:30:00Z"); // 00:30 МСК 2 августа
+    expect(todayLocalISO("Europe/Moscow")).toBe("2026-08-02");
+    // Ровно то, что делал старый код (new Date().toISOString().slice(0,10)) — ещё вчера.
+    expect(todayLocalISO("UTC")).toBe("2026-08-01");
+  });
+
+  it("22:30Z — тоже уже следующие сутки в Москве", () => {
+    freeze("2026-08-01T22:30:00Z");
+    expect(todayLocalISO("Europe/Moscow")).toBe("2026-08-02");
+  });
+
+  it("днём смещения нет — обе зоны дают один день", () => {
+    freeze("2026-08-01T12:00:00Z");
+    expect(todayLocalISO("Europe/Moscow")).toBe("2026-08-01");
+    expect(todayLocalISO("UTC")).toBe("2026-08-01");
+  });
+
+  it("отрицательное смещение сдвигает дату назад", () => {
+    freeze("2026-08-01T02:00:00Z"); // 22:00 31 июля в Нью-Йорке
+    expect(todayLocalISO("America/New_York")).toBe("2026-07-31");
+  });
+
+  it("однозначные месяц и день паддятся до двух цифр", () => {
+    freeze("2026-01-05T12:00:00Z");
+    expect(todayLocalISO("Europe/Moscow")).toBe("2026-01-05");
+    expect(todayLocalISO("Europe/Moscow")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it("дефолт зоны = FACTORY_TZ (Europe/Moscow), молча не уедет", () => {
+    freeze("2026-08-01T21:30:00Z");
+    expect(FACTORY_TZ).toBe("Europe/Moscow");
+    expect(todayLocalISO()).toBe(todayLocalISO(FACTORY_TZ));
+    expect(todayLocalISO()).toBe("2026-08-02");
+  });
+
+  it("результат парсится parseDateUTC в UTC-полночь — формат хранения не сломан", () => {
+    freeze("2026-08-01T21:30:00Z");
+    expect(parseDateUTC(todayLocalISO()).toISOString()).toBe("2026-08-02T00:00:00.000Z");
   });
 });
 

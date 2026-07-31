@@ -20,6 +20,34 @@ export function parseDateUTC(s: string): Date {
   return new Date(`${s}T00:00:00Z`);
 }
 
+// Заводская таймзона; менять здесь. Все «какое сегодня число» считаются в ней — иначе
+// сервер (на Vercel это UTC) и браузер расходятся в дате с 00:00 до 03:00 МСК.
+export const FACTORY_TZ = "Europe/Moscow";
+
+// Конструктор Intl.DateTimeFormat не бесплатный, а зон в проекте одна-две.
+const dateFmtCache = new Map<string, Intl.DateTimeFormat>();
+
+/**
+ * Сегодняшняя дата в заданной зоне, YYYY-MM-DD. Это НЕ формат хранения: даты в БД
+ * остаются UTC-полуночью (см. parseDateUTC), меняется только вычисление «какое сегодня
+ * число». formatToParts — чтобы порядок частей не зависел от локали рантайма.
+ */
+export function todayLocalISO(tz: string = FACTORY_TZ): string {
+  let fmt = dateFmtCache.get(tz);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dateFmtCache.set(tz, fmt);
+  }
+  const parts = fmt.formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
 // season_year = год начала сезона (июнь, BR-17). Месяц >= июнь → год даты, иначе год−1.
 export function seasonYearOf(date: Date): number {
   const month = date.getUTCMonth(); // 0=янв … 5=июнь

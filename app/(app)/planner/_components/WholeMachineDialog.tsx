@@ -10,6 +10,7 @@ import {
   createWholeMachines,
   getTripWeightNorm,
 } from "@/server/shipments/actions";
+import { todayLocalISO } from "@/server/shipments/workdays";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,9 +40,6 @@ const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   month: "short",
   timeZone: "UTC",
 });
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function WholeMachineDialog({
   options,
@@ -250,7 +248,7 @@ export function WholeMachineDialog({
             <Label className="text-xs">Дни недели (рабочие)</Label>
             <div className="flex flex-wrap gap-2">
               {columns.map((col) => {
-                const past = col.dateISO < todayISO();
+                const past = col.dateISO < todayLocalISO();
                 const checked = selectedDays.has(col.dateISO);
                 return (
                   <button

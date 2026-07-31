@@ -279,6 +279,20 @@ async function main() {
       spyCount("stockMovement") === 0,
       `вызовы: ${spyCalls().join(", ") || "—"}`,
     );
+    // audit-w5b: справочники имён нужны ТОЛЬКО для рендера строк панели. Нет правил —
+    // нечего именовать; до правки listAlertRules тянул их всегда (4 запроса на каждую
+    // навигацию по (app), т.к. getActiveAlerts висит на layout).
+    const dictCalls = spyCount("packagingType") + spyCount("ingredient") + spyCount("farmer");
+    check(
+      "справочники имён не читались",
+      dictCalls === 0,
+      `вызовы: ${spyCalls().join(", ") || "—"}`,
+    );
+    check(
+      "на всю ветку ровно один запрос — сами правила",
+      spyCalls().length === 1 && spyCalls()[0] === "alertRule.findMany",
+      `${spyCalls().length}: ${spyCalls().join(", ") || "—"}`,
+    );
     const guardOps = [...new Set(spyCalls())].join(", ") || "—";
     console.log(`  всего запросов на этой ветке: ${spyCalls().length} (${guardOps})`);
 

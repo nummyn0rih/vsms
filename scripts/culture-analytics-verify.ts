@@ -6,7 +6,10 @@
 // ТОЛЬКО ту же выборку + агрегатор.
 import "dotenv/config";
 import { prisma } from "../lib/prisma";
-import { aggregateCultureItems, type CultureItem } from "../server/analytics/culture";
+import {
+  aggregateCultureItems,
+  type CultureItem,
+} from "../server/analytics/culture-agg";
 import { calibreRangeLabel } from "../server/acceptance/accepted";
 import { seasonYearOf } from "../server/shipments/workdays";
 
@@ -36,6 +39,7 @@ function item(p: Partial<CultureItem> & { actualKg: number | null }): CultureIte
     arrival: p.arrival ?? W,
     actualKg: p.actualKg,
     brakPercent: p.brakPercent ?? null,
+    settlementPercent: p.settlementPercent ?? null,
     calibres: p.calibres ?? [],
   };
 }
@@ -160,6 +164,82 @@ function pureCases() {
       a.calibre.length === 0 &&
       a.weekTons.size === 0,
   );
+
+  // --- BR-33: оплачиваемый вес поставщика («К оплате») ---
+  // Ф1 с корректировкой: факт 9850, брак 9% → принято 91% = 8963,5; settlement 95% →
+  // доплата 4% факта = 394 → к оплате 9357,5. Ф2 без корректировки → к оплате = принято.
+  a = aggregateCultureItems([
+    item({ actualKg: 9850, brakPercent: 9, settlementPercent: 95, farmerId: 1 }),
+    item({ actualKg: 5000, brakPercent: 0, farmerId: 2, farmerName: "Ф2", shipmentId: 2 }),
+  ]);
+  const s1 = a.bySupplier.find((s) => s.farmerId === 1)!;
+  const s2 = a.bySupplier.find((s) => s.farmerId === 2)!;
+  check(
+    "BR-33: к оплате = принятый + доплата (9357,5 кг)",
+    near(s1.acceptedKg, 8963.5, 1e-9) && near(s1.paidKg, 8963.5 + 394, 1e-9),
+  );
+  check("без корректировки к оплате = принято", near(s2.paidKg, s2.acceptedKg, 1e-9));
+  check(
+    "Σ к оплате = paidKgTotal",
+    near(a.bySupplier.reduce((s, r) => s + r.paidKg, 0), a.paidKgTotal, 1e-9),
+  );
+  check(
+    "доплата НЕ попала в принятое (тонны выполнения не растут)",
+    near(a.acceptedKgTotal, 8963.5 + 5000, 1e-9),
+  );
+
+  // settlement НЕ выше принятого % → доплаты нет
+  a = aggregateCultureItems([
+    item({ actualKg: 10000, brakPercent: 5, settlementPercent: 90 }),
+  ]);
+  check(
+    "settlement ниже принятого % → к оплате = принято",
+    near(a.paidKgTotal, a.acceptedKgTotal, 1e-9),
+  );
+
+  // --- Доли категорий по поставщику (колонка «% категорий») ---
+  a = aggregateCultureItems([
+    item({
+      actualKg: 10000,
+      brakPercent: 8,
+      farmerId: 1,
+      calibres: [
+        { label: "станд.", isAccepted: true, percent: 50 },
+        { label: "мелкий", isAccepted: true, percent: 30 },
+        { label: "не в зачёт", isAccepted: false, percent: 12 },
+      ],
+    }),
+    item({
+      actualKg: 10000,
+      brakPercent: 0,
+      farmerId: 2,
+      farmerName: "Ф2",
+      shipmentId: 2,
+      calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
+    }),
+  ]);
+  const c1 = a.bySupplier.find((s) => s.farmerId === 1)!.categoryPct;
+  const c2 = a.bySupplier.find((s) => s.farmerId === 2)!.categoryPct;
+  check(
+    "категории поставщика 1: 50/30/12 + брак 8, Σ = 100%",
+    c1.length === 4 && near(c1.reduce((s, c) => s + c.pct, 0), 100),
+  );
+  check(
+    "категории поставщика 2 не смешались с первым (100% стандарт)",
+    c2.length === 1 && near(c2[0].pct, 100),
+  );
+
+  // simple-культура: категорий нет → «Принято» + «Брак» = 100% факта
+  a = aggregateCultureItems([item({ actualKg: 10000, brakPercent: 4 })]);
+  const cs = a.bySupplier[0].categoryPct;
+  check(
+    "simple: «Принято» 96% + «Брак» 4% = 100%",
+    cs.length === 2 &&
+      cs[0].label === "Принято" &&
+      near(cs[0].pct, 96) &&
+      cs[1].label === "Брак" &&
+      near(cs[1].pct, 4),
+  );
 }
 
 // ===== B. Сверка на реальной выборке (rolled-back seed) =====
@@ -191,6 +271,7 @@ async function seedCase() {
       actualKg: number,
       arrival: Date,
       cats: { rangeId: number; percent: number }[],
+      settlementPercent?: number, // BR-33: % к оплате от факта
     ) {
       const s = await tx.shipment.create({
         data: {
@@ -211,7 +292,13 @@ async function seedCase() {
         },
       });
       const act = await tx.acceptanceAct.create({
-        data: { shipment_item_id: it.id, act_number: `${season}-${code}`, brak_percent: "0" },
+        data: {
+          shipment_item_id: it.id,
+          act_number: `${season}-${code}`,
+          brak_percent: "0",
+          settlement_percent:
+            settlementPercent == null ? null : String(settlementPercent),
+        },
       });
       for (const c of cats) {
         await tx.calibreResult.create({
@@ -224,11 +311,19 @@ async function seedCase() {
       }
     }
 
-    // Ф1: 10 т (80% стандарт / 20% нестандарт), Ф2: 5 т (100% стандарт), другая неделя.
-    await accepted("CA-A", f1.id, 10000, W, [
-      { rangeId: rStd.id, percent: 80 },
-      { rangeId: rOut.id, percent: 20 },
-    ]);
+    // Ф1: 10 т (80% стандарт / 20% нестандарт) + корректировка расчёта 85% (BR-33),
+    // Ф2: 5 т (100% стандарт) без корректировки, другая неделя.
+    await accepted(
+      "CA-A",
+      f1.id,
+      10000,
+      W,
+      [
+        { rangeId: rStd.id, percent: 80 },
+        { rangeId: rOut.id, percent: 20 },
+      ],
+      85,
+    );
     await accepted("CA-B", f2.id, 5000, W_NEXT, [{ rangeId: rStd.id, percent: 100 }]);
 
     // ТА ЖЕ форма выборки, что в getCultureAnalytics (секция 1).
@@ -242,6 +337,7 @@ async function seedCase() {
         acceptanceAct: {
           select: {
             brak_percent: true,
+            settlement_percent: true,
             calibreResults: {
               select: {
                 percent: true,
@@ -268,6 +364,9 @@ async function seedCase() {
         actualKg: it.actual_weight_kg ? it.actual_weight_kg.toNumber() : null,
         brakPercent: it.acceptanceAct!.brak_percent
           ? it.acceptanceAct!.brak_percent.toNumber()
+          : null,
+        settlementPercent: it.acceptanceAct!.settlement_percent
+          ? it.acceptanceAct!.settlement_percent.toNumber()
           : null,
         calibres: it.acceptanceAct!.calibreResults.map((cr) => ({
           label: calibreRangeLabel(
@@ -304,6 +403,22 @@ async function seedCase() {
     check("подпись размерной категории «6–9 см»", a.calibre[0].label === "6–9 см");
     check("брак 0% (акты без брака, но с весом)", near(a.avgBrakPct, 0));
     check("две недели прибытия", a.weekTons.size === 2);
+
+    // BR-33 из БД: Ф1 принято 8000 (80%), settlement 85% → доплата 5% = 500 → к оплате 8500.
+    // Ф2 без корректировки → к оплате = принято. Доплата в принятое НЕ попадает.
+    const sA = a.bySupplier.find((s) => s.acceptedKg === 8000);
+    const sB = a.bySupplier.find((s) => s.acceptedKg === 5000);
+    check(
+      "BR-33 из БД: к оплате Ф1 = 8500, Ф2 = 5000",
+      sA != null && sB != null && near(sA.paidKg, 8500) && near(sB.paidKg, 5000),
+    );
+    check("принято не выросло на доплату (13 т)", near(a.acceptedKgTotal, 13000));
+    check(
+      "категории Ф1 из БД: 80/20, Σ = 100%",
+      sA != null &&
+        sA.categoryPct.length === 2 &&
+        near(sA.categoryPct.reduce((s, c) => s + c.pct, 0), 100),
+    );
 
     throw new Error(ROLLBACK);
   }, { maxWait: 30_000, timeout: 60_000 }).catch((e: unknown) => {

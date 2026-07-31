@@ -1118,15 +1118,29 @@ a.an-cbar:hover { background: var(--canvas-soft); text-decoration: none; }
 .an-stbl thead th { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 10px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--mute); font-weight: 400; text-align: right; padding: 0 0 10px; border-bottom: 1px solid var(--hairline); }
 .an-stbl th.l, .an-stbl td.l { text-align: left; }
 .an-stbl th + th, .an-stbl td + td { padding-left: 20px; }
-.an-stbl th.share, .an-stbl td.share { padding-left: 36px; }
-.an-stbl th.num, .an-stbl td.num { width: 120px; }
+.an-stbl th.scol, .an-stbl td.scol { padding-left: 24px; width: 150px; }
+/* .cats/.scol задают padding-left сами: шорткат `padding: 11px 0` у tbody td обнуляет
+   отступ из `td + td`, а этим двум колонкам зазор нужен (в них не числа, а графика). */
+.an-stbl th.cats, .an-stbl td.cats { padding-left: 24px; width: 210px; }
+.an-stbl th.num, .an-stbl td.num { width: 92px; }
 .an-stbl tbody td { padding: 11px 0; border-bottom: 1px solid var(--hairline); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .an-stbl .farmer { display: inline-flex; align-items: center; gap: 9px; min-width: 0; }
 .an-stbl .farmer .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.an-stbl .sharebar { display: grid; grid-template-columns: 1fr 40px; align-items: center; gap: 10px; max-width: 190px; }
-.an-stbl .sharebar .trk { height: 7px; border-radius: 4px; background: var(--an-track); overflow: hidden; position: relative; }
-.an-stbl .sharebar .fl { display: block; height: 100%; border-radius: 4px; }
-.an-stbl .sharebar .pc { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 11px; color: var(--body); text-align: right; }
+/* ⚠ НЕ переименовывать .an-share обратно в .sharebar и .scol в .share: generic-фильтр
+   ##.sharebar из социальных списков EasyList/Fanboy (uBlock Origin, AdGuard) вешал на ячейку
+   display:none — на деплоях колонка «Доля в культуре» была пустой, на localhost работала.
+   Любые новые имена классов проверять на совпадение с фильтрами блокировщиков. */
+.an-stbl .an-share { display: grid; grid-template-columns: 1fr 40px; align-items: center; gap: 10px; max-width: 140px; }
+.an-stbl .an-share .trk { height: 7px; border-radius: 4px; background: var(--an-track); overflow: hidden; position: relative; }
+.an-stbl .an-share .fl { display: block; height: 100%; border-radius: 4px; }
+.an-stbl .an-share .pc { font-family: var(--font-mono), "Geist Mono", monospace; font-size: 11px; color: var(--body); text-align: right; }
+/* мини-стек долей категорий (колонка «% категорий») — миниатюра .an-calbar */
+.an-stbl .catmini { display: flex; flex-direction: column; gap: 4px; max-width: 190px; }
+.an-stbl .catmini .bar { display: flex; height: 9px; border-radius: 3px; overflow: hidden; border: 1px solid var(--hairline); background: var(--an-track); }
+.an-stbl .catmini .bar .seg { display: block; height: 100%; }
+.an-stbl .catmini .bar .seg.reject { background: repeating-linear-gradient(45deg, var(--an-brak) 0 4px, var(--an-brak-deep) 4px 8px); }
+.an-stbl .catmini .leg { display: flex; flex-wrap: wrap; gap: 2px 8px; font-family: var(--font-mono), "Geist Mono", monospace; font-size: 10px; line-height: 13px; color: var(--mute); letter-spacing: 0; }
+.an-stbl .catmini .leg .hi { color: var(--an-brak-deep); }
 .an-stbl .brak-v { color: var(--body); }
 .an-stbl .brak-v.hi { color: var(--an-brak-deep); font-weight: 500; }
 .an-stbl tfoot td { padding: 11px 0 2px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em; border-top: 2px solid var(--hairline); }

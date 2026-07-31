@@ -52,8 +52,13 @@ export async function listOptions(): Promise<{
 
 export async function listAlertRules(): Promise<AlertRuleRow[]> {
   await requireRole();
-  const [rules, packaging, ingredients, farmers] = await Promise.all([
-    prisma.alertRule.findMany({ orderBy: { id: "desc" } }),
+  // Зовётся из getActiveAlerts на layout (app), т.е. на КАЖДОЙ навигации. Справочники
+  // нужны только чтобы подставить имена в строки панели дефицита: нет правил — нечего
+  // именовать, и три запроса не делаем.
+  const rules = await prisma.alertRule.findMany({ orderBy: { id: "desc" } });
+  if (rules.length === 0) return [];
+
+  const [packaging, ingredients, farmers] = await Promise.all([
     prisma.packagingType.findMany({ select: { id: true, name: true } }),
     prisma.ingredient.findMany({ select: { id: true, name: true } }),
     prisma.farmer.findMany({ select: { id: true, name: true } }),

@@ -7,7 +7,12 @@ import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
-import { parseDateUTC, seasonYearOf, subtractWorkdays } from "@/server/shipments/workdays";
+import {
+  parseDateUTC,
+  seasonYearOf,
+  subtractWorkdays,
+  todayLocalISO,
+} from "@/server/shipments/workdays";
 import { getBoardWeek } from "./board";
 import type { BoardWeek } from "./schema";
 
@@ -47,7 +52,7 @@ export async function moveShipmentToDay(
     if (Number.isNaN(target.getTime())) {
       return { ok: false, error: "Некорректная дата" };
     }
-    if (targetDateISO < isoOf(new Date())) {
+    if (targetDateISO < todayLocalISO()) {
       return { ok: false, error: "Нельзя переносить в прошлый день" };
     }
 

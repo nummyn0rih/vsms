@@ -3,7 +3,7 @@ import dns from "node:dns";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { logChange } from "../server/changelog";
-import { parseDateUTC } from "../server/shipments/workdays";
+import { parseDateUTC, todayLocalISO } from "../server/shipments/workdays";
 
 // acceptance auto-date: фактическая дата прибытия пишется в Shipment.arrival_date.
 // Реплицируем ТРАНЗАКЦИОННЫЕ ТЕЛА markArrived/setActualWeight (requireRole не зовём —
@@ -21,7 +21,9 @@ class Rollback extends Error {}
 type Tx = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
 const SHIPMENT = "Shipment";
-const today = new Date().toISOString().slice(0, 10);
+// Как в setActualWeight: «сегодня» в заводской зоне, иначе ночью (00:00–03:00 МСК)
+// скрипт сравнивал бы UTC-вчера с локальным сегодня и падал ложным fail.
+const today = todayLocalISO();
 
 let pass = 0;
 let fail = 0;

@@ -1,16 +1,11 @@
 import { fmtPct1, fmtTons } from "@/lib/format";
 
+import { shade } from "./calibreColors";
+
 type Cat = { label: string; isAccepted: boolean; pct: number; tons: number };
 
 // Сегмент уже слишком узкий для подписи внутри полосы — только легенда.
 const MIN_LABEL_PCT = 12;
-
-// Оттенок принятой категории: чем дальше по списку, тем светлее (структура партии читается
-// одной полосой). Нестандарт — штриховка янтарём (класс .reject).
-function shade(color: string, index: number): string {
-  const mix = Math.max(30, 100 - index * 26);
-  return `color-mix(in srgb, ${color} ${mix}%, #ffffff)`;
-}
 
 export function CalibreStack({ data, color }: { data: Cat[]; color: string }) {
   if (data.length === 0) {

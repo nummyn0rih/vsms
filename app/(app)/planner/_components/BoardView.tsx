@@ -38,6 +38,7 @@ import {
 } from "@/server/shipments/actions";
 import { moveShipmentToDay } from "@/server/board/actions";
 import { formatTareTotals } from "@/server/shipments/format";
+import { todayLocalISO } from "@/server/shipments/workdays";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { useRole } from "@/components/auth/RoleProvider";
 import {
@@ -82,9 +83,6 @@ function parse(dateStr: string): Date {
 function shortWeekday(dateStr: string): string {
   return WEEKDAY_SHORT[(parse(dateStr).getUTCDay() + 6) % 7];
 }
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 // Тонны всегда с 1 знаком (прогресс-бар): «19,0», «−1,8»
 function tons1(n: number): string {
   return n.toFixed(1).replace(".", ",");
@@ -126,7 +124,7 @@ function chipStyle(color: string): React.CSSProperties {
 function canDrop(card: BoardCard | null, targetISO: string): boolean {
   if (!card || !card.draggable) return false;
   if (card.arrivalDate === targetISO) return false; // та же колонка — no-op
-  if (targetISO < todayISO()) return false; // прошлый день
+  if (targetISO < todayLocalISO()) return false; // прошлый день
   // sent: отправление зафиксировано, прибытие не может быть раньше/равно ему
   if (card.arrivalOnly && card.departureDate && targetISO <= card.departureDate) return false;
   return true;
