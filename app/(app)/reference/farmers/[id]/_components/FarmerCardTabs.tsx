@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const TABS = ["main", "contracts", "shipments", "balances"] as const;
+const TABS = ["main", "contracts", "settlement", "shipments", "balances"] as const;
 type TabValue = (typeof TABS)[number];
 
 // Вкладки карточки фермера: активная — в URL (?tab=), без localStorage (конвенция
@@ -13,11 +13,13 @@ type TabValue = (typeof TABS)[number];
 export function FarmerCardTabs({
   mainPanel,
   contractsPanel,
+  settlementPanel,
   shipmentsPanel,
   balancesPanel,
 }: {
   mainPanel: ReactNode;
   contractsPanel: ReactNode;
+  settlementPanel: ReactNode;
   shipmentsPanel: ReactNode;
   balancesPanel: ReactNode;
 }) {
@@ -41,6 +43,7 @@ export function FarmerCardTabs({
       <TabsList variant="line" className="h-auto flex-wrap justify-start border-b pb-0">
         <TabsTrigger value="main">Основное + контакты</TabsTrigger>
         <TabsTrigger value="contracts">Контракты</TabsTrigger>
+        <TabsTrigger value="settlement">Расчёты</TabsTrigger>
         <TabsTrigger value="shipments">Отгрузки</TabsTrigger>
         <TabsTrigger value="balances">Тара / ингредиенты</TabsTrigger>
         <TabsTrigger value="quality" disabled title="Появится в v2">
@@ -58,6 +61,7 @@ export function FarmerCardTabs({
       </TabsList>
       <TabsContent value="main">{mainPanel}</TabsContent>
       <TabsContent value="contracts">{contractsPanel}</TabsContent>
+      <TabsContent value="settlement">{settlementPanel}</TabsContent>
       <TabsContent value="shipments">{shipmentsPanel}</TabsContent>
       <TabsContent value="balances">{balancesPanel}</TabsContent>
     </Tabs>
