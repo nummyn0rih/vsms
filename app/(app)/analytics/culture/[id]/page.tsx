@@ -208,9 +208,11 @@ export default async function CultureAnalyticsPage({
               <SupplierTable
                 rows={data.bySupplier}
                 color={culture.color}
+                totalTargetTons={kpi.targetTons}
                 totalTons={kpi.acceptedTons}
+                totalPaidTons={kpi.paidTons}
                 totalCompletionPct={kpi.completionPct}
-                totalBrakPct={kpi.avgBrakPct}
+                totalCategoryPct={data.categoryPctTotal}
               />
             </div>
           </div>
