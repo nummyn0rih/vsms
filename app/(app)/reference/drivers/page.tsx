@@ -26,7 +26,7 @@ export default async function DriversPage({
   const rows: DriverRow[] = list.map((d) => ({
     id: d.id,
     full_name: d.full_name,
-    phone: d.phone ?? "",
+    phone: d.phone,
     transport_company_id: d.transport_company_id,
     transport_company_name: d.transportCompany?.name ?? null,
     info: d.info,

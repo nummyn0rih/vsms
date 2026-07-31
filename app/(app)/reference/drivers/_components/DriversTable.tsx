@@ -127,7 +127,7 @@ export function DriversTable({
                   {formatPhone(row.phone)}
                 </a>
               ) : (
-                <span className="text-muted-foreground">—</span>
+                <span className="italic text-muted-foreground">номер не указан</span>
               )}
             </TableCell>
             <TableCell>

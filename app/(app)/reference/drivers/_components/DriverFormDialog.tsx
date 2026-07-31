@@ -9,6 +9,7 @@ import { Pencil, Plus } from "lucide-react";
 
 import {
   driverSchema,
+  type DriverFormValues,
   type DriverInput,
   type DriverRow,
   type TransportCompanyOption,
@@ -51,7 +52,9 @@ export function DriverFormDialog({ mode, row, companyOptions }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
-  const form = useForm<DriverInput>({
+  // Третий генерик — тип ПОСЛЕ трансформации схемы (phone: "" → null): его и
+  // получает onSubmit, тогда как поля формы остаются строковыми.
+  const form = useForm<DriverFormValues, unknown, DriverInput>({
     resolver: zodResolver(driverSchema),
     defaultValues: {
       full_name: row?.full_name ?? "",
@@ -95,7 +98,7 @@ export function DriverFormDialog({ mode, row, companyOptions }: Props) {
     if (res.fieldErrors) {
       for (const [field, messages] of Object.entries(res.fieldErrors)) {
         if (messages?.[0]) {
-          form.setError(field as keyof DriverInput, { message: messages[0] });
+          form.setError(field as keyof DriverFormValues, { message: messages[0] });
         }
       }
     } else {
@@ -146,9 +149,14 @@ export function DriverFormDialog({ mode, row, companyOptions }: Props) {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Телефон</FormLabel>
+                  <FormLabel>Телефон (необязательно)</FormLabel>
                   <FormControl>
-                    <Input placeholder="+7 999 123-45-67" {...field} />
+                    {/* value ?? "" — поле остаётся контролируемым: схема допускает null. */}
+                    <Input
+                      placeholder="+7 999 123-45-67"
+                      {...field}
+                      value={field.value ?? ""}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

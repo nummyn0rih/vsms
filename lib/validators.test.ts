@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPhone, normalizePhone, phoneSchema } from "./validators";
+import {
+  formatPhone,
+  normalizePhone,
+  optionalPhoneSchema,
+  phoneSchema,
+} from "./validators";
 
 // Телефоны хранятся как ввели, нормализуются только для href="tel:" и приводятся
 // к единому виду на показе. Формат показа — «+7 XXX XXX-XX-XX».
@@ -57,5 +62,43 @@ describe("phoneSchema", () => {
   it("отклоняет буквы и пустую строку", () => {
     expect(phoneSchema.safeParse("+7 999 ABC-45-67").success).toBe(false);
     expect(phoneSchema.safeParse("").success).toBe(false);
+  });
+});
+
+// Телефон водителя необязателен: «нет номера» = null (не пустая строка), а
+// непустое значение проверяется теми же правилами, что и обязательный phoneSchema.
+describe("optionalPhoneSchema", () => {
+  it("пусто в любом виде → null", () => {
+    for (const input of ["", "   ", undefined, null]) {
+      const res = optionalPhoneSchema.safeParse(input);
+      expect(res.success).toBe(true);
+      expect(res.success && res.data).toBe(null);
+    }
+  });
+
+  it("валидный номер проходит и сохраняется как ввели (без маски trim)", () => {
+    const res = optionalPhoneSchema.safeParse("  +7 (999) 123-45-67  ");
+    expect(res.success).toBe(true);
+    expect(res.success && res.data).toBe("+7 (999) 123-45-67");
+  });
+
+  it("выход схемы допустим как её же вход (сервер парсит присланное повторно)", () => {
+    expect(optionalPhoneSchema.safeParse(optionalPhoneSchema.parse("")).success).toBe(true);
+  });
+
+  it("мусор отклоняется теми же сообщениями, что у phoneSchema", () => {
+    const letters = optionalPhoneSchema.safeParse("+7 999 ABC-45-67");
+    expect(letters.success).toBe(false);
+    expect(!letters.success && letters.error.issues[0].message).toBe(
+      phoneSchema.safeParse("+7 999 ABC-45-67").error?.issues[0].message,
+    );
+
+    const short = optionalPhoneSchema.safeParse("123456789"); // 9 цифр
+    expect(short.success).toBe(false);
+    expect(!short.success && short.error.issues[0].message).toBe(
+      phoneSchema.safeParse("123456789").error?.issues[0].message,
+    );
+
+    expect(optionalPhoneSchema.safeParse("1234567890123456").success).toBe(false); // 16 цифр
   });
 });

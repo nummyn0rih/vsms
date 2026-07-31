@@ -17,6 +17,26 @@ export const phoneSchema = z
     return n >= PHONE_MIN_DIGITS && n <= PHONE_MAX_DIGITS;
   }, `Телефон должен содержать от ${PHONE_MIN_DIGITS} до ${PHONE_MAX_DIGITS} цифр`);
 
+// Необязательный телефон (Driver: номер известен не всегда). Пусто → null, чтобы
+// «нет номера» проверялось одним способом. Правила для НЕпустого значения не
+// дублируются — переиспользуем phoneSchema (он же держит обязательность у Farmer).
+// .nullish(), а не .optional(): выход схемы (string | null) должен быть допустимым
+// ВХОДОМ — клиент шлёт server-action уже трансформированные значения, а тот парсит
+// их повторно; с .optional() второй safeParse(null) падал бы.
+export const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((v) => (v ? v : null))
+  .superRefine((v, ctx) => {
+    if (v == null) return; // номера нет — проверять нечего
+    const parsed = phoneSchema.safeParse(v);
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues) {
+      ctx.addIssue({ code: "custom", message: issue.message });
+    }
+  });
+
 // Для href="tel:": ведущий + (если был) + только цифры.
 export function normalizePhone(value: string): string {
   const digits = value.replace(/\D/g, "");
