@@ -23,6 +23,15 @@ const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
 // 0=Пн … 6=Вс, как в workdays.ts.
 const WEEKDAY_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
+// Диапазон недели по краям (Пн–Вс): «22–28 июня 2026». Для лент без дней (приёмка,
+// материалы) — formatWeekRange там не годится, он считает по week.days[].isWorkday.
+export function formatWeekSpan(startDate: string, endDate: string): string {
+  const s = new Date(`${startDate}T00:00:00Z`);
+  const e = new Date(`${endDate}T00:00:00Z`);
+  const left = s.getUTCMonth() === e.getUTCMonth() ? dayFmt.format(s) : dayMonthFmt.format(s);
+  return `${left}–${dayMonthFmt.format(e)} ${e.getUTCFullYear()}`;
+}
+
 // Диапазон рабочих дней недели: «8–13 июня» (range) и «Пн–Сб» (span).
 export function formatWeekRange(week: FeedWeek): { range: string; span: string } {
   const workdays = week.days.filter((d) => d.isWorkday);

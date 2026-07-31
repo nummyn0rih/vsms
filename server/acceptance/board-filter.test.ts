@@ -20,6 +20,7 @@ function item(
   id: number,
   farmerId: number,
   cultureId: number,
+  actNumber: string | null = null,
 ): AcceptanceItem {
   const farmerName = { 1: "Иванов", 2: "Петров", 3: "Абрамов" }[farmerId]!;
   const cultureName = { 10: "Томаты", 20: "Огурцы" }[cultureId]!;
@@ -32,8 +33,8 @@ function item(
     farmerName,
     plannedKg: 1000,
     actualKg: null,
-    accepted: false,
-    actNumber: null,
+    accepted: actNumber != null,
+    actNumber,
   };
 }
 
@@ -43,6 +44,7 @@ function machine(
   status: "sent" | "arrived",
   driverName: string | null,
   items: AcceptanceItem[],
+  transportCompanyName: string | null = null,
 ): AcceptanceMachine {
   return {
     id,
@@ -51,7 +53,7 @@ function machine(
     departureDate: "2026-07-13",
     arrivalDate: "2026-07-15",
     driverName,
-    transportCompanyName: null,
+    transportCompanyName,
     driverPhone: null,
     driverInfo: null,
     comment: null,
@@ -114,15 +116,23 @@ function makeBoard(): AcceptanceBoard {
     machine(1, "М-001", "sent", "Сидоров Пётр", [
       item(101, FARMER.ivanov, CULTURE.tomato),
     ]),
-    machine(2, "М-002", "sent", "Кузнецов Илья", [
-      item(102, FARMER.petrov, CULTURE.cucumber),
-      item(103, FARMER.petrov, CULTURE.tomato),
-    ]),
+    machine(
+      2,
+      "М-002",
+      "sent",
+      "Кузнецов Илья",
+      [
+        item(102, FARMER.petrov, CULTURE.cucumber),
+        item(103, FARMER.petrov, CULTURE.tomato),
+      ],
+      "ТК Логистик",
+    ),
   ];
+  // М-003 частично принята: у одной позиции уже есть акт (BR-13 — машина ещё в зоне 2).
   const zone2 = [
     machine(3, "М-003", "arrived", null, [
       item(104, FARMER.ivanov, CULTURE.cucumber),
-      item(105, FARMER.abramov, CULTURE.tomato),
+      item(105, FARMER.abramov, CULTURE.tomato, "2026-7"),
     ]),
   ];
   const zone3 = [
@@ -204,15 +214,42 @@ describe("filterBoard", () => {
     expect([...none.zone1, ...none.zone2]).toHaveLength(0);
   });
 
-  it("поиск по коду машины", () => {
+  // Код машины (М-001) — внутренний идентификатор БД, на экране его нет: поиском
+  // по нему пользователь ничего осмысленного не ищет, ось убрана (acceptance-ux-1).
+  it("по коду машины поиск БОЛЬШЕ не находит", () => {
     const r = filterBoard(makeBoard(), { ...noFilters, search: "М-002" });
-    expect(r.zone1.map((m) => m.code)).toEqual(["М-002"]);
+    expect(r.zone1).toHaveLength(0);
     expect(r.zone2).toHaveLength(0);
+    expect(r.zone3).toHaveLength(0);
   });
 
   it("поиск по имени водителя, регистр не важен", () => {
     const r = filterBoard(makeBoard(), { ...noFilters, search: "кузнецов" });
     expect(r.zone1.map((m) => m.code)).toEqual(["М-002"]);
+  });
+
+  it("поиск по транспортной компании, регистр не важен", () => {
+    const r = filterBoard(makeBoard(), { ...noFilters, search: "логистик" });
+    expect(r.zone1.map((m) => m.code)).toEqual(["М-002"]);
+    expect(r.zone2).toHaveLength(0);
+    expect(r.zone3).toHaveLength(0);
+  });
+
+  it("поиск по № акта — зона 3 (positions)", () => {
+    const full = filterBoard(makeBoard(), { ...noFilters, search: "2026-42" });
+    expect(full.zone3.map((m) => m.code)).toEqual(["М-004"]);
+    expect(full.zone1).toHaveLength(0);
+    // № акта хранится с сезонным префиксом — ищем и по «хвосту».
+    expect(
+      filterBoard(makeBoard(), { ...noFilters, search: "42" }).zone3,
+    ).toHaveLength(1);
+  });
+
+  it("поиск по № акта — зоны 1/2 (items частично принятой машины)", () => {
+    const r = filterBoard(makeBoard(), { ...noFilters, search: "2026-7" });
+    expect(r.zone2.map((m) => m.code)).toEqual(["М-003"]);
+    expect(r.zone1).toHaveLength(0);
+    expect(r.zone3).toHaveLength(0);
   });
 
   it("поиск по фермеру и по культуре внутри позиций", () => {
@@ -231,9 +268,9 @@ describe("filterBoard", () => {
   });
 
   it("acceptedCount пересчитывается из видимой зоны 3", () => {
-    const all = filterBoard(makeBoard(), { ...noFilters, search: "м-" });
-    expect(all.acceptedCount).toBe(1);
-    const none = filterBoard(makeBoard(), { ...noFilters, search: "М-001" });
+    const withAccepted = filterBoard(makeBoard(), { ...noFilters, search: "ёлкин" });
+    expect(withAccepted.acceptedCount).toBe(1);
+    const none = filterBoard(makeBoard(), { ...noFilters, search: "кузнецов" });
     expect(none.zone3).toHaveLength(0);
     expect(none.acceptedCount).toBe(0);
   });
@@ -261,7 +298,7 @@ describe("boardOptions", () => {
   });
 
   it("опции строятся из ПОЛНОГО board, а не из отфильтрованного", () => {
-    const filtered = filterBoard(makeBoard(), { ...noFilters, search: "М-001" });
+    const filtered = filterBoard(makeBoard(), { ...noFilters, search: "сидоров" });
     expect(boardOptions(filtered).farmers).toHaveLength(1);
     expect(opts.farmers).toHaveLength(3);
   });

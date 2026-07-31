@@ -44,6 +44,16 @@ const M_CONTENT_CLS =
 // Radix Select не допускает value="" — сентинел для «— не в зачёт» (contract_line_id=null).
 const NONE = "__none__";
 
+// Дефолт привязки к строке контракта (BR-10): строка позиции отгрузки → иначе
+// единственная строка контракта → иначе пусто. ОДИН источник и для simple-поля, и для
+// привязок принятых калибр-категорий: раньше simple-ветка про itemLineId не знала и при
+// ≥2 строках контракта показывала пустой селект, хотя планировщик строку уже выбрал.
+function defaultLineOf(ctx: ActContext): string {
+  if (ctx.itemLineId != null) return String(ctx.itemLineId);
+  if (ctx.autoLineId != null) return String(ctx.autoLineId);
+  return "";
+}
+
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
   month: "long",
@@ -97,25 +107,18 @@ export function AcceptanceActDialog({
     context.existing ? String(context.existing.brakPercent) : "",
   );
 
-  // simple: одна строка контракта.
+  // simple: одна строка контракта. Приоритет: сохранённая в акте → дефолт (BR-10).
   const [lineId, setLineId] = useState<string>(
     context.existing?.contractLineId != null
       ? String(context.existing.contractLineId)
-      : context.autoLineId != null
-        ? String(context.autoLineId)
-        : "",
+      : defaultLineOf(context),
   );
+  // Плашка «авто» — только когда выбрана ИМЕННО единственная сезонная строка. Иначе
+  // (позиция привязана к строке другого сезона) она показывала бы не то, что уйдёт в акт.
+  const lineAuto = context.autoLineId != null && lineId === String(context.autoLineId);
 
   // calibre: % и привязка по категориям. Дефолт: принятые → строка позиции/единственная.
-  const defaultBind = useMemo(
-    () =>
-      context.itemLineId != null
-        ? String(context.itemLineId)
-        : context.autoLineId != null
-          ? String(context.autoLineId)
-          : "",
-    [context.itemLineId, context.autoLineId],
-  );
+  const defaultBind = defaultLineOf(context);
   const existingCal = useMemo(
     () => new Map(context.existing?.calibres.map((c) => [c.calibreRangeId, c]) ?? []),
     [context.existing],
@@ -132,12 +135,17 @@ export function AcceptanceActDialog({
     const o: Record<number, string> = {};
     for (const r of context.calibreRanges) {
       const ex = existingCal.get(r.id);
-      o[r.id] =
-        ex?.contractLineId != null
-          ? String(ex.contractLineId)
-          : r.isAccepted
-            ? defaultBind || NONE
-            : NONE;
+      if (ex) {
+        // Акт уже сохранён → показываем ЕГО привязку как есть. null здесь — осознанное
+        // «— не в зачёт» оператора (saveAct пишет строку на КАЖДУЮ категорию схемы),
+        // дефолт затирать его не должен.
+        o[r.id] = ex.contractLineId != null ? String(ex.contractLineId) : NONE;
+        continue;
+      }
+      // Новый акт (либо категория добавлена в схему после сохранения): дефолт — только
+      // принятым. Нестандарту (is_accepted=false) дефолт давать НЕЛЬЗЯ: гард BR-33×C3d-2
+      // запрещает «нестандарт со строкой» при заданном % к оплате (двойной счёт).
+      o[r.id] = r.isAccepted ? defaultBind || NONE : NONE;
     }
     return o;
   });
@@ -736,7 +744,7 @@ export function AcceptanceActDialog({
 
               {/* Строка контракта (simple) — отдельным полем (фикс 1) */}
               <Field label="Строка контракта">
-                {context.autoLineId != null ? (
+                {lineAuto ? (
                   <div className="flex h-10 items-center gap-2 rounded-md border border-[#ebebeb] bg-[#fafafa] px-3 text-[13.5px] text-[#171717]">
                     <span
                       className="inline-block size-[9px] shrink-0 rounded-[3px]"

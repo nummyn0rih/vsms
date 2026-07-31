@@ -13,7 +13,15 @@ import {
   boardOptions,
   anyAcceptanceFilterActive,
 } from "@/server/acceptance/board-filter";
+import {
+  groupByArrivalWeek,
+  weekCultures,
+  weekGroupKey,
+  type AcceptanceView,
+  type WeekGroup,
+} from "@/server/acceptance/board-weeks";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
+import { writeUrlParam } from "@/app/(app)/shipments/_components/week-format";
 import { downloadXlsx, type XlsxRow } from "@/lib/xlsx-export";
 import { useRole } from "@/components/auth/RoleProvider";
 import { FilterCombo } from "@/components/filters/FilterCombo";
@@ -21,6 +29,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AcceptanceMachine } from "./AcceptanceMachine";
 import { AcceptedMachine } from "./AcceptedMachine";
 import { AcceptanceActDialog } from "./AcceptanceActDialog";
+import { AcceptanceWeekBlock } from "./AcceptanceWeekBlock";
 
 // Иконки фильтров (stroke-пути, вербатим из ленты — тот же тулбар-паттерн).
 const supplierIcon = (
@@ -48,10 +57,97 @@ function EmptyZone({ note }: { note: string }) {
   );
 }
 
-export function AcceptanceBoard({ board }: { board: Board }) {
+type BoardMachine = Board["zone1"][number] | Board["zone3"][number];
+
+// Тело зоны: сплошной список либо разбивка по неделям прибытия (BR-26 не меняется —
+// недели живут ВНУТРИ зоны). Разметку карточек задаёт renderList: она одна на оба вида.
+function ZoneBody<T extends BoardMachine>({
+  machines,
+  weekly,
+  zone,
+  isCollapsed,
+  onToggle,
+  renderList,
+}: {
+  machines: T[];
+  weekly: boolean;
+  zone: string;
+  isCollapsed: (key: string, position: WeekGroup<unknown>["position"]) => boolean;
+  onToggle: (key: string, collapsed: boolean) => void;
+  renderList: (list: T[]) => React.ReactNode;
+}) {
+  const grouping = useMemo(
+    () => (weekly ? groupByArrivalWeek(machines) : null),
+    [machines, weekly],
+  );
+  if (!grouping) return <>{renderList(machines)}</>;
+
+  const bucket = (
+    week: WeekGroup<T> | null,
+    list: T[],
+    position: WeekGroup<unknown>["position"],
+  ) => {
+    const key = weekGroupKey(zone, week);
+    const collapsed = isCollapsed(key, position);
+    return (
+      <AcceptanceWeekBlock
+        key={key}
+        week={week}
+        cultures={weekCultures(list)}
+        count={list.length}
+        collapsed={collapsed}
+        onToggle={() => onToggle(key, collapsed)}
+      >
+        {renderList(list)}
+      </AcceptanceWeekBlock>
+    );
+  };
+
+  return (
+    <div>
+      {grouping.weeks.map((w) => bucket(w, w.machines, w.position))}
+      {/* Машины без даты прибытия не должны исчезать из вида — отдельной корзиной. */}
+      {grouping.undated.length > 0 && bucket(null, grouping.undated, "current")}
+    </div>
+  );
+}
+
+export function AcceptanceBoard({
+  board,
+  initialView,
+}: {
+  board: Board;
+  initialView: AcceptanceView;
+}) {
   const router = useRouter();
   const role = useRole();
   const isAdmin = role === "admin";
+
+  // Вид (Список/Недели) — из URL (?view), как на ленте: replaceState не ре-рендерит
+  // сервер, поэтому держим локальный стейт, засеянный сервером, и пишем URL при
+  // переключении. Без localStorage.
+  const [viewMode, setViewMode] = useState<AcceptanceView>(initialView);
+  function onViewChange(v: AcceptanceView) {
+    setViewMode(v);
+    writeUrlParam("view", v);
+  }
+
+  // Свёрнутость недель: в стейте только ПОЛЬЗОВАТЕЛЬСКИЕ переключения (ключ «зона:неделя»),
+  // дефолт вычисляется от группы. Не Set с ленивым сидом, как на ленте: там недели
+  // приходят с сервера, а здесь группировка клиентская и пересобирается после каждого
+  // router.refresh() (приёмка двигает машину между зонами) — засеянный однажды Set
+  // заморозил бы дефолты первой доски.
+  const [weekOverrides, setWeekOverrides] = useState<Record<string, boolean>>({});
+  const isWeekCollapsed = useCallback(
+    (key: string, position: WeekGroup<unknown>["position"]) =>
+      weekOverrides[key] ?? position === "past",
+    [weekOverrides],
+  );
+  const toggleWeek = useCallback(
+    (key: string, collapsed: boolean) =>
+      setWeekOverrides((p) => ({ ...p, [key]: !collapsed })),
+    [],
+  );
 
   // Состояние диалога акта держим ЗДЕСЬ (на доске), не в карточке: markArrived
   // перетасовывает зоны (sent→arrived), карточка размонтируется — диалог жил бы внутри
@@ -205,6 +301,30 @@ export function AcceptanceBoard({ board }: { board: Board }) {
   const emptyNote = (base: string) =>
     anyFilterActive ? "Ничего не найдено по фильтрам." : base;
 
+  // Разметка списка карточек — одна на оба вида; ZoneBody только решает, во что её обернуть.
+  const renderPending = (list: Board["zone1"]) => (
+    <div className="flex flex-col gap-3">
+      {list.map((m) => (
+        <AcceptanceMachine
+          key={m.id}
+          machine={m}
+          onOpenAct={onOpenAct}
+          pendingId={pendingId}
+        />
+      ))}
+    </div>
+  );
+  const renderAccepted = (list: Board["zone3"]) => (
+    <div className="flex flex-col gap-3">
+      {list.map((m) => (
+        <AcceptedMachine key={m.id} machine={m} />
+      ))}
+    </div>
+  );
+  // Группируется ВИДИМЫЙ набор (view = filterBoard), поэтому фильтры и счётчики
+  // согласованы в обоих видах.
+  const weekly = viewMode === "weeks";
+
   const toolbar = (
     <div className="tbar-row mb-6 border-b border-[#ebebeb] pb-4">
         <div className={`search${search ? " has-val" : ""}`}>
@@ -224,7 +344,7 @@ export function AcceptanceBoard({ board }: { board: Board }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск: № машины, водитель…"
+            placeholder="Поиск: водитель, ТК, поставщик, культура, № акта…"
           />
           {search && (
             <button
@@ -294,6 +414,24 @@ export function AcceptanceBoard({ board }: { board: Board }) {
 
         <div className="spacer" />
 
+        {/* Вид: сплошной список ↔ группировка по ISO-неделе прибытия (?view=). */}
+        <div className="seg">
+          <button
+            type="button"
+            className={viewMode === "list" ? "active" : ""}
+            onClick={() => onViewChange("list")}
+          >
+            Список
+          </button>
+          <button
+            type="button"
+            className={viewMode === "weeks" ? "active" : ""}
+            onClick={() => onViewChange("weeks")}
+          >
+            По неделям
+          </button>
+        </div>
+
         <a href={printHref} target="_blank" rel="noopener" className="btn btn-sm">
           <svg
             viewBox="0 0 24 24"
@@ -338,16 +476,14 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           {view.zone1.length === 0 ? (
             <EmptyZone note={emptyNote("Нет машин в пути.")} />
           ) : (
-            <div className="flex flex-col gap-3">
-              {view.zone1.map((m) => (
-                <AcceptanceMachine
-                  key={m.id}
-                  machine={m}
-                  onOpenAct={onOpenAct}
-                  pendingId={pendingId}
-                />
-              ))}
-            </div>
+            <ZoneBody
+              machines={view.zone1}
+              weekly={weekly}
+              zone="z1"
+              isCollapsed={isWeekCollapsed}
+              onToggle={toggleWeek}
+              renderList={renderPending}
+            />
           )}
         </section>
 
@@ -357,16 +493,14 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           {view.zone2.length === 0 ? (
             <EmptyZone note={emptyNote("Нет машин на приёмке.")} />
           ) : (
-            <div className="flex flex-col gap-3">
-              {view.zone2.map((m) => (
-                <AcceptanceMachine
-                  key={m.id}
-                  machine={m}
-                  onOpenAct={onOpenAct}
-                  pendingId={pendingId}
-                />
-              ))}
-            </div>
+            <ZoneBody
+              machines={view.zone2}
+              weekly={weekly}
+              zone="z2"
+              isCollapsed={isWeekCollapsed}
+              onToggle={toggleWeek}
+              renderList={renderPending}
+            />
           )}
         </section>
 
@@ -376,11 +510,14 @@ export function AcceptanceBoard({ board }: { board: Board }) {
           {view.zone3.length === 0 ? (
             <EmptyZone note={emptyNote("Нет принятых машин.")} />
           ) : (
-            <div className="flex flex-col gap-3">
-              {view.zone3.map((m) => (
-                <AcceptedMachine key={m.id} machine={m} />
-              ))}
-            </div>
+            <ZoneBody
+              machines={view.zone3}
+              weekly={weekly}
+              zone="z3"
+              isCollapsed={isWeekCollapsed}
+              onToggle={toggleWeek}
+              renderList={renderAccepted}
+            />
           )}
         </section>
       </div>

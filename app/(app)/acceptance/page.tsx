@@ -1,4 +1,5 @@
 import { getAcceptanceBoard } from "@/server/acceptance/board";
+import { parseAcceptanceView } from "@/server/acceptance/board-weeks";
 import { AcceptanceBoard } from "./_components/AcceptanceBoard";
 import { MobileAcceptanceBoard } from "./_components/MobileAcceptanceBoard";
 
@@ -10,6 +11,8 @@ export default async function AcceptancePage({
   const sp = await searchParams;
   const initialZone =
     sp.zone === "zone2" || sp.zone === "zone3" ? sp.zone : "zone1";
+  // Вид десктопной доски — из URL (?view=weeks), как неделя/вид на ленте.
+  const initialView = parseAcceptanceView(sp.view);
   const board = await getAcceptanceBoard();
 
   return (
@@ -22,7 +25,7 @@ export default async function AcceptancePage({
       </div>
 
       <div className="hidden md:block">
-        <AcceptanceBoard board={board} />
+        <AcceptanceBoard board={board} initialView={initialView} />
       </div>
       <div className="md:hidden">
         <MobileAcceptanceBoard board={board} initialZone={initialZone} />

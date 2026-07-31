@@ -127,6 +127,30 @@ export async function getActContext({
     orderBy: { id: "asc" },
   });
 
+  // Фактические привязки позиции/акта могут указывать на строку ВНЕ сезонного списка
+  // (машину завели на границе сезона, строку перенесли в другой контракт). Опция обязана
+  // быть в списке: иначе селект при валидном value рисует плейсхолдер — оператор видит
+  // «не привязана», хотя привязка есть и уйдёт в сохранение как есть. В норме множество
+  // пустое и запроса не будет. Образец — FK-Select форм (filterContractLines).
+  const referenced = new Set<number>();
+  if (item.contract_line_id != null) referenced.add(item.contract_line_id);
+  for (const c of item.acceptanceAct?.calibreResults ?? [])
+    if (c.contract_line_id != null) referenced.add(c.contract_line_id);
+  for (const l of lines) referenced.delete(l.id);
+
+  const extraLines = referenced.size
+    ? await prisma.contractLine.findMany({
+        where: { id: { in: [...referenced] } },
+        select: {
+          id: true,
+          label: true,
+          price_per_kg: true,
+          contract: { select: { season_year: true } },
+        },
+        orderBy: { id: "asc" },
+      })
+    : [];
+
   // «Последняя непринятая» — у машины ровно одна позиция без акта (эта).
   const unaccepted = await prisma.shipmentItem.count({
     where: { shipment_id: item.shipment.id, acceptanceAct: null },
@@ -146,11 +170,21 @@ export async function getActContext({
     arrivalDate: toDateStr(item.shipment.arrival_date),
     actualKg:
       item.actual_weight_kg != null ? item.actual_weight_kg.toNumber() : null,
-    contractLines: lines.map((l) => ({
-      id: l.id,
-      label: l.label,
-      pricePerKg: l.price_per_kg.toString(),
-    })),
+    contractLines: [
+      ...lines.map((l) => ({
+        id: l.id,
+        label: l.label,
+        pricePerKg: l.price_per_kg.toString(),
+      })),
+      // Несезонные строки — в хвост и с пометкой сезона, чтобы не путались с текущими.
+      ...extraLines.map((l) => ({
+        id: l.id,
+        label: `${l.label?.trim() || `строка #${l.id}`} · сезон ${l.contract.season_year}`,
+        pricePerKg: l.price_per_kg.toString(),
+      })),
+    ],
+    // Считается по СЕЗОННЫМ строкам: «строк ровно одна → привязка авто» (BR-8).
+    // extraLines — заплатка видимости, на семантику авто-привязки не влияют.
     autoLineId: lines.length === 1 ? lines[0].id : null,
     isLastUnaccepted: item.acceptanceAct == null && unaccepted === 1,
     calibreRanges: (item.culture.calibreScheme?.ranges ?? []).map((r) => ({

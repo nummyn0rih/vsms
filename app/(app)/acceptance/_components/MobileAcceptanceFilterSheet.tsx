@@ -69,7 +69,7 @@ export function MobileAcceptanceFilterSheet({
               type="text"
               value={search}
               onChange={(e) => onSearch(e.target.value)}
-              placeholder="Поиск: № машины, водитель…"
+              placeholder="Поиск: водитель, ТК, поставщик, культура, № акта…"
             />
             {search && (
               <button
