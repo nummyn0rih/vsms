@@ -64,7 +64,13 @@ function DriverCard({ row }: { row: DriverRow }) {
             {!row.active && "неактивен"}
           </span>
         )}
-        <span className="dcard-phone">{row.phone ? formatPhone(row.phone) : "—"}</span>
+        {row.phone ? (
+          <span className="dcard-phone">{formatPhone(row.phone)}</span>
+        ) : (
+          <span className="dcard-phone" style={{ color: "var(--mute)", fontStyle: "italic" }}>
+            номер не указан
+          </span>
+        )}
       </div>
       {row.phone && (
         <a className="callbtn" href={`tel:${normalizePhone(row.phone)}`}>

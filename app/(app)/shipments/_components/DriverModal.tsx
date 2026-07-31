@@ -97,7 +97,7 @@ export function DriverModal({
               <span className="tabular-nums">{formatPhone(phone)}</span>
             </a>
           ) : (
-            <span className="text-sm text-muted-foreground">Телефон не указан</span>
+            <span className="text-sm italic text-muted-foreground">номер не указан</span>
           )}
 
           {info && (
