@@ -4,6 +4,7 @@ import {
   computeAcceptedKg,
   computeSettlement,
   calibreRangeLabel,
+  compareCalibreRanges,
   stripSeasonPrefix,
 } from "./accepted";
 import { itemCost, type ExecItem } from "@/server/contracts/execution";
@@ -69,7 +70,9 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
                     percent: true,
                     contract_line_id: true,
                     calibreRange: {
+                      // id — тай-брейкер размерного порядка показа (compareCalibreRanges).
                       select: {
+                        id: true,
                         label: true,
                         min_cm: true,
                         max_cm: true,
@@ -195,8 +198,26 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
         calibres: exec.calibres,
       });
 
+      // ПОКАЗ калибра — размерным порядком (compareCalibreRanges), из БД строки приходят
+      // в физическом порядке. Сортируем КОПИЮ: results/exec.calibres остаются как есть,
+      // чтобы порядок показа не мог задеть расчёт стоимости и разнос по строкам.
+      const shown = [...results].sort((a, b) =>
+        compareCalibreRanges(
+          {
+            minCm: a.calibreRange.min_cm?.toNumber() ?? null,
+            maxCm: a.calibreRange.max_cm?.toNumber() ?? null,
+            id: a.calibreRange.id,
+          },
+          {
+            minCm: b.calibreRange.min_cm?.toNumber() ?? null,
+            maxCm: b.calibreRange.max_cm?.toNumber() ?? null,
+            id: b.calibreRange.id,
+          },
+        ),
+      );
+
       // Чипы калибра: категории + строка «брак» последней. Только для калибра.
-      const calibres = results.map((cr) => {
+      const calibres = shown.map((cr) => {
         const minCm = cr.calibreRange.min_cm?.toNumber() ?? null;
         const maxCm = cr.calibreRange.max_cm?.toNumber() ?? null;
         const percent = cr.percent.toNumber();
@@ -219,7 +240,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
 
       // Нестандарт со своей строкой контракта — оплачивается по ней (C3d-2, §5).
       // В headline «к оплате» (acceptedKg) НЕ входит, но ₽ идут в costRub/сумму машины.
-      const nonStandard = results
+      const nonStandard = shown
         .filter((cr) => !cr.calibreRange.is_accepted && cr.contract_line_id != null)
         .map((cr) => {
           const minCm = cr.calibreRange.min_cm?.toNumber() ?? null;

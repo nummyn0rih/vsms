@@ -1,20 +1,25 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getCultureAnalytics } from "@/server/analytics/culture";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { fmtInt, fmtPct1, fmtTons } from "@/lib/format";
+import { CultureAreaChart } from "@/app/(app)/analytics/culture/[id]/_components/CultureAreaChart";
+import { CultureBrakBarChart } from "@/app/(app)/analytics/culture/[id]/_components/CultureBrakBarChart";
+import { SupplierTable } from "@/app/(app)/analytics/culture/[id]/_components/SupplierTable";
+import { CalibreStack } from "@/app/(app)/analytics/culture/[id]/_components/CalibreStack";
+import { PrintSheet } from "../../../_components/PrintSheet";
 
-import { SeasonSelector } from "../../_components/SeasonSelector";
-import { CultureSelector } from "./_components/CultureSelector";
-import { CultureAreaChart } from "./_components/CultureAreaChart";
-import { CultureBrakBarChart } from "./_components/CultureBrakBarChart";
-import { SupplierTable } from "./_components/SupplierTable";
-import { CalibreStack } from "./_components/CalibreStack";
+// Печатный лист «Профиль культуры» (A4 portrait, с графиками) — печатная копия экрана
+// /analytics/culture/[id]. Read-only, источник — ТОТ ЖЕ getCultureAnalytics, что у экрана:
+// второй выборки и второй агрегации не заводим, поэтому числа сходятся тождественно.
+// Компоненты графиков/таблиц переиспользуются с экрана, но без drill-down ссылок.
+// Культура — в пути, сезон — в ?season= (дефолт текущий). PDF — «Сохранить как PDF»
+// браузера, PDF-библиотек в проекте нет.
+// Высота графиков на листе: экранные 200px не дают уместить весь профиль в одну
+// страницу A4 (шапка + KPI + два графика + таблица поставщиков + стек калибра).
+const PRINT_CHART_H = 150;
 
-// Профиль культуры за сезон — read-only drill-down из дашборда. Культура в пути,
-// сезон в ?season= (дефолт текущий). Агрегаты на лету, ничего не хранится.
-export default async function CultureAnalyticsPage({
+export default async function PrintCultureAnalyticsPage({
   params,
   searchParams,
 }: {
@@ -36,90 +41,46 @@ export default async function CultureAnalyticsPage({
   const { culture, kpi } = data;
   const isCalibre = culture.acceptanceType === "calibre";
 
+  const weeks = data.acceptanceByWeek;
+  const period = weeks.length
+    ? `сезон ${season} · ${weeks[0].label}–${weeks[weeks.length - 1].label}`
+    : `сезон ${season}`;
+
+  // Без «лист 1/1»: число строк таблицы поставщиков переменное, и у культуры с десятком
+  // фермеров лист законно уходит на вторую страницу (прецедент — лист «Отгрузки»).
+  const footPage = `Профиль культуры · ${culture.name} · сезон ${season} · поставщиков: ${data.bySupplier.length}`;
+
   return (
-    <div className="mx-auto w-full max-w-[1320px]">
-      <div className="an-stage">
-        {/* page head */}
-        <div className="an-phead" style={{ flexDirection: "column", gap: 0 }}>
-          <div className="an-crumb">
-            <Link href={`/analytics?season=${season}`}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
-              Аналитика
-            </Link>
-            <span className="sep">/</span>
-            <span className="cur">{culture.name}</span>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 18,
-              flexWrap: "wrap",
-              width: "100%",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div className="an-ptitle">
-                <span className="an-cchip" style={{ background: culture.color }} />
-                {culture.name}
-              </div>
-              <div className="an-sub">
-                <span className="ro">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                  Только просмотр
-                </span>
-                <span className="sep" />
-                <span>
-                  Сезон <b style={{ color: "var(--body)" }}>{season}</b>
-                </span>
-                <span className="sep" />
-                <span className="an-pill">
-                  {isCalibre ? "приёмка по калибру" : "приёмка по весу"}
-                </span>
-              </div>
-            </div>
-            <div className="spacer" style={{ flex: 1 }} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <CultureSelector
-                cultureId={culture.id}
-                season={season}
-                cultures={data.cultures}
-              />
-              <SeasonSelector season={season} seasons={data.seasons} />
-              {/* Печать — bare-роут /print/*, PDF даёт браузерное «Сохранить как PDF».
-                  Эталон разметки — кнопка на дашборде аналитики. */}
-              <a
-                href={`/print/analytics/culture/${culture.id}?season=${season}`}
-                target="_blank"
-                rel="noopener"
-                className="btn btn-sm"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 6 2 18 2 18 9" />
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                  <rect x="6" y="14" width="12" height="8" />
-                </svg>
-                Печать
-              </a>
-            </div>
-          </div>
-        </div>
-
-        {/* KPI strip */}
+    <PrintSheet
+      title={`Профиль культуры · ${culture.name}`}
+      subtitle="Недели · поставщики · категории — агрегаты считаются на лету"
+      season={`Сезон ${season}`}
+      period={period}
+      periodLabel="Период"
+      filters={
+        <>
+          Приёмка — {isCalibre ? "по калибру" : "по весу"} · серии —{" "}
+          <b>Culture.color</b> · брак — янтарь · категории — размерным порядком
+        </>
+      }
+      footTotal={
+        <>
+          <b>Итого по культуре:</b> принято{" "}
+          <span className="num">{fmtTons(kpi.acceptedTons)} т</span> из{" "}
+          <span className="num">{fmtTons(kpi.targetTons)} т</span> · выполнение{" "}
+          <span className="num">
+            {kpi.completionPct == null ? "—" : `${Math.round(kpi.completionPct)}%`}
+          </span>{" "}
+          · к оплате <span className="num">{fmtTons(kpi.paidTons)} т</span> · средний брак{" "}
+          <span className="num">
+            {kpi.avgBrakPct == null ? "—" : `${fmtPct1(kpi.avgBrakPct)}%`}
+          </span>
+        </>
+      }
+      footPage={footPage}
+    >
+      <div className="an-print an-culture">
+        {/* KPI-полоса (5 плиток) — копия экрана профиля культуры */}
         <div className="an-kpis">
           <div className="an-kpi">
             <div className="k">Принято</div>
@@ -147,7 +108,7 @@ export default async function CultureAnalyticsPage({
 
           <div className={`an-kpi${kpi.avgBrakPct == null ? " muted" : ""}`}>
             <div className="k">Средний брак</div>
-            <div className="v" style={kpi.avgBrakPct != null ? { color: "var(--an-brak-deep)" } : undefined}>
+            <div className="v">
               <span>{kpi.avgBrakPct == null ? "—" : fmtPct1(kpi.avgBrakPct)}</span>
               {kpi.avgBrakPct != null && <span className="u">%</span>}
             </div>
@@ -169,10 +130,8 @@ export default async function CultureAnalyticsPage({
 
           <div className={`an-kpi${kpi.seasonSharePct == null ? " muted" : ""}`}>
             <div className="k">Доля в сезоне</div>
-            <div className="v" style={kpi.seasonSharePct != null ? { color: culture.color } : undefined}>
-              <span>
-                {kpi.seasonSharePct == null ? "—" : Math.round(kpi.seasonSharePct)}
-              </span>
+            <div className="v">
+              <span>{kpi.seasonSharePct == null ? "—" : Math.round(kpi.seasonSharePct)}</span>
               {kpi.seasonSharePct != null && <span className="u">%</span>}
             </div>
             <div className="sub">
@@ -183,7 +142,7 @@ export default async function CultureAnalyticsPage({
           </div>
         </div>
 
-        {/* charts row 1 */}
+        {/* Динамика и брак по неделям — два графика в ряд */}
         <div className="an-charts">
           <div className="an-card">
             <div className="an-card-head">
@@ -195,7 +154,7 @@ export default async function CultureAnalyticsPage({
             </div>
             <div className="an-card-body">
               <CultureAreaChart
-                data={data.acceptanceByWeek.map((w) => ({
+                data={weeks.map((w) => ({
                   label: w.label,
                   tons: w.tons,
                   actualTons: w.actualTons,
@@ -204,6 +163,7 @@ export default async function CultureAnalyticsPage({
                 color={culture.color}
                 cultureName={culture.name}
                 hasPlan={data.hasPlanLine}
+                height={PRINT_CHART_H}
               />
             </div>
           </div>
@@ -211,15 +171,15 @@ export default async function CultureAnalyticsPage({
           <div className="an-card">
             <div className="an-card-head">
               <div className="an-card-title">% брака по неделям</div>
-              <div className="an-card-unit">брак / принято · % · нейтральный янтарь</div>
+              <div className="an-card-unit">брак / принято · % · по неделе прибытия</div>
             </div>
             <div className="an-card-body">
-              <CultureBrakBarChart data={data.brakByWeek} />
+              <CultureBrakBarChart data={data.brakByWeek} height={PRINT_CHART_H} />
             </div>
           </div>
         </div>
 
-        {/* suppliers */}
+        {/* По поставщикам — полная ширина листа */}
         <div className="an-charts wide" style={{ paddingTop: 0 }}>
           <div className="an-card">
             <div className="an-card-head">
@@ -242,7 +202,7 @@ export default async function CultureAnalyticsPage({
           </div>
         </div>
 
-        {/* calibre — только для calibre-культур */}
+        {/* Калибр — только для calibre-культур (у simple блока нет и на экране) */}
         {data.calibre != null && (
           <div className="an-charts wide" style={{ paddingTop: 0 }}>
             <div className="an-card">
@@ -259,6 +219,6 @@ export default async function CultureAnalyticsPage({
           </div>
         )}
       </div>
-    </div>
+    </PrintSheet>
   );
 }

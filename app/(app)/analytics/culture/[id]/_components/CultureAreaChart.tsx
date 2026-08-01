@@ -13,20 +13,33 @@ import {
 
 import { fmtTons } from "@/lib/format";
 
-type Point = { label: string; tons: number; planTons: number | null };
+// ⚠ ТРИ РАЗНЫЕ БАЗЫ В ОДНОЙ ТОЧКЕ (DOMAIN §1) — не складывать и не путать:
+//   tons       — ПРИНЯТЫЙ вес (что завод забрал после брака и нестандарта);
+//   actualTons — ФАКТИЧЕСКИЙ вес перевески, всегда ≥ tons;
+//   planTons   — плановый темп WeeklyPlan (не факт вообще).
+type Point = {
+  label: string;
+  tons: number;
+  actualTons: number;
+  planTons: number | null;
+};
 
-// Динамика приёмки культуры по ISO-неделям: area цветом культуры + плановый темп
-// пунктиром (WeeklyPlan). Плановая линия рендерится только при hasPlan.
+// Динамика приёмки культуры по ISO-неделям: area цветом культуры + фактический вес
+// (перевеска) той же гаммой, но приглушённо, + плановый темп пунктиром (WeeklyPlan).
+// Плановая линия рендерится только при hasPlan. Разрыв между «по перевеске» и
+// «приёмкой» — ровно брак + нестандарт, ради него серия и добавлена.
 export function CultureAreaChart({
   data,
   color,
   cultureName,
   hasPlan,
+  height = 200,
 }: {
   data: Point[];
   color: string;
   cultureName: string;
   hasPlan: boolean;
+  height?: number; // только ради печатного A4: на экране дефолт не трогаем
 }) {
   if (data.length === 0) {
     return (
@@ -45,7 +58,7 @@ export function CultureAreaChart({
 
   return (
     <>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke="#ebebeb" />
           <XAxis
@@ -65,7 +78,11 @@ export function CultureAreaChart({
             cursor={{ stroke: "#a1a1a1", strokeOpacity: 0.4 }}
             formatter={(value, name) => [
               `${fmtTons(Number(value))} т`,
-              name === "planTons" ? "план" : "приёмка",
+              name === "planTons"
+                ? "план"
+                : name === "actualTons"
+                  ? "по перевеске"
+                  : "приёмка",
             ]}
             contentStyle={{
               borderRadius: 8,
@@ -73,6 +90,20 @@ export function CultureAreaChart({
               fontSize: 12,
               boxShadow: "0 8px 16px -4px #0000000f",
             }}
+          />
+          {/* Перевеска — ПОД приёмкой и приглушённо: новых цветов не вводим, тот же
+              Culture.color с прозрачностью. Видимая полоса сверху = брак + нестандарт. */}
+          <Area
+            type="linear"
+            dataKey="actualTons"
+            stroke={color}
+            strokeOpacity={0.5}
+            strokeWidth={1.4}
+            fill={color}
+            fillOpacity={0.05}
+            dot={false}
+            activeDot={{ r: 3, fill: "#ffffff", stroke: color, strokeWidth: 1.2, strokeOpacity: 0.6 }}
+            isAnimationActive={false}
           />
           <Area
             type="linear"
@@ -100,6 +131,10 @@ export function CultureAreaChart({
         </ComposedChart>
       </ResponsiveContainer>
       <div className="an-legend">
+        <span>
+          <span className="sw" style={{ background: color, opacity: 0.35 }} />
+          по перевеске (факт)
+        </span>
         <span>
           <span className="sw" style={{ background: color }} />
           приёмка — {cultureName}

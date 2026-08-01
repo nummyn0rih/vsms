@@ -510,6 +510,94 @@ table.dt tfoot .lead {
   font-size: 10px;
 }
 
+/* Лист «Профиль культуры» — блоков больше, чем на дашборде (KPI + 2 графика + таблица
+   поставщиков + стек калибра), поэтому компакт плотнее: иначе лист не влезает в одну
+   страницу A4. Класс .an-culture висит рядом с .an-print только на этом листе. */
+.an-print.an-culture .an-kpi {
+  padding: 7px 9px;
+}
+.an-print.an-culture .an-kpi .v {
+  font-size: 18px;
+  margin-top: 4px;
+}
+.an-print.an-culture .an-charts {
+  margin-top: 7px;
+  gap: 9px;
+}
+.an-print.an-culture .an-card-head {
+  padding: 6px 11px 5px;
+}
+.an-print.an-culture .an-card-body {
+  padding: 6px 11px 7px;
+}
+.an-print.an-culture .an-legend {
+  margin-top: 6px;
+  font-size: 8.5px;
+  line-height: 12px;
+}
+
+/* Таблица поставщиков и стек калибра шире всего остального — им отдельный компакт
+   под ширину A4 portrait. */
+.an-print .an-stbl {
+  font-size: 11px;
+}
+.an-print .an-stbl thead th {
+  font-size: 8px;
+  padding-bottom: 7px;
+}
+.an-print .an-stbl th + th,
+.an-print .an-stbl td + td {
+  padding-left: 12px;
+}
+.an-print .an-stbl tbody td {
+  padding: 6px 0;
+}
+.an-print .an-stbl th.num,
+.an-print .an-stbl td.num {
+  width: 66px;
+}
+.an-print .an-stbl th.cats,
+.an-print .an-stbl td.cats {
+  padding-left: 14px;
+  width: 168px;
+}
+.an-print .an-stbl th.scol,
+.an-print .an-stbl td.scol {
+  padding-left: 14px;
+  width: 104px;
+}
+.an-print .an-stbl .catmini {
+  max-width: 156px;
+}
+.an-print .an-stbl .catmini .leg {
+  font-size: 8.5px;
+  line-height: 11px;
+}
+.an-print .an-stbl .an-share {
+  max-width: 96px;
+  grid-template-columns: 1fr 32px;
+  gap: 7px;
+}
+.an-print .an-stbl .an-share .pc {
+  font-size: 9.5px;
+}
+.an-print .an-stbl tfoot td {
+  padding: 8px 0 2px;
+}
+.an-print .an-calbar {
+  height: 24px;
+}
+.an-print .an-calbar .seg {
+  font-size: 10px;
+}
+.an-print .an-calleg {
+  margin-top: 8px;
+  gap: 4px;
+}
+.an-print .an-calleg .row {
+  font-size: 10px;
+}
+
 /* ================= PRINT ================= */
 @media print {
   @page {

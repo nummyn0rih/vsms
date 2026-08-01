@@ -187,6 +187,39 @@ export function calibreRangeLabel(
   return fallbackLabel;
 }
 
+// Ключ сортировки калибр-категории: границы в см + id категории.
+export type CalibreOrderKey = {
+  minCm: number | null;
+  maxCm: number | null;
+  id: number;
+};
+
+// ЕДИНСТВЕННЫЙ порядок показа калибр-категорий во всём приложении: РАЗМЕРНЫЙ, а не по
+// доле. Раньше каждое место сортировало по-своему (доля DESC в аналитике, id в диалоге
+// акта, физический порядок строк в чипах) — и `9–12 · 6–9 · >12` менялось местами от
+// фермера к фермеру. Правило:
+//   1) безразмерная категория (обе границы null) — всегда В КОНЕЦ (это «брак»/«пульпа»);
+//   2) размерные — по min ASC, затем max ASC; открытый низ (<6 см, min=null) идёт первым,
+//      открытый верх (>12 см, max=null) — последним из размерных;
+//   3) тай-брейкер — id ASC: де-факто порядок ввода в форме культуры (persistCalibreScheme
+//      пересоздаёт строки, id раздаются по порядку строк формы).
+// is_accepted и доля на порядок НЕ влияют — иначе он снова поедет от данных.
+// Поля порядка в схеме нет и не заводим: размер детерминирован из самих данных.
+export function compareCalibreRanges(a: CalibreOrderKey, b: CalibreOrderKey): number {
+  const aPlain = a.minCm == null && a.maxCm == null;
+  const bPlain = b.minCm == null && b.maxCm == null;
+  if (aPlain !== bPlain) return aPlain ? 1 : -1;
+  if (!aPlain) {
+    // ⚠ Сравниваем, а не вычитаем: Infinity − Infinity = NaN, и компаратор ломается.
+    const cmp = (x: number, y: number) => (x < y ? -1 : x > y ? 1 : 0);
+    const byMin = cmp(a.minCm ?? -Infinity, b.minCm ?? -Infinity);
+    if (byMin !== 0) return byMin;
+    const byMax = cmp(a.maxCm ?? Infinity, b.maxCm ?? Infinity);
+    if (byMax !== 0) return byMax;
+  }
+  return a.id - b.id;
+}
+
 // Смарт-дефолт даты прибытия (BR-24б): плановая в прошлом → берём её (отгрузка
 // задним числом); иначе сегодня. Общий хелпер — зовут десктопная MarkArrivedButton
 // и мобильный MobileArrivalSheet, без дублирования расчёта.
