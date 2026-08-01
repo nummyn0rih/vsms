@@ -53,6 +53,7 @@ export type CultureVolume = {
 
 export type ContractListRow = {
   id: number;
+  farmer_id: number; // для ссылки на карточку поставщика из списка
   farmer_name: string;
   season_year: number;
   lines_count: number;

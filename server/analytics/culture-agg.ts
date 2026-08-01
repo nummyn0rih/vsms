@@ -1,4 +1,6 @@
 import {
+  compareCalibreRanges,
+  type CalibreOrderKey,
   computeAcceptedKg,
   computeSettlement,
   computeWeightedBrak,
@@ -34,6 +36,8 @@ function weightedBrakOrNull(rows: BrakRow[]): number | null {
 
 // Принятая позиция культуры (загрузчик маппит из Prisma-результата). Чистое DTO —
 // агрегатор ниже тестируется без сессии/БД.
+// ⚠ minCm/maxCm/rangeId у категории нужны НЕ для арифметики, а для показа: без них
+// сортировать категории размерным порядком нечем (categoryShares их и использует).
 export type CultureItem = {
   shipmentId: number;
   farmerId: number;
@@ -42,7 +46,14 @@ export type CultureItem = {
   actualKg: number | null;
   brakPercent: number | null;
   settlementPercent: number | null; // BR-33: % к оплате от факта, null = корректировки нет
-  calibres: { label: string; isAccepted: boolean; percent: number }[];
+  calibres: {
+    label: string;
+    isAccepted: boolean;
+    percent: number;
+    minCm: number | null; // границы категории (см) — ключ размерного порядка показа
+    maxCm: number | null;
+    rangeId: number; // CalibreRange.id — тай-брейкер порядка
+  }[];
 };
 
 export type CultureItemsAggregate = {
@@ -52,7 +63,15 @@ export type CultureItemsAggregate = {
   positionsCount: number;
   tripsCount: number;
   farmersCount: number;
-  weekTons: Map<string, { isoYear: number; isoWeek: number; tons: number }>;
+  // ⚠ ДВЕ БАЗЫ ВЕСА В ОДНОЙ НЕДЕЛЕ (DOMAIN §1) — не складывать и не путать:
+  //   tons       — ПРИНЯТЫЙ вес (после брака и нестандарта), база тонн выполнения;
+  //   actualTons — ФАКТИЧЕСКИЙ вес перевески, база брака.
+  // Тождественно actualTons ≥ tons: принятый = факт × Σ принятых %. Разрыв на графике —
+  // ровно брак + нестандарт.
+  weekTons: Map<
+    string,
+    { isoYear: number; isoWeek: number; tons: number; actualTons: number }
+  >;
   weekBrakPct: Map<string, { isoYear: number; isoWeek: number; pct: number }>;
   bySupplier: {
     farmerId: number;
@@ -73,8 +92,16 @@ export type CultureItemsAggregate = {
 //   позиция БЕЗ категорий (simple-акт) → одна принятая доля «Принято» (формула — computeAcceptedKg)
 //   брак → отдельная доля акта (categories + brak = 100), в calibreResults её нет
 // Сумма долей = 100% факта. Пустые доли не создаём (иначе категория-призрак в легенде).
+//
+// ПОРЯДОК — размерный (compareCalibreRanges), а не по доле: иначе у каждого фермера свой
+// порядок категорий и колонки таблицы не сопоставить глазами. Синтетические «Принято» и
+// «Брак» — не CalibreRange (id/границ у них нет), поэтому пришпилены в хвост явно.
 export function categoryShares(items: CultureItem[]): CategoryShare[] {
-  const catKg = new Map<string, { isAccepted: boolean; kg: number }>();
+  // Значение несёт и вес, и ключ сортировки (CalibreOrderKey: minCm/maxCm/id).
+  const catKg = new Map<
+    string,
+    CalibreOrderKey & { isAccepted: boolean; kg: number }
+  >();
   let actualKgTotal = 0;
   let brakKgTotal = 0; // вес брака (actual × brak%)
   let plainKg = 0; // принятый вес позиций без калибра
@@ -88,30 +115,52 @@ export function categoryShares(items: CultureItem[]): CategoryShare[] {
       continue;
     }
     for (const c of i.calibres) {
-      const cur = catKg.get(c.label) ?? { isAccepted: c.isAccepted, kg: 0 };
+      // Ключ — подпись: внутри одной культуры она 1:1 с диапазоном (строится из его
+      // границ), поэтому ключ сортировки берём у первой встреченной категории.
+      const cur = catKg.get(c.label) ?? {
+        isAccepted: c.isAccepted,
+        kg: 0,
+        minCm: c.minCm,
+        maxCm: c.maxCm,
+        id: c.rangeId,
+      };
       cur.kg += (i.actualKg * c.percent) / 100;
       catKg.set(c.label, cur);
     }
   }
 
-  if (plainKg > 0) catKg.set(PLAIN_LABEL, { isAccepted: true, kg: plainKg });
-  if (brakKgTotal > 0) {
-    const cur = catKg.get(BRAK_LABEL) ?? { isAccepted: false, kg: 0 };
-    cur.kg += brakKgTotal;
-    catKg.set(BRAK_LABEL, cur);
-  }
+  // Синтетические доли доливаются в ОДНОИМЁННУЮ категорию, если такая есть в схеме
+  // (у культуры может быть заведён свой безразмерный «Брак») — иначе ломоть задвоится.
+  const addSynthetic = (label: string, isAccepted: boolean, kg: number) => {
+    if (kg <= 0) return;
+    const cur = catKg.get(label) ?? {
+      isAccepted,
+      kg: 0,
+      minCm: null,
+      maxCm: null,
+      id: 0,
+    };
+    cur.kg += kg;
+    catKg.set(label, cur);
+  };
+  addSynthetic(PLAIN_LABEL, true, plainKg);
+  addSynthetic(BRAK_LABEL, false, brakKgTotal);
 
-  return (
-    [...catKg.entries()]
-      .map(([label, c]) => ({
-        label,
-        isAccepted: c.isAccepted,
-        pct: actualKgTotal > 0 ? (c.kg / actualKgTotal) * 100 : 0,
-        tons: c.kg / KG_PER_TON,
-      }))
-      // принятые категории первыми (по убыванию доли), «не в зачёт» — в конец
-      .sort((a, b) => Number(b.isAccepted) - Number(a.isAccepted) || b.pct - a.pct)
-  );
+  // «Принято» и «Брак» — не диапазоны, их место фиксировано: перед хвостом и в самом
+  // хвосте. Остальные — размерным порядком.
+  const rank = (label: string) => (label === BRAK_LABEL ? 2 : label === PLAIN_LABEL ? 1 : 0);
+
+  return [...catKg.entries()]
+    .sort(([aLabel, a], [bLabel, b]) => {
+      const byRank = rank(aLabel) - rank(bLabel);
+      return byRank !== 0 ? byRank : compareCalibreRanges(a, b);
+    })
+    .map(([label, c]) => ({
+      label,
+      isAccepted: c.isAccepted,
+      pct: actualKgTotal > 0 ? (c.kg / actualKgTotal) * 100 : 0,
+      tons: c.kg / KG_PER_TON,
+    }));
 }
 
 // Оплачиваемый вес позиции (BR-33) = принятый + доплата от факта. Формула — только
@@ -135,7 +184,10 @@ function paidKgOf(item: CultureItem, acceptedKg: number | null): number {
 // Всё, что считается из позиций культуры: объём/брак/недели/поставщики/калибр.
 // Формулы — только computeAcceptedKg + computeWeightedBrak, ничего своего.
 export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggregate {
-  const weekTons = new Map<string, { isoYear: number; isoWeek: number; tons: number }>();
+  const weekTons = new Map<
+    string,
+    { isoYear: number; isoWeek: number; tons: number; actualTons: number }
+  >();
   const weekBrakRows = new Map<
     string,
     { isoYear: number; isoWeek: number; rows: BrakRow[] }
@@ -170,8 +222,16 @@ export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggrega
     if (i.arrival) {
       const w = isoWeek(i.arrival);
       const key = `${w.isoYear}-${w.isoWeek}`;
-      const cur = weekTons.get(key) ?? { isoYear: w.isoYear, isoWeek: w.isoWeek, tons: 0 };
+      const cur = weekTons.get(key) ?? {
+        isoYear: w.isoYear,
+        isoWeek: w.isoWeek,
+        tons: 0,
+        actualTons: 0,
+      };
       cur.tons += acceptedKg / KG_PER_TON;
+      // Фактический вес — тем же проходом; своей выборки/агрегации под серию «по
+      // перевеске» не заводим. Позиция без перевески даёт 0, а не пропуск недели.
+      cur.actualTons += (i.actualKg ?? 0) / KG_PER_TON;
       weekTons.set(key, cur);
       if (brakRow) {
         const b = weekBrakRows.get(key) ?? {

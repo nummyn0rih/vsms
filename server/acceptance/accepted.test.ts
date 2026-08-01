@@ -3,12 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   actNumbersSummary,
   calibreRangeLabel,
+  compareCalibreRanges,
   computeAcceptedKg,
   computeAcceptedPercent,
   computeSettlement,
   computeWeightedBrak,
   findSettlementConflict,
   settlementConflictMessage,
+  type CalibreOrderKey,
   type SettlementCalibre,
 } from "./accepted";
 
@@ -239,6 +241,57 @@ describe("calibreRangeLabel", () => {
 
   it("безразмерная категория показывается своим label", () => {
     expect(calibreRangeLabel(null, null, "Пульпа")).toBe("Пульпа");
+  });
+});
+
+// Порядок показа категорий — РАЗМЕРНЫЙ и стабильный: не зависит ни от долей (у другого
+// фермера доли другие), ни от is_accepted, ни от порядка строк в БД.
+describe("compareCalibreRanges", () => {
+  // id-шники намеренно вразнобой: порядок ввода в форме не должен перебивать размер.
+  const R_912: CalibreOrderKey = { minCm: 9, maxCm: 12, id: 1 };
+  const BRAK: CalibreOrderKey = { minCm: null, maxCm: null, id: 2 };
+  const R_69: CalibreOrderKey = { minCm: 6, maxCm: 9, id: 3 };
+  const R_GT12: CalibreOrderKey = { minCm: 12, maxCm: null, id: 4 };
+  const R_LT6: CalibreOrderKey = { minCm: null, maxCm: 6, id: 5 };
+
+  const labels = (rs: CalibreOrderKey[]) =>
+    [...rs]
+      .sort(compareCalibreRanges)
+      .map((r) => calibreRangeLabel(r.minCm, r.maxCm, `#${r.id}`));
+
+  it("размерный порядок, безразмерная — в конец", () => {
+    expect(labels([R_912, BRAK, R_69, R_GT12])).toEqual([
+      "6–9 см",
+      "9–12 см",
+      ">12 см",
+      "#2",
+    ]);
+  });
+
+  it("открытый низ идёт первым, открытый верх — последним из размерных", () => {
+    expect(labels([R_GT12, R_912, R_LT6, R_69])).toEqual([
+      "<6 см",
+      "6–9 см",
+      "9–12 см",
+      ">12 см",
+    ]);
+  });
+
+  it("несколько безразмерных — в конце, между собой по id (порядок ввода)", () => {
+    const pulpa: CalibreOrderKey = { minCm: null, maxCm: null, id: 7 };
+    const othod: CalibreOrderKey = { minCm: null, maxCm: null, id: 6 };
+    expect(labels([pulpa, R_912, othod, R_69])).toEqual([
+      "6–9 см",
+      "9–12 см",
+      "#6",
+      "#7",
+    ]);
+  });
+
+  it("порядок стабилен независимо от исходной перестановки", () => {
+    const expected = labels([R_LT6, R_69, R_912, R_GT12, BRAK]);
+    expect(labels([BRAK, R_GT12, R_912, R_69, R_LT6])).toEqual(expected);
+    expect(labels([R_912, R_LT6, BRAK, R_GT12, R_69])).toEqual(expected);
   });
 });
 

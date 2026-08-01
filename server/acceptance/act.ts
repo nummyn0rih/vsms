@@ -13,6 +13,7 @@ import {
   withSeasonPrefix,
   stripSeasonPrefix,
   calibreRangeLabel,
+  compareCalibreRanges,
   findSettlementConflict,
   settlementConflictMessage,
   type SettlementConflictCalibre,
@@ -188,13 +189,31 @@ export async function getActContext({
     // extraLines — заплатка видимости, на семантику авто-привязки не влияют.
     autoLineId: lines.length === 1 ? lines[0].id : null,
     isLastUnaccepted: item.acceptanceAct == null && unaccepted === 1,
-    calibreRanges: (item.culture.calibreScheme?.ranges ?? []).map((r) => ({
-      id: r.id,
-      label: r.label,
-      minCm: r.min_cm != null ? r.min_cm.toString() : null,
-      maxCm: r.max_cm != null ? r.max_cm.toString() : null,
-      isAccepted: r.is_accepted,
-    })),
+    // Порядок строк диалога — размерный (compareCalibreRanges), а не порядок ввода в
+    // форме культуры. Prisma orderBy правило не выражает (NULLS у min и max трактуются
+    // по-разному), поэтому сортируем здесь; orderBy id в выборке оставлен ради
+    // детерминизма тай-брейкера.
+    calibreRanges: (item.culture.calibreScheme?.ranges ?? [])
+      .map((r) => ({
+        id: r.id,
+        label: r.label,
+        min: r.min_cm != null ? r.min_cm.toNumber() : null,
+        max: r.max_cm != null ? r.max_cm.toNumber() : null,
+        isAccepted: r.is_accepted,
+      }))
+      .sort((a, b) =>
+        compareCalibreRanges(
+          { minCm: a.min, maxCm: a.max, id: a.id },
+          { minCm: b.min, maxCm: b.max, id: b.id },
+        ),
+      )
+      .map((r) => ({
+        id: r.id,
+        label: r.label,
+        minCm: r.min != null ? String(r.min) : null,
+        maxCm: r.max != null ? String(r.max) : null,
+        isAccepted: r.isAccepted,
+      })),
     itemLineId: item.contract_line_id,
     existing: item.acceptanceAct
       ? {

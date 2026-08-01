@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
+import { FACTORY_LOCATION_ID } from "@/server/shipments/packaging";
 import type { ActionResult } from "@/lib/action-result";
 import {
   alertRuleSchema,
@@ -82,7 +83,12 @@ export async function listAlertRules(): Promise<AlertRuleRow[]> {
       location_name:
         r.location_scope == null
           ? "У любого фермера"
-          : (farmerMap.get(r.location_scope) ?? `#${r.location_scope}`),
+          : // Локация 0 — завод: не Farmer.id, в farmerMap его нет (рисовался «#0»).
+            // Новые правила с ней запрещены (для ингредиента — гардом схемы), но
+            // старые в БД должны читаться по-человечески.
+            r.location_scope === FACTORY_LOCATION_ID
+            ? "Завод"
+            : (farmerMap.get(r.location_scope) ?? `#${r.location_scope}`),
       threshold: Number(r.threshold),
     };
   });

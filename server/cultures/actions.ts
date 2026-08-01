@@ -8,6 +8,7 @@ import { failWithLog } from "@/server/action-result";
 import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import type { Prisma } from "@/lib/generated/prisma/client";
+import { compareCalibreRanges } from "@/server/acceptance/accepted";
 import { cultureSchema, type CultureInput, type PackagingOption } from "./schema";
 import { persistCalibreScheme } from "./calibre";
 
@@ -45,7 +46,7 @@ export async function listCultures(params?: {
   await requireRole();
 
   const q = params?.q?.trim();
-  return prisma.culture.findMany({
+  const cultures = await prisma.culture.findMany({
     where: {
       ...(params?.includeInactive ? {} : { active: true }),
       ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
@@ -55,11 +56,25 @@ export async function listCultures(params?: {
         include: { packagingType: { select: { name: true, active: true } } },
       },
       calibreScheme: {
-        include: { ranges: { orderBy: { min_cm: "asc" } } },
+        include: { ranges: { orderBy: { id: "asc" } } },
       },
     },
     orderBy: { name: "asc" },
   });
+
+  // Категории — единым размерным порядком (compareCalibreRanges), как в акте и аналитике.
+  // Prisma orderBy тут не годится: min_cm ASC в Postgres даёт NULLS LAST, и «<6 см»
+  // (открытый низ) уезжает в самый хвост вместо начала. orderBy id — только детерминизм
+  // выборки под тай-брейкер.
+  for (const c of cultures) {
+    c.calibreScheme?.ranges.sort((a, b) =>
+      compareCalibreRanges(
+        { minCm: a.min_cm?.toNumber() ?? null, maxCm: a.max_cm?.toNumber() ?? null, id: a.id },
+        { minCm: b.min_cm?.toNumber() ?? null, maxCm: b.max_cm?.toNumber() ?? null, id: b.id },
+      ),
+    );
+  }
+  return cultures;
 }
 
 // Active-типы тары для Select формы культуры.

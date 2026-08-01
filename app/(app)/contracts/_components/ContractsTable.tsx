@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
@@ -75,7 +76,14 @@ export function ContractsTable({
         )}
         {rows.map((row) => (
           <TableRow key={row.id}>
-            <TableCell className="font-medium">{row.farmer_name}</TableCell>
+            <TableCell className="font-medium">
+              <Link
+                href={`/reference/farmers/${row.farmer_id}?tab=contracts`}
+                className="hover:underline"
+              >
+                {row.farmer_name}
+              </Link>
+            </TableCell>
             <TableCell>{row.season_year}</TableCell>
             <TableCell className="text-right">{row.lines_count}</TableCell>
             <TableCell>

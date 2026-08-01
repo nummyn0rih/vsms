@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 // Сгенерированный клиент стабами НЕ подменяется (нужен только тип Decimal и его
 // конструктор), поэтому его можно тянуть статически — до регистрации хуков.
 import { Prisma } from "../lib/generated/prisma/client";
+import { FACTORY_LOCATION_ID } from "../server/shipments/packaging";
 
 // registerHooks — Node 22.15+/24; в @types/node ^20 его ещё нет, отсюда локальный тип.
 type ResolveResult = { url: string; shortCircuit?: boolean; format?: string };
@@ -213,8 +214,16 @@ async function main() {
         new Prisma.Decimal(c.quantity),
       ]),
     );
-    const oldIngNonZero: Cells = new Map([...oldIng].filter(([, v]) => !v.isZero()));
-    report("витрина ингредиентов", diff(oldIngNonZero, ingFromView));
+    // ingredients-factory-source: витрина ингредиентов сознательно НЕ отдаёт локацию
+    // завода (0) — для ингредиента он внешний безлимитный источник, а не место
+    // хранения. В леджере эти ячейки на месте (фаза 1 выше сверяет агрегацию целиком,
+    // вместе с заводом); здесь сверяется то, что доходит до экрана.
+    const oldIngNonZero: Cells = new Map(
+      [...oldIng].filter(
+        ([k, v]) => !v.isZero() && Number(k.split(":")[0]) !== FACTORY_LOCATION_ID,
+      ),
+    );
+    report("витрина ингредиентов (без завода)", diff(oldIngNonZero, ingFromView));
 
     // Деактивированные позиции не должны выпадать из колонок.
     const ledgerTypeIds = new Set(

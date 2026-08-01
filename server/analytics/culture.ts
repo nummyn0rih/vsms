@@ -42,11 +42,16 @@ export type CultureAnalytics = {
     farmersCount: number;
     seasonSharePct: number | null; // null = в сезоне ничего не принято
   };
+  // ⚠ ТРИ БАЗЫ В ОДНОЙ ТОЧКЕ ГРАФИКА — НЕ СЛИВАТЬ (DOMAIN §1):
+  //   tons       — ПРИНЯТЫЙ вес недели (серия «приёмка»);
+  //   actualTons — ФАКТИЧЕСКИЙ вес перевески (серия «по перевеске»), всегда ≥ tons;
+  //   planTons   — плановый темп из WeeklyPlan (не факт вообще), null = плана на неделю нет.
   acceptanceByWeek: {
     isoYear: number;
     isoWeek: number;
     label: string;
     tons: number;
+    actualTons: number;
     planTons: number | null;
   }[];
   hasPlanLine: boolean;
@@ -110,7 +115,14 @@ export async function getCultureAnalytics({
             select: {
               percent: true,
               calibreRange: {
-                select: { label: true, min_cm: true, max_cm: true, is_accepted: true },
+                // id и границы нужны показу: размерный порядок категорий (compareCalibreRanges).
+                select: {
+                  id: true,
+                  label: true,
+                  min_cm: true,
+                  max_cm: true,
+                  is_accepted: true,
+                },
               },
             },
           },
@@ -127,15 +139,18 @@ export async function getCultureAnalytics({
     const brakPercent = it.acceptanceAct!.brak_percent
       ? it.acceptanceAct!.brak_percent.toNumber()
       : null;
-    const calibres = it.acceptanceAct!.calibreResults.map((cr) => ({
-      label: calibreRangeLabel(
-        cr.calibreRange.min_cm ? cr.calibreRange.min_cm.toNumber() : null,
-        cr.calibreRange.max_cm ? cr.calibreRange.max_cm.toNumber() : null,
-        cr.calibreRange.label,
-      ),
-      isAccepted: cr.calibreRange.is_accepted,
-      percent: cr.percent.toNumber(),
-    }));
+    const calibres = it.acceptanceAct!.calibreResults.map((cr) => {
+      const minCm = cr.calibreRange.min_cm ? cr.calibreRange.min_cm.toNumber() : null;
+      const maxCm = cr.calibreRange.max_cm ? cr.calibreRange.max_cm.toNumber() : null;
+      return {
+        label: calibreRangeLabel(minCm, maxCm, cr.calibreRange.label),
+        isAccepted: cr.calibreRange.is_accepted,
+        percent: cr.percent.toNumber(),
+        minCm,
+        maxCm,
+        rangeId: cr.calibreRange.id,
+      };
+    });
     items.push({
       shipmentId: it.shipment_id,
       farmerId: it.farmer.id,
@@ -176,6 +191,7 @@ export async function getCultureAnalytics({
     return {
       ...w,
       tons: weekTons.get(key)?.tons ?? 0,
+      actualTons: weekTons.get(key)?.actualTons ?? 0,
       planTons: planTons.get(key)?.tons ?? null,
     };
   });

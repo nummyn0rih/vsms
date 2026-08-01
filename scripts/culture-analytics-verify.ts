@@ -31,6 +31,18 @@ const near = (a: number | null, b: number, eps = 1e-6) =>
 const W = new Date("2026-07-15T00:00:00Z"); // среда, ISO-неделя 29
 const W_NEXT = new Date("2026-07-22T00:00:00Z"); // среда, ISO-неделя 30
 
+// Категории калибра фикстур. id вразнобой относительно размеров: порядок показа обязан
+// идти от границ (compareCalibreRanges), а не от порядка ввода в форме культуры.
+const CAT = {
+  small: { label: "6–9 см", isAccepted: true, minCm: 6, maxCm: 9, rangeId: 3 },
+  mid: { label: "9–12 см", isAccepted: true, minCm: 9, maxCm: 12, rangeId: 1 },
+  big: { label: ">12 см", isAccepted: false, minCm: 12, maxCm: null, rangeId: 2 },
+} as const;
+
+function cal(cat: (typeof CAT)[keyof typeof CAT], percent: number) {
+  return { ...cat, percent };
+}
+
 function item(p: Partial<CultureItem> & { actualKg: number | null }): CultureItem {
   return {
     shipmentId: p.shipmentId ?? 1,
@@ -86,21 +98,19 @@ function pureCases() {
     near(a.weekBrakPct.get("2026-29")!.pct, 4) && near(a.weekBrakPct.get("2026-30")!.pct, 8),
   );
 
-  // calibre: 10000 кг, 60% станд. + 30% мелкий (в зачёт) + 10% не в зачёт
+  // calibre: 10000 кг, 60% 6–9 + 30% 9–12 (в зачёт) + 10% >12 (не в зачёт).
+  // На вход подаём вразнобой — порядок показа задаёт размер, а не порядок строк.
   a = aggregateCultureItems([
     item({
       actualKg: 10000,
-      calibres: [
-        { label: "станд.", isAccepted: true, percent: 60 },
-        { label: "мелкий", isAccepted: true, percent: 30 },
-        { label: "не в зачёт", isAccepted: false, percent: 10 },
-      ],
+      calibres: [cal(CAT.big, 10), cal(CAT.small, 60), cal(CAT.mid, 30)],
     }),
   ]);
   check("calibre: принято = actual × Σ принятых % = 9 т", near(a.acceptedKgTotal, 9000));
   check(
-    "calibre: доли 60/30/10, Σ = 100%",
-    near(a.calibre[0].pct, 60) &&
+    "calibre: доли 60/30/10 в размерном порядке, Σ = 100%",
+    a.calibre.map((c) => c.label).join("|") === "6–9 см|9–12 см|>12 см" &&
+      near(a.calibre[0].pct, 60) &&
       near(a.calibre[1].pct, 30) &&
       near(a.calibre[2].pct, 10) &&
       near(a.calibre.reduce((s, c) => s + c.pct, 0), 100),
@@ -108,16 +118,24 @@ function pureCases() {
   check("calibre: «не в зачёт» — последним", a.calibre[2].isAccepted === false);
   check("calibre: тоннаж категории 6 т", near(a.calibre[0].tons, 6));
 
+  // порядок не зависит от долей: у другого фермера доли другие, колонки те же
+  const flipped = aggregateCultureItems([
+    item({
+      actualKg: 10000,
+      calibres: [cal(CAT.big, 70), cal(CAT.mid, 20), cal(CAT.small, 10)],
+    }),
+  ]);
+  check(
+    "calibre: порядок категорий не зависит от долей",
+    flipped.calibre.map((c) => c.label).join("|") === "6–9 см|9–12 см|>12 см",
+  );
+
   // calibre + брак: категории (50+30+12) + brak 8 = 100. Брак — синтетический ломоть.
   a = aggregateCultureItems([
     item({
       actualKg: 10000,
       brakPercent: 8,
-      calibres: [
-        { label: "станд.", isAccepted: true, percent: 50 },
-        { label: "мелкий", isAccepted: true, percent: 30 },
-        { label: "не в зачёт", isAccepted: false, percent: 12 },
-      ],
+      calibres: [cal(CAT.small, 50), cal(CAT.mid, 30), cal(CAT.big, 12)],
     }),
   ]);
   check("calibre+брак: принято = 80% = 8 т", near(a.acceptedKgTotal, 8000));
@@ -136,7 +154,7 @@ function pureCases() {
     item({
       actualKg: 10000,
       brakPercent: 0,
-      calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
+      calibres: [cal(CAT.small, 100)],
     }),
   ]);
   check(
@@ -203,11 +221,7 @@ function pureCases() {
       actualKg: 10000,
       brakPercent: 8,
       farmerId: 1,
-      calibres: [
-        { label: "станд.", isAccepted: true, percent: 50 },
-        { label: "мелкий", isAccepted: true, percent: 30 },
-        { label: "не в зачёт", isAccepted: false, percent: 12 },
-      ],
+      calibres: [cal(CAT.small, 50), cal(CAT.mid, 30), cal(CAT.big, 12)],
     }),
     item({
       actualKg: 10000,
@@ -215,7 +229,7 @@ function pureCases() {
       farmerId: 2,
       farmerName: "Ф2",
       shipmentId: 2,
-      calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
+      calibres: [cal(CAT.small, 100)],
     }),
   ]);
   const c1 = a.bySupplier.find((s) => s.farmerId === 1)!.categoryPct;
@@ -342,7 +356,13 @@ async function seedCase() {
               select: {
                 percent: true,
                 calibreRange: {
-                  select: { label: true, min_cm: true, max_cm: true, is_accepted: true },
+                  select: {
+                    id: true,
+                    label: true,
+                    min_cm: true,
+                    max_cm: true,
+                    is_accepted: true,
+                  },
                 },
               },
             },
@@ -368,15 +388,18 @@ async function seedCase() {
         settlementPercent: it.acceptanceAct!.settlement_percent
           ? it.acceptanceAct!.settlement_percent.toNumber()
           : null,
-        calibres: it.acceptanceAct!.calibreResults.map((cr) => ({
-          label: calibreRangeLabel(
-            cr.calibreRange.min_cm ? cr.calibreRange.min_cm.toNumber() : null,
-            cr.calibreRange.max_cm ? cr.calibreRange.max_cm.toNumber() : null,
-            cr.calibreRange.label,
-          ),
-          isAccepted: cr.calibreRange.is_accepted,
-          percent: cr.percent.toNumber(),
-        })),
+        calibres: it.acceptanceAct!.calibreResults.map((cr) => {
+          const minCm = cr.calibreRange.min_cm ? cr.calibreRange.min_cm.toNumber() : null;
+          const maxCm = cr.calibreRange.max_cm ? cr.calibreRange.max_cm.toNumber() : null;
+          return {
+            label: calibreRangeLabel(minCm, maxCm, cr.calibreRange.label),
+            isAccepted: cr.calibreRange.is_accepted,
+            percent: cr.percent.toNumber(),
+            minCm,
+            maxCm,
+            rangeId: cr.calibreRange.id,
+          };
+        }),
       }));
 
     check("выборка вернула 2 позиции", items.length === 2, `got ${items.length}`);

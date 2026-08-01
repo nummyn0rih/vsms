@@ -15,7 +15,9 @@ import { fmtPct1 } from "@/lib/format";
 type Row = { label: string; pct: number };
 
 // % брака культуры по ISO-неделям (нейтральный янтарь). База — Σ(actual×brak%)/Σactual.
-export function CultureBrakBarChart({ data }: { data: Row[] }) {
+// height — только ради печатного листа: на A4 экранные 200px не дают уместить лист
+// в одну страницу. На экране дефолт не трогаем.
+export function CultureBrakBarChart({ data, height = 200 }: { data: Row[]; height?: number }) {
   if (data.length === 0) {
     return (
       <div className="an-empty">
@@ -36,7 +38,7 @@ export function CultureBrakBarChart({ data }: { data: Row[] }) {
 
   return (
     <>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={height}>
         <BarChart data={data} margin={{ top: 12, right: 8, bottom: 4, left: 0 }}>
           <CartesianGrid vertical={false} stroke="#ebebeb" />
           <XAxis

@@ -3,6 +3,7 @@ import { Truck } from "lucide-react";
 import type { FarmerCard } from "@/server/farmers/card";
 import { StatusBadge } from "@/app/(app)/shipments/_components/shipment-status";
 import { EmptyState } from "./EmptyState";
+import { FillRest } from "./FillRest";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
 
@@ -27,8 +28,10 @@ export function ShipmentsPanel({ card }: { card: FarmerCard }) {
     );
   }
 
+  // Скролл — как был: один контейнер над всеми недельными блоками. Меняется только
+  // высота: вместо фиксированных 460px тянемся до низа окна (FillRest замеряет остаток).
   return (
-    <div className="flex max-h-[460px] flex-col gap-5 overflow-y-auto">
+    <FillRest className="flex flex-col gap-5 overflow-y-auto">
       {weeks.map((w) => (
         <div key={`${w.isoYear}-${w.isoWeek}`}>
           <div className="mb-2 flex flex-wrap items-center gap-3">
@@ -115,6 +118,6 @@ export function ShipmentsPanel({ card }: { card: FarmerCard }) {
           </table>
         </div>
       ))}
-    </div>
+    </FillRest>
   );
 }

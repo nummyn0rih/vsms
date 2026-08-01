@@ -11,6 +11,18 @@ import {
 
 const W = new Date("2026-07-15T00:00:00Z"); // среда, ISO-неделя 29
 
+// Категории калибра фикстур. id намеренно вразнобой относительно размеров: порядок
+// показа обязан идти от границ, а не от порядка ввода в форме культуры.
+const CAT = {
+  small: { label: "6–9 см", isAccepted: true, minCm: 6, maxCm: 9, rangeId: 3 },
+  mid: { label: "9–12 см", isAccepted: true, minCm: 9, maxCm: 12, rangeId: 1 },
+  big: { label: ">12 см", isAccepted: false, minCm: 12, maxCm: null, rangeId: 2 },
+} as const;
+
+function cal(cat: (typeof CAT)[keyof typeof CAT], percent: number) {
+  return { ...cat, percent };
+}
+
 function item(p: Partial<CultureItem> & { actualKg: number | null }): CultureItem {
   return {
     shipmentId: p.shipmentId ?? 1,
@@ -122,20 +134,31 @@ describe("доли категорий калибра", () => {
       item({
         actualKg: 10000,
         brakPercent: 8,
-        calibres: [
-          { label: "станд.", isAccepted: true, percent: 50 },
-          { label: "мелкий", isAccepted: true, percent: 30 },
-          { label: "не в зачёт", isAccepted: false, percent: 12 },
-        ],
+        // на входе — «9–12 · 6–9 · >12», как приходит из БД
+        calibres: [cal(CAT.mid, 30), cal(CAT.small, 50), cal(CAT.big, 12)],
       }),
     ]);
     expect(cats.map((c) => c.label)).toEqual([
-      "станд.",
-      "мелкий",
-      "не в зачёт",
+      "6–9 см",
+      "9–12 см",
+      ">12 см",
       "Брак",
     ]);
     expect(cats.reduce((s, c) => s + c.pct, 0)).toBeCloseTo(100, 9);
+  });
+
+  // Главный инвариант показа: порядок категорий размерный и не зависит ни от долей, ни от
+  // is_accepted, ни от порядка строк в БД. Иначе у каждого фермера свой порядок колонок.
+  it("порядок размерный: доли и is_accepted на него не влияют", () => {
+    const order = (cats: { label: string }[]) => cats.map((c) => c.label);
+    const big = categoryShares([
+      item({ actualKg: 10000, calibres: [cal(CAT.big, 80), cal(CAT.small, 15), cal(CAT.mid, 5)] }),
+    ]);
+    const small = categoryShares([
+      item({ actualKg: 10000, calibres: [cal(CAT.small, 80), cal(CAT.mid, 15), cal(CAT.big, 5)] }),
+    ]);
+    expect(order(big)).toEqual(["6–9 см", "9–12 см", ">12 см"]);
+    expect(order(small)).toEqual(order(big));
   });
 
   it("simple: «Принято» + «Брак» дают 100% факта", () => {
@@ -148,11 +171,7 @@ describe("доли категорий калибра", () => {
 
   it("брак 0 → пустая категория не создаётся", () => {
     const cats = categoryShares([
-      item({
-        actualKg: 10000,
-        brakPercent: 0,
-        calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
-      }),
+      item({ actualKg: 10000, brakPercent: 0, calibres: [cal(CAT.small, 100)] }),
     ]);
     expect(cats).toHaveLength(1);
   });
@@ -166,28 +185,58 @@ describe("доли категорий калибра", () => {
       item({
         actualKg: 10000,
         farmerId: 1,
-        calibres: [
-          { label: "станд.", isAccepted: true, percent: 60 },
-          { label: "не в зачёт", isAccepted: false, percent: 40 },
-        ],
+        calibres: [cal(CAT.small, 60), cal(CAT.big, 40)],
       }),
       item({
         actualKg: 10000,
         farmerId: 2,
         farmerName: "Ф2",
         shipmentId: 2,
-        calibres: [{ label: "станд.", isAccepted: true, percent: 100 }],
+        calibres: [cal(CAT.small, 100)],
       }),
     ]);
     // строки отсортированы по принятому убыв. → Ф2 (10 т) впереди Ф1 (6 т)
     const f1 = a.bySupplier.find((s) => s.farmerId === 1)!;
     const f2 = a.bySupplier.find((s) => s.farmerId === 2)!;
     expect(f1.categoryPct.map((c) => [c.label, c.pct])).toEqual([
-      ["станд.", 60],
-      ["не в зачёт", 40],
+      ["6–9 см", 60],
+      [">12 см", 40],
     ]);
-    expect(f2.categoryPct.map((c) => [c.label, c.pct])).toEqual([["станд.", 100]]);
+    expect(f2.categoryPct.map((c) => [c.label, c.pct])).toEqual([["6–9 см", 100]]);
     // культура целиком — общая база: (6000 + 10000) / 20000 = 80%
     expect(a.calibre[0].pct).toBeCloseTo(80, 9);
+  });
+});
+
+// Серия «по перевеске» на графике динамики. ⚠ Две разные базы веса в одной точке
+// (DOMAIN §1): tons — принятый, actualTons — фактический. Разрыв = брак + нестандарт.
+describe("недельные тонны: приёмка и перевеска", () => {
+  const week = (a: ReturnType<typeof aggregateCultureItems>) =>
+    a.weekTons.get("2026-29")!;
+
+  it("actualTons = Σ фактического веса недели, tons = Σ принятого", () => {
+    const a = aggregateCultureItems([
+      item({ actualKg: 10000, brakPercent: 8, calibres: [cal(CAT.small, 80), cal(CAT.big, 12)] }),
+      item({ actualKg: 5000, brakPercent: 4, shipmentId: 2 }),
+    ]);
+    // факт 10 + 5 = 15 т; принято 10×80% + 5×96% = 8 + 4,8 = 12,8 т
+    expect(week(a).actualTons).toBeCloseTo(15, 9);
+    expect(week(a).tons).toBeCloseTo(12.8, 9);
+  });
+
+  it("перевеска всегда ≥ приёмки (принятый = факт × Σ принятых %)", () => {
+    const a = aggregateCultureItems([
+      item({ actualKg: 9850, brakPercent: 9, calibres: [cal(CAT.mid, 61), cal(CAT.big, 30)] }),
+      item({ actualKg: 4000, brakPercent: 0, shipmentId: 2 }),
+    ]);
+    expect(week(a).actualTons).toBeGreaterThanOrEqual(week(a).tons);
+  });
+
+  it("позиция без перевески не ломает неделю (0, не NaN)", () => {
+    const a = aggregateCultureItems([
+      item({ actualKg: null, brakPercent: 5 }),
+      item({ actualKg: 2000, shipmentId: 2 }),
+    ]);
+    expect(week(a).actualTons).toBeCloseTo(2, 9);
   });
 });

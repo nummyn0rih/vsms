@@ -72,6 +72,7 @@ export async function listContracts(params?: {
 
     return {
       id: c.id,
+      farmer_id: c.farmer_id,
       farmer_name: c.farmer.name,
       season_year: c.season_year,
       lines_count: c.lines.length,
