@@ -3,17 +3,29 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, ChevronDown, Phone, RotateCcw, User } from "lucide-react";
+import { Check, ChevronDown, Loader2, Pencil, Phone, RotateCcw, User } from "lucide-react";
 
 import type { AcceptedMachine as Machine } from "@/server/acceptance/schema";
 import { revertAct } from "@/server/acceptance/act";
+import {
+  actNumbersSummary,
+  computeAcceptedPercent,
+} from "@/server/acceptance/accepted";
 import { normalizePhone } from "@/lib/validators";
 import { TripDates } from "@/app/(app)/shipments/_components/MachineRow";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import { STATUS_STYLE } from "@/app/(app)/shipments/_components/shipment-status";
+import { ACT_CHIP_CLS } from "./card-layout";
 
 function kg(n: number): string {
   return formatWeight(Math.round(n));
+}
+
+// % принятого веса — та же чистая формула, что на десктопе (computeAcceptedPercent).
+function acceptedPctLabel(pos: Machine["positions"][number]): string {
+  if (!(pos.actualKg > 0)) return "—";
+  const pct = computeAcceptedPercent(pos.brakPercent, pos.calibres);
+  return `${pct.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} %`;
 }
 
 // Кнопка отката акта позиции (admin). Тот же вызов, что десктопный RollbackButton
@@ -46,7 +58,37 @@ function RollbackButton({ shipmentItemId }: { shipmentItemId: number }) {
   );
 }
 
-function Position({ pos, isAdmin }: { pos: Machine["positions"][number]; isAdmin: boolean }) {
+// Правка акта без отката (admin) — тот же MobileActDialog, что и приёмка; вес в нём
+// остаётся read-only (гард w5a). Десктопный аналог — EditActButton в AcceptedMachine.
+function EditActButton({ onClick, pending }: { onClick: () => void; pending: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      className="mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-md border border-[#ebebeb] bg-white text-[13px] font-medium tracking-tight text-[#4d4d4d] disabled:opacity-60"
+    >
+      {pending ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Pencil className="size-3.5" />
+      )}{" "}
+      Изменить акт
+    </button>
+  );
+}
+
+function Position({
+  pos,
+  isAdmin,
+  onEditAct,
+  pending,
+}: {
+  pos: Machine["positions"][number];
+  isAdmin: boolean;
+  onEditAct: () => void;
+  pending: boolean;
+}) {
   return (
     <div
       className="overflow-hidden rounded-lg border border-[#ebebeb]"
@@ -69,6 +111,8 @@ function Position({ pos, isAdmin }: { pos: Machine["positions"][number]; isAdmin
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 pt-0.5 text-[13px] tracking-tight">
         <span className="text-muted-foreground">факт <b className="font-medium tabular-nums text-[#171717]">{kg(pos.actualKg)}</b> кг</span>
+        <span className="text-[#a1a1a1]">·</span>
+        <span className="text-muted-foreground">принято <b className="font-medium tabular-nums text-[#171717]">{acceptedPctLabel(pos)}</b></span>
         <span className="text-[#a1a1a1]">·</span>
         <span className="text-muted-foreground">брак <b className="font-medium tabular-nums text-[#171717]">{pos.brakPercent}</b> %</span>
         <span className="text-[#a1a1a1]">·</span>
@@ -136,6 +180,7 @@ function Position({ pos, isAdmin }: { pos: Machine["positions"][number]; isAdmin
 
       {isAdmin && (
         <div className="border-t border-[#ebebeb] bg-white px-3.5 py-2.5">
+          <EditActButton onClick={onEditAct} pending={pending} />
           <RollbackButton shipmentItemId={pos.id} />
         </div>
       )}
@@ -145,8 +190,20 @@ function Position({ pos, isAdmin }: { pos: Machine["positions"][number]; isAdmin
 
 // Мобильная карточка зоны 3 «Принято» — свёрнутый аккордеон (та же логика, что
 // десктопная AcceptedMachine.tsx), позиции read-only + откат акта (admin).
-export function MobileAcceptedCard({ machine, isAdmin }: { machine: Machine; isAdmin: boolean }) {
+export function MobileAcceptedCard({
+  machine,
+  isAdmin,
+  onOpenAct,
+  pendingId,
+}: {
+  machine: Machine;
+  isAdmin: boolean;
+  onOpenAct: (itemId: number, machineId: number, machineStatus: "accepted") => void;
+  pendingId: number | null;
+}) {
   const [open, setOpen] = useState(false);
+  // № актов в свёрнутом виде — как на десктопе (acceptance-ux-2).
+  const acts = actNumbersSummary(machine.positions.map((p) => p.actNumber));
 
   return (
     <article className="acard">
@@ -191,6 +248,21 @@ export function MobileAcceptedCard({ machine, isAdmin }: { machine: Machine; isA
           )}
         </div>
 
+        {acts.shown.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1 pt-0.5">
+            {acts.shown.map((n) => (
+              <span key={n} className={ACT_CHIP_CLS}>
+                № {n}
+              </span>
+            ))}
+            {acts.rest > 0 && (
+              <span className="font-mono text-[11px] text-muted-foreground">
+                +{acts.rest}
+              </span>
+            )}
+          </div>
+        )}
+
         <span className="acard-progress">
           <Check className="size-3.5" style={{ color: STATUS_STYLE.accepted.color }} />
           принято <span className="pn">{machine.acceptedCount}&#8202;/&#8202;{machine.total}</span>
@@ -204,7 +276,13 @@ export function MobileAcceptedCard({ machine, isAdmin }: { machine: Machine; isA
       {open && (
         <div className="flex flex-col gap-2.5 border-t border-[#ebebeb] bg-[#fafafa] p-3">
           {machine.positions.map((pos) => (
-            <Position key={pos.id} pos={pos} isAdmin={isAdmin} />
+            <Position
+              key={pos.id}
+              pos={pos}
+              isAdmin={isAdmin}
+              pending={pendingId === pos.id}
+              onEditAct={() => onOpenAct(pos.id, machine.id, "accepted")}
+            />
           ))}
         </div>
       )}

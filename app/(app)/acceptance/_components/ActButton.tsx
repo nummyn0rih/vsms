@@ -29,11 +29,22 @@ export function ActButton({
     machineStatus: "sent" | "arrived",
   ) => void;
 }) {
+  // № акта прямо на кнопке (acceptance-ux-2): раньше он жил только в title, и найти
+  // нужный акт можно было лишь наведением на каждую позицию. Номер — техническая метка,
+  // значит Geist Mono (DESIGN-SYSTEM). Акт без номера (старые данные) — прежняя подпись.
+  const label = actNumber ? (
+    <>
+      Акт <span className="font-mono">№ {actNumber}</span>
+    </>
+  ) : (
+    "Акт принят"
+  );
+
   // user: только индикатор, без действий.
   if (!canEdit) {
     return accepted ? (
-      <span className="inline-flex items-center gap-1 text-xs font-medium tabular-nums text-[#1d8e75]">
-        <FileText className="size-3" /> Акт принят
+      <span className="inline-flex items-center gap-1 truncate text-xs font-medium tabular-nums text-[#1d8e75]">
+        <FileText className="size-3 shrink-0" /> {label}
       </span>
     ) : (
       <span className="text-xs text-[#888888]">—</span>
@@ -46,10 +57,10 @@ export function ActButton({
     <button
       onClick={onClick}
       disabled={pending}
-      title={actNumber ? `Акт №${actNumber}` : undefined}
-      className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-2.5 text-[0.8rem] font-medium tracking-tight text-[#1d8e75] hover:bg-[#c7f6ea]"
+      title={actNumber ? `Акт № ${actNumber} · открыть` : undefined}
+      className="inline-flex h-7 max-w-full items-center gap-1.5 truncate rounded-md border border-[#c7f6ea] bg-[#ddfff7] px-2.5 text-[0.8rem] font-medium tracking-tight text-[#1d8e75] hover:bg-[#c7f6ea]"
     >
-      <FileText className="size-3.5" /> Акт принят
+      <FileText className="size-3.5 shrink-0" /> {label}
     </button>
   ) : (
     <button

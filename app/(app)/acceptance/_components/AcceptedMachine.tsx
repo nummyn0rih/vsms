@@ -3,13 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, ChevronRight, FileText, RotateCcw } from "lucide-react";
+import { Check, ChevronRight, FileText, Loader2, Pencil, RotateCcw } from "lucide-react";
 
 import type { AcceptedMachine as Machine } from "@/server/acceptance/schema";
 import { revertAct } from "@/server/acceptance/act";
+import {
+  actNumbersSummary,
+  computeAcceptedPercent,
+} from "@/server/acceptance/accepted";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import { DriverModal } from "@/app/(app)/shipments/_components/DriverModal";
+import { ACT_CHIP_CLS, LEFT_ZONE_CLS } from "./card-layout";
 
 const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
   day: "numeric",
@@ -78,6 +83,15 @@ function rub(n: number): string {
   return formatWeight(Math.round(n));
 }
 
+// % принятого веса позиции. Формула НЕ новая — та же чистая computeAcceptedPercent, что
+// валидирует settlement_percent на сервере (simple: 100 − брак%; калибр: Σ принятых
+// категорий), поэтому значение всегда сходится с «принято … кг» (computeAcceptedKg).
+function acceptedPctLabel(pos: Machine["positions"][number]): string {
+  if (!(pos.actualKg > 0)) return "—";
+  const pct = computeAcceptedPercent(pos.brakPercent, pos.calibres);
+  return `${pct.toLocaleString("ru-RU", { maximumFractionDigits: 2 })} %`;
+}
+
 // Кнопка отката акта (admin). Откат штатный/обратим → вторичный, не красный стиль.
 function RollbackButton({ shipmentItemId }: { shipmentItemId: number }) {
   const router = useRouter();
@@ -113,10 +127,41 @@ function RollbackButton({ shipmentItemId }: { shipmentItemId: number }) {
   );
 }
 
+// Кнопка правки акта БЕЗ отката (admin, acceptance-ux-2). Открывает тот же диалог акта,
+// что и приёмка (getActContext отдаёт сохранённые значения); фактический вес в нём
+// остаётся read-only — расход ингредиентов уже списан по нему (гард w5a).
+function EditActButton({
+  onClick,
+  pending,
+}: {
+  onClick: () => void;
+  pending: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      className="inline-flex h-[34px] items-center gap-1.5 rounded-md border border-[#ebebeb] bg-white px-3 text-[13px] font-medium tracking-tight text-[#4d4d4d] shadow-[0_1px_1px_#0000000a] hover:border-[#a1a1a1] hover:bg-[#fafafa] hover:text-[#171717] disabled:opacity-60"
+    >
+      {pending ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Pencil className="size-3.5" />
+      )}{" "}
+      Изменить акт
+    </button>
+  );
+}
+
 function Position({
   pos,
+  onEditAct,
+  pending,
 }: {
   pos: Machine["positions"][number];
+  onEditAct: () => void;
+  pending: boolean;
 }) {
   return (
     <div
@@ -149,9 +194,11 @@ function Position({
         </div>
       </div>
 
-      {/* Метрики: факт · брак · принято [· к оплате, если есть корректировка BR-33]. */}
+      {/* Метрики: факт · принято % · брак · принято [· к оплате, если корректировка BR-33]. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3.5 pt-0.5">
         <Metric k="факт" v={`${kg(pos.actualKg)}`} u="кг" />
+        <span className="text-[#a1a1a1]">·</span>
+        <Metric k="принято %" v={acceptedPctLabel(pos)} />
         <span className="text-[#a1a1a1]">·</span>
         <Metric k="брак" v={`${pos.brakPercent} %`} />
         <span className="text-[#a1a1a1]">·</span>
@@ -240,8 +287,13 @@ function Position({
             <span className="ml-0.5 text-xs font-normal text-[#4d4d4d]">₽</span>
           </span>
         </div>
+        {/* Правка и откат — обе admin-действия над принятой партией (деньги). Серверная
+            проверка роли — в saveAct/revertAct, RoleGate прячет только кнопки. */}
         <RoleGate allow={["admin"]}>
-          <RollbackButton shipmentItemId={pos.id} />
+          <div className="flex items-center gap-2">
+            <EditActButton onClick={onEditAct} pending={pending} />
+            <RollbackButton shipmentItemId={pos.id} />
+          </div>
         </RoleGate>
       </div>
 
@@ -306,15 +358,26 @@ function Metric({
   );
 }
 
-export function AcceptedMachine({ machine }: { machine: Machine }) {
+export function AcceptedMachine({
+  machine,
+  onOpenAct,
+  pendingId,
+}: {
+  machine: Machine;
+  onOpenAct: (itemId: number, machineId: number, machineStatus: "accepted") => void;
+  pendingId: number | null;
+}) {
   const [open, setOpen] = useState(false);
+  // № актов машины в СВЁРНУТОМ виде: раньше их было видно только после раскрытия, и
+  // поиск нужного акта означал разворачивать каждую машину подряд.
+  const acts = actNumbersSummary(machine.positions.map((p) => p.actNumber));
 
   return (
     <div className="overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
       <div className="flex cursor-pointer items-stretch" onClick={() => setOpen((v) => !v)}>
         {/* Левая зона: статус · даты · водитель. */}
         <div
-          className="flex w-[348px] shrink-0 flex-col gap-2 border-r border-[#ebebeb] p-3"
+          className={`flex ${LEFT_ZONE_CLS} flex-col gap-2 border-r border-[#ebebeb] p-3`}
           style={{ backgroundColor: "#ddfff7" }}
         >
           <div className="flex items-center gap-2">
@@ -360,6 +423,20 @@ export function AcceptedMachine({ machine }: { machine: Machine }) {
                 {c.name}
               </span>
             ))}
+            {acts.shown.length > 0 && (
+              <span className="flex flex-wrap items-center gap-1">
+                {acts.shown.map((n) => (
+                  <span key={n} className={ACT_CHIP_CLS}>
+                    № {n}
+                  </span>
+                ))}
+                {acts.rest > 0 && (
+                  <span className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+                    +{acts.rest}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           <div className="ml-auto flex items-center gap-5">
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] tracking-tight text-[#4d4d4d]">
@@ -388,7 +465,12 @@ export function AcceptedMachine({ machine }: { machine: Machine }) {
       {open && (
         <div className="flex flex-col gap-2.5 border-t border-[#ebebeb] bg-[#fafafa] p-3">
           {machine.positions.map((pos) => (
-            <Position key={pos.id} pos={pos} />
+            <Position
+              key={pos.id}
+              pos={pos}
+              pending={pendingId === pos.id}
+              onEditAct={() => onOpenAct(pos.id, machine.id, "accepted")}
+            />
           ))}
         </div>
       )}

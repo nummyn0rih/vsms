@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  actNumbersSummary,
   calibreRangeLabel,
   computeAcceptedKg,
   computeAcceptedPercent,
@@ -279,5 +280,53 @@ describe("findSettlementConflict — BR-33 × C3d-2", () => {
     expect(msg).toContain("«>12 см»");
     expect(msg).toContain("Уберите строку контракта");
     expect(msg).toContain("очистите процент");
+  });
+});
+
+// --- Сводка № актов для свёрнутой карточки (acceptance-ux-2) ---
+
+describe("actNumbersSummary", () => {
+  it("позиции без акта отбрасываются", () => {
+    expect(actNumbersSummary([null, "12", null])).toEqual({
+      shown: ["12"],
+      rest: 0,
+    });
+    expect(actNumbersSummary([null, null])).toEqual({ shown: [], rest: 0 });
+    expect(actNumbersSummary([])).toEqual({ shown: [], rest: 0 });
+  });
+
+  it("повторяющийся номер (один акт на несколько позиций) схлопывается", () => {
+    expect(actNumbersSummary(["12", "12", "13"])).toEqual({
+      shown: ["12", "13"],
+      rest: 0,
+    });
+  });
+
+  it("переполнение сворачивается в остаток, порядок позиций сохраняется", () => {
+    expect(actNumbersSummary(["12", "13", "14", "15", "16"])).toEqual({
+      shown: ["12", "13", "14"],
+      rest: 2,
+    });
+  });
+
+  it("остаток считается по уникальным номерам, а не по позициям", () => {
+    expect(actNumbersSummary(["12", "12", "13", "14", "15"])).toEqual({
+      shown: ["12", "13", "14"],
+      rest: 1,
+    });
+  });
+
+  it("предел настраивается", () => {
+    expect(actNumbersSummary(["12", "13", "14"], 1)).toEqual({
+      shown: ["12"],
+      rest: 2,
+    });
+  });
+
+  it("пустая строка номером не считается", () => {
+    expect(actNumbersSummary(["", "  ", "12"])).toEqual({
+      shown: ["12"],
+      rest: 0,
+    });
   });
 });

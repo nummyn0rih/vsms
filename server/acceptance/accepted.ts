@@ -147,6 +147,22 @@ export function computeAcceptedPercent(
   return calibres.filter((c) => c.isAccepted).reduce((s, c) => s + c.percent, 0);
 }
 
+// Компактная сводка № актов машины для СВЁРНУТОЙ карточки (acceptance-ux-2): показать
+// первые max номеров, остальные свернуть в «+N». Позиции без акта отбрасываются,
+// повторы схлопываются (одна машина = один номер на несколько позиций — штатный случай).
+// Порядок сохраняется — он повторяет порядок позиций в карточке.
+export function actNumbersSummary(
+  numbers: (string | null)[],
+  max = 3,
+): { shown: string[]; rest: number } {
+  const uniq: string[] = [];
+  for (const n of numbers) {
+    if (n == null || n.trim() === "") continue;
+    if (!uniq.includes(n)) uniq.push(n);
+  }
+  return { shown: uniq.slice(0, max), rest: Math.max(0, uniq.length - max) };
+}
+
 // Средневзвешенный брак по фактическому весу: Σ(actual×brak%) / Σ actual.
 // Пустой набор ИЛИ Σ actual = 0 → 0. База — факт (BR-10/§5). Единая формула для
 // печатной приёмки и аналитики (per-culture + total).

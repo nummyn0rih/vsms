@@ -92,10 +92,12 @@ export function MobileAcceptanceBoard({
     writeUrlParam("zone", z);
   }
 
+  // machineStatus = "accepted" — вход «Изменить акт» из зоны 3 (acceptance-ux-2):
+  // markArrived не зовём, машина уже принята.
   async function onOpenAct(
     itemId: number,
     machineId: number,
-    machineStatus: "sent" | "arrived",
+    machineStatus: "sent" | "arrived" | "accepted",
   ) {
     setPendingId(itemId);
     const fromSent = machineStatus === "sent";
@@ -192,7 +194,15 @@ export function MobileAcceptanceBoard({
           (view.zone3.length === 0 ? (
             <EmptyZone note={emptyNote("Нет принятых машин.")} />
           ) : (
-            view.zone3.map((m) => <MobileAcceptedCard key={m.id} machine={m} isAdmin={isAdmin} />)
+            view.zone3.map((m) => (
+              <MobileAcceptedCard
+                key={m.id}
+                machine={m}
+                isAdmin={isAdmin}
+                onOpenAct={onOpenAct}
+                pendingId={pendingId}
+              />
+            ))
           ))}
       </div>
 

@@ -273,10 +273,12 @@ export function AcceptanceBoard({
     });
   }
 
+  // machineStatus = "accepted" — вход из зоны 3 («Изменить акт», acceptance-ux-2):
+  // markArrived не зовём (машина уже принята), статус при правке не меняется.
   async function onOpenAct(
     itemId: number,
     machineId: number,
-    machineStatus: "sent" | "arrived",
+    machineStatus: "sent" | "arrived" | "accepted",
   ) {
     setPendingId(itemId);
     const fromSent = machineStatus === "sent";
@@ -317,7 +319,12 @@ export function AcceptanceBoard({
   const renderAccepted = (list: Board["zone3"]) => (
     <div className="flex flex-col gap-3">
       {list.map((m) => (
-        <AcceptedMachine key={m.id} machine={m} />
+        <AcceptedMachine
+          key={m.id}
+          machine={m}
+          onOpenAct={onOpenAct}
+          pendingId={pendingId}
+        />
       ))}
     </div>
   );
