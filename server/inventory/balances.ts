@@ -2,13 +2,24 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
-import { aggregateStockCells, listLedgerItemIds } from "@/server/inventory/cells";
+import { zonedDayRange } from "@/server/changelog/labels";
+import {
+  aggregateFactoryOutflow,
+  aggregateStockCells,
+  listLedgerItemIds,
+} from "@/server/inventory/cells";
+import { summarizeIngredientLedger } from "@/server/inventory/ingredient-ledger";
 import {
   FACTORY_LOCATION_ID,
   TRANSIT_TO_FACTORY,
   TRANSIT_TO_FARMER,
   TRANSFER_TRANSIT,
 } from "@/server/shipments/packaging";
+import {
+  parseDateUTC,
+  seasonYearOf,
+  todayLocalISO,
+} from "@/server/shipments/workdays";
 
 // D4b: read-only витрина остатков тары (DOMAIN §3). Баланс НЕ хранится — это Σ
 // движений по (локация, тип, состояние). Server-only loader + два action для
@@ -382,6 +393,14 @@ export async function getTareMovements(
 // -1 ингредиента не касается), колонки несут единицу (кг/л), количества —
 // Decimal (микродозы, не округлять). Σ-агрегация — общая с тарой (cells.ts,
 // audit-w4b), различие только в арности ключа (loc:ing вместо loc:type:state).
+//
+// ingredients-factory-source: у ингредиента завод — ВНЕШНИЙ БЕЗЛИМИТНЫЙ ИСТОЧНИК,
+// а не локация (обратного потока нет: ингредиент уходит к фермеру и в производство).
+// Поэтому локация 0 из витрины исключена — её «остаток» ничего не значит и уходит в
+// минус по мере доставок. Транзит -2 остаётся: груз в дороге реален. Леджер не
+// изменился, движения по-прежнему пишутся `0 → -2 → фермер` — скрыт только показ,
+// решение обратимо. Тары это НЕ касается: там завод — полноценная локация (тара
+// возвращается), getTareBalances не тронут.
 // =====================================================================
 
 export type IngredientCol = {
@@ -390,10 +409,12 @@ export type IngredientCol = {
   unit: "kg" | "l";
 };
 
+// kind без "factory" (в отличие от TareLocation) — завод в ингредиентной витрине
+// не локация, а внешний источник.
 export type IngredientLocation = {
   id: number;
   name: string;
-  kind: "factory" | "farmer" | "transit";
+  kind: "farmer" | "transit";
   inactive?: boolean;
 };
 
@@ -418,6 +439,30 @@ export type IngredientMovement = {
   qty: number;
   srcKind: "trip" | "act" | "inv";
   srcRef: string;
+};
+
+// Сводка над историей движений пары (локация × ингредиент): «остаток на начало ·
+// поступило с завода · израсходовано в производство» (+ перенос между поставщиками,
+// когда он есть). Считается ЧИСТОЙ функцией из тех же строк, что идут в список, —
+// без второго запроса и второй свёртки. Decimal → number на выходе (сериализуемо).
+export type IngredientLedgerTotals = {
+  openingQty: number;
+  receivedQty: number;
+  transferNet: number;
+  consumedQty: number;
+  otherNet: number;
+  balance: number;
+};
+
+export type IngredientLedger = {
+  movements: IngredientMovement[];
+  totals: IngredientLedgerTotals;
+};
+
+// «Забрано со склада» по ингредиентам за сезон — KPI /ingredients.
+export type FactoryOutflow = {
+  seasonYear: number;
+  byIngredient: { ingredientId: number; quantity: number }[];
 };
 
 // itemIds — сужение выборки ДЛЯ АЛЕРТОВ (см. getTareBalances).
@@ -489,8 +534,8 @@ export async function getIngredientBalances(
     ([k, v]) => Number(k.split(":")[0]) === TRANSFER_TRANSIT && !v.isZero(),
   );
 
+  // Завода в списке нет (см. шапку секции): он внешний источник, не локация.
   const locations: IngredientLocation[] = [
-    { id: FACTORY_LOCATION_ID, name: FACTORY_NAME, kind: "factory" },
     ...activeFarmers.map((f) => ({
       id: f.id,
       name: f.name,
@@ -522,6 +567,9 @@ export async function getIngredientBalances(
   for (const [k, v] of balances) {
     if (v.isZero()) continue;
     const [loc, ing] = k.split(":");
+    // Ячейки завода отбрасываем вместе с его строкой — иначе «Итого у поставщиков»
+    // в матрице подмешало бы остаток источника.
+    if (Number(loc) === FACTORY_LOCATION_ID) continue;
     cells.push({
       locationId: Number(loc),
       ingredientId: Number(ing),
@@ -574,12 +622,14 @@ function chipForIngredient(
   }
 }
 
-// История движений ячейки (локация × ингредиент) для drill-down. Знак qty — для
-// ЭТОЙ локации (+to / −from). Источник (рейс/акт) — для метки.
+// История движений ячейки (локация × ингредиент) для drill-down + сводка над ней.
+// Знак qty — для ЭТОЙ локации (+to / −from). Источник (рейс/акт) — для метки.
+// Сводка считается из УЖЕ загруженных строк (summarizeIngredientLedger) — лишнего
+// обращения к БД нет.
 export async function getIngredientMovements(
   locationId: number,
   ingredientId: number,
-): Promise<IngredientMovement[]> {
+): Promise<IngredientLedger> {
   await requireRole();
 
   const rows = await prisma.stockMovement.findMany({
@@ -658,7 +708,7 @@ export async function getIngredientMovements(
     return farmerName.get(loc) ?? `Фермер #${loc}`;
   };
 
-  return touched.map((m) => {
+  const movements: IngredientMovement[] = touched.map((m) => {
     const originFarmer =
       m.source_doc_type === "material_shipment" && m.source_doc_id != null
         ? srcFarmerByTrip.get(m.source_doc_id) ?? null
@@ -689,4 +739,45 @@ export async function getIngredientMovements(
       srcRef,
     };
   });
+
+  // Сводка — из тех же rows (Decimal целы до самого конца), число только на выходе.
+  const s = summarizeIngredientLedger(rows, locationId);
+  return {
+    movements,
+    totals: {
+      openingQty: s.openingQty.toNumber(),
+      receivedQty: s.receivedQty.toNumber(),
+      transferNet: s.transferNet.toNumber(),
+      consumedQty: s.consumedQty.toNumber(),
+      otherNet: s.otherNet.toNumber(),
+      balance: s.balance.toNumber(),
+    },
+  };
+}
+
+/**
+ * «Забрано со склада за сезон» — KPI /ingredients. Завод для ингредиентов внешний
+ * безлимитный источник, поэтому показываем не его остаток, а исходящий поток.
+ *
+ * Сезон (BR-17) — июнь→май; StockMovement сезона не хранит, поэтому границы считаем
+ * по `date`. Границы — ИНСТАНТЫ местных суток (zonedDayRange, FACTORY_TZ), а не
+ * UTC-полночь: иначе движение, созданное 1 июня в 01:00 МСК, попало бы в прошлый
+ * сезон. «Сегодня» — через todayLocalISO() по той же причине.
+ */
+export async function getIngredientFactoryOutflow(): Promise<FactoryOutflow> {
+  await requireRole();
+
+  const seasonYear = seasonYearOf(parseDateUTC(todayLocalISO()));
+  const range = zonedDayRange(`${seasonYear}-06-01`, `${seasonYear + 1}-05-31`);
+  const outflow = await aggregateFactoryOutflow(range);
+
+  const byIngredient = [...outflow]
+    .filter(([, qty]) => !qty.isZero())
+    .map(([ingredientId, qty]) => ({
+      ingredientId,
+      quantity: qty.toNumber(),
+    }))
+    .sort((a, b) => a.ingredientId - b.ingredientId);
+
+  return { seasonYear, byIngredient };
 }

@@ -15,12 +15,17 @@ import {
   getIngredientMovements,
   type IngredientBalances,
   type IngredientCol,
+  type IngredientLedger,
+  type IngredientLedgerTotals,
   type IngredientMovement,
 } from "@/server/inventory/balances";
 
 // E4: матрица остатков ингредиентов локация × ингредиент. Read-only, зеркало
 // TareBalanceMatrix, но проще: нет состояния (good-only), один транзит -2,
 // колонки несут единицу (кг/л), количества — Decimal (не округлять).
+//
+// ingredients-factory-source: строки «Завод» здесь нет — для ингредиента завод
+// внешний безлимитный источник (сервер его и не отдаёт). Итог — «у поставщиков».
 
 const OUTFLOW = "#9a5a12"; // приглушённый amber для отрицательных (зазор учёта)
 const LOCATION_COL_W = 220; // ширина колонки «Локация»; остальные делят остаток поровну
@@ -45,7 +50,7 @@ function fmtQty(v: number): string {
 export function IngredientBalanceMatrix({ data }: Props) {
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<SelectedCell | null>(null);
-  const [movements, setMovements] = useState<IngredientMovement[] | null>(null);
+  const [ledger, setLedger] = useState<IngredientLedger | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Лукап баланса: `${loc}:${ing}` → qty.
@@ -62,7 +67,6 @@ export function IngredientBalanceMatrix({ data }: Props) {
     [balMap],
   );
 
-  const factory = data.locations.find((l) => l.kind === "factory");
   const farmers = data.locations.filter((l) => l.kind === "farmer");
   const transit = data.locations.filter((l) => l.kind === "transit");
 
@@ -75,8 +79,8 @@ export function IngredientBalanceMatrix({ data }: Props) {
     : farmers.filter((f) => !farmerIsZero(f.id));
   const hiddenCount = farmers.length - visibleFarmers.length;
 
-  // Итог колонки = Σ по всем локациям ПО ЭТОЙ колонке (единица колонки). Между
-  // колонками НЕ суммируем — разные единицы (кг/л).
+  // Итог колонки = Σ по всем локациям ПО ЭТОЙ колонке (единица колонки): фермеры +
+  // транзит, завода в locations нет. Между колонками НЕ суммируем — разные единицы.
   const systemTotal = useCallback(
     (ing: number) =>
       data.locations.reduce((sum, l) => sum + cellVal(l.id, ing), 0),
@@ -86,10 +90,10 @@ export function IngredientBalanceMatrix({ data }: Props) {
   function openCell(location: SelectedCell["location"], column: IngredientCol) {
     if (cellVal(location.id, column.id) === 0) return;
     setSelected({ location, column });
-    setMovements(null);
+    setLedger(null);
     setLoading(true);
     getIngredientMovements(location.id, column.id)
-      .then((rows) => setMovements(rows))
+      .then((res) => setLedger(res))
       .finally(() => setLoading(false));
   }
 
@@ -195,15 +199,6 @@ export function IngredientBalanceMatrix({ data }: Props) {
             </tr>
           </thead>
           <tbody>
-            {factory && (
-              <LocationRow
-                location={factory}
-                columns={data.columns}
-                cellVal={cellVal}
-                onOpen={openCell}
-                emphasis
-              />
-            )}
             {visibleFarmers.map((f) => (
               <LocationRow
                 key={f.id}
@@ -229,7 +224,7 @@ export function IngredientBalanceMatrix({ data }: Props) {
             <tr>
               <th className="sticky left-0 z-10 border-t-2 bg-muted/60 px-4 py-3 text-left text-[13px] font-semibold">
                 <span className="flex flex-col">
-                  Итого в системе
+                  Итого у поставщиков
                   <span className="text-[11px] font-normal text-muted-foreground">
                     живой остаток · учитывает расход
                   </span>
@@ -262,7 +257,7 @@ export function IngredientBalanceMatrix({ data }: Props) {
         balance={
           selected ? cellVal(selected.location.id, selected.column.id) : 0
         }
-        movements={movements}
+        ledger={ledger}
         loading={loading}
         onClose={closeDrawer}
       />
@@ -276,7 +271,6 @@ function LocationRow({
   columns,
   cellVal,
   onOpen,
-  emphasis,
   muted,
   topBorder,
 }: {
@@ -284,34 +278,23 @@ function LocationRow({
   columns: IngredientCol[];
   cellVal: (loc: number, ing: number) => number;
   onOpen: (loc: IngredientBalances["locations"][number], col: IngredientCol) => void;
-  emphasis?: boolean;
   muted?: boolean;
   topBorder?: boolean;
 }) {
-  const rowBg = emphasis ? "bg-muted/40" : "";
   const top = topBorder ? "border-t-2" : "";
   return (
     <tr className="group">
       <th
-        className={`sticky left-0 z-10 border-b border-r bg-background px-4 text-left font-medium whitespace-nowrap group-hover:bg-muted/30 ${rowBg} ${top}`}
+        className={`sticky left-0 z-10 border-b border-r bg-background px-4 text-left font-medium whitespace-nowrap group-hover:bg-muted/30 ${top}`}
         style={{ height: 52 }}
       >
         <span className="flex items-center gap-2">
           {location.kind === "transit" && (
             <Truck className="size-3.5 text-muted-foreground" />
           )}
-          {location.kind === "factory" ? (
-            <span className="flex items-center gap-2">
-              <span className="rounded border bg-background px-1.5 py-px font-mono text-[10px] text-muted-foreground">
-                завод
-              </span>
-              МКЗ
-            </span>
-          ) : (
-            <span className={muted ? "text-muted-foreground" : ""}>
-              {location.name}
-            </span>
-          )}
+          <span className={muted ? "text-muted-foreground" : ""}>
+            {location.name}
+          </span>
           {location.inactive && (
             <span className="text-[10px] text-muted-foreground">(архив)</span>
           )}
@@ -323,7 +306,7 @@ function LocationRow({
         return (
           <td
             key={c.id}
-            className={`border-b p-0 group-hover:bg-muted/30 ${rowBg} ${top}`}
+            className={`border-b p-0 group-hover:bg-muted/30 ${top}`}
           >
             <button
               type="button"
@@ -359,19 +342,23 @@ function Legend() {
   return (
     <div className="mt-4 max-w-[760px] rounded-lg border bg-muted/30 px-4 py-3.5 text-[13px] leading-5 text-muted-foreground">
       <p>
-        <span className="font-semibold text-foreground">Завод / Фермер</span> —
-        реальный остаток ингредиента на руках (начальный + доставлено − расход).
+        <span className="font-semibold text-foreground">Поставщик</span> —
+        реальный остаток ингредиента на руках (начальный + поступило − расход).
       </p>
       <p className="mt-2">
         <span className="font-semibold text-foreground">В пути с завода</span> —
-        ингредиент отправлен, но ещё не доставлен фермеру.
+        ингредиент отправлен, но ещё не доставлен поставщику.
       </p>
       <p className="mt-2 border-t border-dashed pt-2.5">
-        Отрицательный остаток у фермера — временный зазор учёта: расход отмечен
-        раньше прибытия доставки.{" "}
-        <span className="font-medium text-foreground">«Итого в системе»</span> по
-        колонке — живой остаток (учитывает расход в производство); может быть
-        меньше начального. Единицы (кг/л) между колонками не складываются.
+        <span className="font-medium text-foreground">Завод</span> — внешний
+        безлимитный источник: ингредиент на складе завода не отслеживается и{" "}
+        <span className="font-medium text-foreground">в сумму не входит</span>.
+        Сколько его забрали за сезон — в шапке страницы.{" "}
+        <span className="font-medium text-foreground">«Итого у поставщиков»</span>{" "}
+        по колонке — живой остаток на руках плюс «в пути с завода» (груз в дороге
+        уже забран со склада); учитывает расход в производство. Отрицательный
+        остаток у поставщика — временный зазор учёта: расход отмечен раньше
+        прибытия доставки. Единицы (кг/л) между колонками не складываются.
       </p>
     </div>
   );
@@ -381,13 +368,13 @@ function Legend() {
 function Drawer({
   selected,
   balance,
-  movements,
+  ledger,
   loading,
   onClose,
 }: {
   selected: SelectedCell | null;
   balance: number;
-  movements: IngredientMovement[] | null;
+  ledger: IngredientLedger | null;
   loading: boolean;
   onClose: () => void;
 }) {
@@ -395,15 +382,14 @@ function Drawer({
   const neg = balance < 0;
   const kind = selected?.location.kind;
   const unit = selected ? INGREDIENT_UNIT_LABELS[selected.column.unit] : "";
+  const movements = ledger?.movements ?? null;
   const meta = !selected
     ? ""
     : kind === "transit"
-      ? "Ингредиент в дороге к фермеру — отправлен с завода, ещё не доставлен. Источник — рейсы."
+      ? "Ингредиент в дороге к поставщику — отправлен с завода, ещё не доставлен. Источник — рейсы."
       : neg
         ? "Отрицательный остаток — временный зазор учёта: расход отмечен раньше прибытия доставки."
-        : kind === "factory"
-          ? "Физический остаток ингредиента на складе завода."
-          : "Реальный остаток у фермера: начальный + доставлено − расход в производство.";
+        : "Реальный остаток у поставщика: начальный + поступило − расход в производство.";
 
   return (
     <>
@@ -425,11 +411,9 @@ function Drawer({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {selected.location.kind !== "factory" && (
-                      <Truck className="size-3" />
-                    )}
+                    <Truck className="size-3" />
                     {selected.location.name}
-                    {selected.location.kind === "farmer" && " · фермер"}
+                    {selected.location.kind === "farmer" && " · поставщик"}
                   </div>
                   <h3 className="mt-1 text-[17px] font-semibold tracking-tight">
                     {selected.column.name}
@@ -462,6 +446,9 @@ function Drawer({
             </div>
 
             <div className="flex-1 overflow-y-auto px-6 py-4">
+              {kind === "farmer" && ledger && (
+                <LedgerTotals totals={ledger.totals} unit={unit} />
+              )}
               <h4 className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
                 История движений
               </h4>
@@ -495,6 +482,66 @@ function Drawer({
         )}
       </aside>
     </>
+  );
+}
+
+// ---------- сводка над историей движений ----------
+// Три величины из спеки + перенос между поставщиками (только когда он есть: без
+// него инвариант «начало + поступило − израсходовано = остаток» у участника
+// переноса не сходился бы). «Прочие движения» — та же страховка для ручных правок:
+// блок обязан сходиться с крупной цифрой остатка в шапке drawer'а.
+function LedgerTotals({
+  totals,
+  unit,
+}: {
+  totals: IngredientLedgerTotals;
+  unit: string;
+}) {
+  const rows: { label: string; value: number; outflow?: boolean }[] = [
+    { label: "Остаток на начало сезона", value: totals.openingQty },
+    { label: "Поступило с завода", value: totals.receivedQty },
+    {
+      label: "Израсходовано в производство",
+      value: totals.consumedQty,
+      outflow: true,
+    },
+  ];
+  if (totals.transferNet !== 0) {
+    rows.push({
+      label: "Перенос между поставщиками",
+      value: totals.transferNet,
+      outflow: totals.transferNet < 0,
+    });
+  }
+  if (totals.otherNet !== 0) {
+    rows.push({
+      label: "Прочие движения",
+      value: totals.otherNet,
+      outflow: totals.otherNet < 0,
+    });
+  }
+
+  return (
+    <div className="mb-5 rounded-md border">
+      {rows.map((r, i) => (
+        <div
+          key={r.label}
+          className={`flex items-baseline justify-between gap-4 px-3 py-2 ${
+            i > 0 ? "border-t" : ""
+          }`}
+        >
+          <span className="text-xs text-muted-foreground">{r.label}</span>
+          <span className="shrink-0 font-mono text-[13px] font-medium tabular-nums">
+            <span style={r.outflow ? { color: OUTFLOW } : undefined}>
+              {fmtQty(r.value)}
+            </span>
+            <span className="ml-1 font-sans text-[11px] font-normal text-muted-foreground">
+              {unit}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 

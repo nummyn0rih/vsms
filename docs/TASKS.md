@@ -199,6 +199,7 @@
 - [x] **E3** — начальные остатки ингредиентов: `server/inventory/opening.ts` параметризован по kind (тара целое · ингредиент Decimal); `/settings/opening-stock` += вкладки Тара|Ингредиенты (unit в шапке). Замена + ChangeLog в транзакции. _Регресс тары + дробный ввод ✓._
 - [x] **E4** — дашборд балансов ингредиентов: `server/inventory/balances.ts` += `getIngredientBalances`/`getIngredientMovements` (зеркало tare, общая агрегация — хелпер); экран `/ingredients` (заменил заглушку). Без scrap, один транзит `-2`, колонки с unit, «Итог» учитывает consumption (≠ opening — норма), drill-down с чипом «расход в производство». _Принято._
 - [x] **transfer фермер→фермер** — закрыт (см. раздел «transfer» ниже).
+- [x] **ingredients-factory-source** — завод = внешний безлимитный источник ингредиентов (BR-27): из `/ingredients` убраны KPI «На заводе» и строка «Завод», «Итого в системе» → **«Итого у поставщиков»**; новый KPI **«Забрано со склада за сезон»** (`getIngredientFactoryOutflow` + `aggregateFactoryOutflow`, нетто плеча `0 → -2`, границы сезона в `FACTORY_TZ`); в drill-down — сводка «начало · поступило с завода · израсходовано» (+ перенос при ≠0) на чистом `server/inventory/ingredient-ledger.ts` (15 юнит-тестов). Смежное: завод скрыт в opening-stock для ингредиентов (+ серверный гард), `AlertRule` — гард в zod и «Завод» вместо «#0». **Миграции нет, леджер и тара не тронуты**; `scripts/ingredients-factory-source-verify.ts` — 37 проверок. _Принято._
 
 ---
 

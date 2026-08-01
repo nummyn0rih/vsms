@@ -1,5 +1,6 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { FACTORY_LOCATION_ID } from "@/server/shipments/packaging";
 
 // audit-w4b: Σ движений склада считает БД, а не JS. Баланс по-прежнему НЕ хранится
 // (CLAUDE.md правило 2) — просто свёртка переехала из findMany-цикла в groupBy.
@@ -129,6 +130,74 @@ export async function aggregateStockCells(
     add(ingCellKey(r.from_location_id, r.ingredient_id), q.neg());
   }
   return balances;
+}
+
+/**
+ * ingredients-factory-source: сколько ингредиента УШЛО с завода за период («забрано
+ * со склада»). Завод для ингредиентов — внешний безлимитный источник: его остаток не
+ * показываем, но исходящий поток — ровно та цифра, которая нужна.
+ *
+ * База — плечо отправки `завод(0) → −2`, то есть груз считается забранным в момент
+ * ухода со склада (включая то, что ещё в пути). Нетто: сторно отправки `−2 → 0`
+ * вычитается — откаты append-only, гард «по существованию» дал бы завышение.
+ *
+ * `movement_type: "delivery"` обязателен: без него в цифру попал бы opening завода
+ * (`null → 0`) и любые ручные правки — это остаток источника, а не отток.
+ *
+ * Механика та же, что у aggregateStockCells: две groupBy на плечо, Decimal, свёртка
+ * в Map. Границы периода приходят инстантами (см. zonedDayRange) — считать их здесь
+ * нельзя, это дело вызывающего.
+ */
+export async function aggregateFactoryOutflow(
+  range: { gte?: Date; lt?: Date } = {},
+): Promise<Map<number, Prisma.Decimal>> {
+  const out = new Map<number, Prisma.Decimal>();
+  const add = (ingredientId: number, delta: Prisma.Decimal) => {
+    out.set(
+      ingredientId,
+      (out.get(ingredientId) ?? new Prisma.Decimal(0)).plus(delta),
+    );
+  };
+
+  const dateFilter =
+    range.gte != null || range.lt != null ? { date: range } : {};
+
+  const [sentRows, revertedRows] = await Promise.all([
+    prisma.stockMovement.groupBy({
+      by: ["ingredient_id"],
+      where: {
+        kind: "ingredient",
+        movement_type: "delivery",
+        from_location_id: FACTORY_LOCATION_ID,
+        ingredient_id: { not: null },
+        ...dateFilter,
+      },
+      _sum: { quantity: true },
+    }),
+    prisma.stockMovement.groupBy({
+      by: ["ingredient_id"],
+      where: {
+        kind: "ingredient",
+        movement_type: "delivery",
+        to_location_id: FACTORY_LOCATION_ID,
+        ingredient_id: { not: null },
+        ...dateFilter,
+      },
+      _sum: { quantity: true },
+    }),
+  ]);
+
+  for (const r of sentRows) {
+    const q = r._sum.quantity;
+    if (q == null || r.ingredient_id == null) continue;
+    add(r.ingredient_id, q);
+  }
+  for (const r of revertedRows) {
+    const q = r._sum.quantity;
+    if (q == null || r.ingredient_id == null) continue;
+    add(r.ingredient_id, q.neg());
+  }
+  return out;
 }
 
 /**

@@ -85,8 +85,14 @@ export async function getOpeningBalances(
     }),
   ]);
 
+  // ingredients-factory-source: у ингредиента завод — внешний безлимитный источник,
+  // «стартовый остаток» бесконечного источника смысла не имеет → строки нет. У тары
+  // завод остаётся полноценной локацией (тара возвращается). Уже введённые значения
+  // завода по ингредиентам в БД остаются — просто не показываются и не правятся.
   const locations = [
-    { id: FACTORY_LOCATION_ID, name: "Завод", isFactory: true },
+    ...(kind === "ingredient"
+      ? []
+      : [{ id: FACTORY_LOCATION_ID, name: "Завод", isFactory: true }]),
     ...farmers.map((f) => ({ id: f.id, name: f.name, isFactory: false })),
   ];
 
@@ -105,11 +111,16 @@ export async function getOpeningBalances(
 }
 
 // Локация opening: завод (0) или активный фермер. Транзит/null — запрещены.
-async function isValidLocation(locationId: number): Promise<boolean> {
+// Для ингредиента завод тоже запрещён (внешний безлимитный источник) — гард на
+// сервере, а не только скрытая строка в UI.
+async function isValidLocation(
+  locationId: number,
+  kind: ItemKind,
+): Promise<boolean> {
   if (locationId === TRANSIT_TO_FACTORY || locationId === TRANSIT_TO_FARMER) {
     return false;
   }
-  if (locationId === FACTORY_LOCATION_ID) return true;
+  if (locationId === FACTORY_LOCATION_ID) return kind !== "ingredient";
   const farmer = await prisma.farmer.findFirst({
     where: { id: locationId, active: true },
     select: { id: true },
@@ -138,7 +149,7 @@ export async function setOpeningBalance(input: {
     } else if (!Number.isInteger(quantity) || quantity < 0) {
       return { ok: false, error: "Количество — целое число ≥ 0" };
     }
-    if (!(await isValidLocation(locationId))) {
+    if (!(await isValidLocation(locationId, kind))) {
       return { ok: false, error: "Недопустимая локация" };
     }
     if (kind === "ingredient") {

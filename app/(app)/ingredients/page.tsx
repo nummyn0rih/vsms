@@ -1,13 +1,15 @@
 import { INGREDIENT_UNIT_LABELS } from "@/server/ingredients/schema";
 import { listAlertRules } from "@/server/alert-rules/actions";
 import { computeIngredientAlerts } from "@/server/alert-rules/alerts";
-import { getIngredientBalances } from "@/server/inventory/balances";
-import { FACTORY_LOCATION_ID } from "@/server/shipments/packaging";
+import {
+  getIngredientBalances,
+  getIngredientFactoryOutflow,
+} from "@/server/inventory/balances";
 import { DeficitPanel } from "@/components/inventory/DeficitPanel";
 import { IngredientBalanceMatrix } from "./_components/IngredientBalanceMatrix";
 
-// Decimal-форматирование для сводки завода (как в матрице): без округления, без
-// trailing-нулей. Дублируем мелкий хелпер — page серверный, матрица клиентская.
+// Decimal-форматирование для KPI (как в матрице): без округления, без trailing-нулей.
+// Дублируем мелкий хелпер — page серверный, матрица клиентская.
 function fmtQty(v: number): string {
   return v.toLocaleString("ru-RU", {
     maximumFractionDigits: 6,
@@ -15,16 +17,28 @@ function fmtQty(v: number): string {
 }
 
 export default async function IngredientsPage() {
-  const [data, rules] = await Promise.all([getIngredientBalances(), listAlertRules()]);
+  const [data, rules, outflow] = await Promise.all([
+    getIngredientBalances(),
+    listAlertRules(),
+    getIngredientFactoryOutflow(),
+  ]);
   const alerts = computeIngredientAlerts(rules, data);
 
-  // Сводка завода (остаток по ингредиентам) — статична, считаем из cells.
-  const factory = data.columns.map((c) => {
-    const cell = data.cells.find(
-      (x) => x.locationId === FACTORY_LOCATION_ID && x.ingredientId === c.id,
-    );
-    return { name: c.name, unit: c.unit, qty: cell ? cell.quantity : 0 };
-  });
+  // ingredients-factory-source: завод — внешний безлимитный источник, его остаток
+  // не показываем. Вместо него — сколько с него забрали за сезон (нетто плеча
+  // «завод → в пути», т.е. включая груз, который ещё едет).
+  const takenMap = new Map(
+    outflow.byIngredient.map((r) => [r.ingredientId, r.quantity]),
+  );
+  const taken = data.columns
+    .map((c) => ({
+      name: c.name,
+      unit: c.unit,
+      qty: takenMap.get(c.id) ?? 0,
+    }))
+    .filter((r) => r.qty !== 0);
+  // «2026/27» — сезон июнь→май (BR-17).
+  const seasonLabel = `${outflow.seasonYear}/${String(outflow.seasonYear + 1).slice(2)}`;
 
   return (
     <div className="w-full max-w-[1120px]">
@@ -35,30 +49,32 @@ export default async function IngredientsPage() {
         <div className="min-w-0 flex-1 basis-0">
           <h1 className="text-2xl font-semibold tracking-tight">Ингредиенты</h1>
           <p className="text-sm text-muted-foreground">
-            Реальные остатки ингредиентов по локациям: начальный + доставлено −
+            Реальные остатки ингредиентов у поставщиков: начальный + поступило −
             расход в производство. Строка «в пути» — отправлено с завода, ещё не
-            доставлено. Read-only.
+            доставлено. Завод — внешний источник, его остаток не отслеживается.
+            Read-only.
           </p>
         </div>
-        {factory.length > 0 && (
+        {taken.length > 0 && (
           <div className="min-w-0 flex-1 basis-0 rounded-lg border bg-card px-4 py-3 shadow-sm">
             <div className="mb-1.5 text-[11px] text-muted-foreground">
-              На заводе
+              Забрано со склада · сезон {seasonLabel}
             </div>
             <div className="flex flex-wrap items-baseline gap-4">
-              {factory.map((f) => (
-                <span key={f.name} className="flex items-baseline gap-1.5">
+              {taken.map((t) => (
+                <span key={t.name} className="flex items-baseline gap-1.5">
                   <span className="text-xl font-semibold tabular-nums">
-                    {fmtQty(f.qty)}
+                    {fmtQty(t.qty)}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {f.name}, {INGREDIENT_UNIT_LABELS[f.unit]}
+                    {t.name}, {INGREDIENT_UNIT_LABELS[t.unit]}
                   </span>
                 </span>
               ))}
             </div>
             <div className="mt-1.5 text-[11px] text-muted-foreground">
-              Кг и л не суммируются — учёт по каждому ингредиенту раздельный.
+              Включая груз в пути. Кг и л не суммируются — учёт по каждому
+              ингредиенту раздельный.
             </div>
           </div>
         )}

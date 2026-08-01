@@ -12,18 +12,33 @@ export const ITEM_KIND_LABELS: Record<"packaging" | "ingredient", string> = {
 // Сентинел «у любого фермера» в Select → location_scope = null.
 export const LOCATION_ANY = "any";
 
+// Завод как локация правила (ingredients-factory-source): для ингредиента бессмысленно —
+// это внешний безлимитный источник, дефицита у него не бывает. В Select его и так нет,
+// гард закрывает путь мимо формы.
+export const FACTORY_SCOPE = "0";
+
 // Поля item_id/location_scope приходят строкой из Select; threshold — строкой из
 // Input. Числа/null резолвим в server actions (паттерн driver).
-export const alertRuleSchema = z.object({
-  item_kind: z.enum(["packaging", "ingredient"]),
-  item_id: z.string().trim().min(1, "Выберите позицию"),
-  location_scope: z.string(), // LOCATION_ANY или Farmer.id
-  threshold: z
-    .string()
-    .trim()
-    .min(1, "Укажите порог")
-    .refine((v) => Number(v) > 0, "Порог должен быть больше 0"),
-});
+export const alertRuleSchema = z
+  .object({
+    item_kind: z.enum(["packaging", "ingredient"]),
+    item_id: z.string().trim().min(1, "Выберите позицию"),
+    location_scope: z.string(), // LOCATION_ANY или Farmer.id
+    threshold: z
+      .string()
+      .trim()
+      .min(1, "Укажите порог")
+      .refine((v) => Number(v) > 0, "Порог должен быть больше 0"),
+  })
+  .superRefine((v, ctx) => {
+    if (v.item_kind === "ingredient" && v.location_scope === FACTORY_SCOPE) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["location_scope"],
+        message: "Завод — внешний источник ингредиентов, дефицита у него нет",
+      });
+    }
+  });
 
 export type AlertRuleInput = z.infer<typeof alertRuleSchema>;
 
