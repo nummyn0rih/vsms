@@ -138,6 +138,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "AcceptanceAct.updated": "Акт изменён",
   "AcceptanceAct.deleted": "Акт удалён",
   "AcceptanceAct.movements": "Движения по акту",
+  "AcceptanceAct.calibres": "Категории калибра",
   "Contract.lines": "Строки контракта",
   "SeasonConfig.season_year": "Год сезона",
   "AlertRule.item_id": "Номенклатура (тара/ингредиент)",

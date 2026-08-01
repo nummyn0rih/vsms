@@ -9,6 +9,7 @@ import {
 } from "@/app/(app)/shipments/_components/shipment-status";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import { DriverModal } from "@/app/(app)/shipments/_components/DriverModal";
+import { LEFT_ZONE_CLS } from "./card-layout";
 import { WeightInput } from "./WeightInput";
 import { MarkArrivedButton } from "./AcceptanceActions";
 import { ActButton } from "./ActButton";
@@ -85,24 +86,29 @@ export function AcceptanceMachine({
     <div className="flex overflow-hidden rounded-lg border border-[#ebebeb] bg-card shadow-[0_1px_1px_#00000005,0_2px_2px_#0000000a]">
       {/* Левая зона: статус · даты · довешенность · водитель · действие. */}
       <div
-        className="flex w-[330px] shrink-0 flex-col gap-2 border-r border-[#ebebeb] p-3"
+        className={`flex ${LEFT_ZONE_CLS} flex-col gap-2 border-r border-[#ebebeb] p-3`}
         style={{ backgroundColor: zoneBg }}
       >
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {/* Заголовок НЕ переносится (без flex-wrap): иначе пара чипов уезжала на вторую
+            строку целиком и висела там. Сжимается блок чипов — см. ниже. */}
+        <div className="flex items-start gap-x-2">
           <StatusBadge status={machine.status} />
-          <span className="text-[13px] tracking-tight">
+          <span className="shrink-0 text-[13px] leading-[22px] tracking-tight">
             <TripDates
               departure={machine.departureDate}
               arrival={machine.arrivalDate}
             />
           </span>
-          {/* Короткие бейджи в одну строку: взвешено + (если есть акты) принято (фикс 2). */}
-          <div className="ml-auto flex items-center gap-1">
-            <span className="rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
+          {/* Бейджи «взвешено»/«принято» — у ПРАВОГО края. Собственный flex-wrap плюс
+              min-w-0: не хватает места на пару в ряд → чипы складываются СТОЛБИКОМ,
+              выровненные по правому краю, а не уезжают вдвоём на вторую строку.
+              При одном чипе строка одна — высота карточки не меняется. */}
+          <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+            <span className="whitespace-nowrap rounded border border-[#0000000f] bg-white/60 px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
               взвешено · {machine.weighed}/{machine.total}
             </span>
             {machine.acceptedCount > 0 && (
-              <span className="inline-flex items-center rounded-md bg-[#c7f6ea] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#1d8e75]">
+              <span className="inline-flex whitespace-nowrap items-center rounded-md bg-[#c7f6ea] px-1.5 py-0.5 text-xs font-medium tabular-nums text-[#1d8e75]">
                 принято · {machine.acceptedCount}/{machine.total}
               </span>
             )}
@@ -151,8 +157,10 @@ export function AcceptanceMachine({
             key={it.id}
             className="grid flex-1 items-center gap-3 border-t border-[#ebebeb] px-4 py-2 first:border-t-0"
             style={{
+              // Последняя колонка — кнопка «Акт»: с № акта внутри ей нужно больше 110px,
+              // иначе длинный номер упирается в край карточки.
               gridTemplateColumns:
-                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px 130px 110px",
+                "minmax(150px,1.4fr) minmax(160px,1.5fr) 120px 130px 148px",
               backgroundColor: `color-mix(in srgb, ${it.color} 9%, #fff)`,
             }}
           >
@@ -176,7 +184,7 @@ export function AcceptanceMachine({
                 locked={it.accepted}
               />
             </span>
-            <span className="flex items-center justify-end">
+            <span className="flex min-w-0 items-center justify-end">
               <ActButton
                 shipmentItemId={it.id}
                 machineId={machine.id}

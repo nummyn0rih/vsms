@@ -95,6 +95,10 @@ export function AcceptanceActDialog({
   // Появился акт → поле read-only: расход ингредиентов уже списан по этому весу, правка
   // отклоняется сервером (гард в setActualWeight). Здесь блокировка — только UX.
   const weightLocked = context.existing != null;
+  // Правка существующего акта (в т.ч. вход «Изменить акт» из зоны 3) — тот же диалог и
+  // тот же saveAct (upsert), меняются только подписи. Гард w5a при этом не ослабляется:
+  // вес остаётся read-only ровно потому, что акт уже есть (weightLocked выше).
+  const isEdit = context.existing != null;
   const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
   const [weightStr, setWeightStr] = useState(
     context.actualKg != null ? String(context.actualKg) : "",
@@ -337,7 +341,7 @@ export function AcceptanceActDialog({
     });
     setSubmitting(false);
     if (res.ok) {
-      toast.success("Позиция принята");
+      toast.success(isEdit ? "Акт изменён" : "Позиция принята");
       onOpenChange(false);
       router.refresh();
     } else {
@@ -547,7 +551,7 @@ export function AcceptanceActDialog({
         {/* Шапка */}
         <div className="border-b border-[#ebebeb] px-5 pb-4 pt-[18px]">
           <DialogTitle className="text-[18px] font-semibold leading-6 tracking-[-0.035em] text-[#171717]">
-            Акт приёмки
+            {isEdit ? "Правка акта приёмки" : "Акт приёмки"}
           </DialogTitle>
           <div className="mt-2 flex flex-wrap items-center gap-x-[7px] gap-y-1 text-[13px] tracking-tight text-[#4d4d4d]">
             <span className="inline-flex items-center gap-1.5 font-medium text-[#171717]">
@@ -804,7 +808,7 @@ export function AcceptanceActDialog({
               disabled={blockReason != null || submitting}
               className="flex h-10 flex-1 items-center justify-center gap-2 rounded-md border border-[#171717] bg-[#171717] px-4 text-sm font-medium tracking-tight text-white shadow-[0_1px_2px_#0000001f] hover:bg-[#171717]/90 disabled:cursor-not-allowed disabled:border-[#ebebeb] disabled:bg-[#f1f1f1] disabled:text-[#888888] disabled:shadow-none"
             >
-              <Check className="size-[15px]" /> Принять
+              <Check className="size-[15px]" /> {isEdit ? "Сохранить" : "Принять"}
             </button>
             {blockReason && (
               <span className="pointer-events-none absolute bottom-[calc(100%+9px)] left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-[#171717] px-[10px] py-2 text-xs text-white group-hover:block">

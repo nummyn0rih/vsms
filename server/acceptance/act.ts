@@ -17,6 +17,7 @@ import {
   settlementConflictMessage,
   type SettlementConflictCalibre,
 } from "./accepted";
+import { diffCalibreResults, type CalibreSnapshot } from "./act-diff";
 import { calcIngredientConsumption } from "./ingredients";
 import { revalidateStockDashboards } from "@/server/inventory/revalidate";
 import {
@@ -217,15 +218,30 @@ export async function getActContext({
   };
 }
 
+// Статус машины под блокировкой её строки. Общий примитив для всех операций над актами:
+// читать статус БЕЗ блокировки бессмысленно — параллельная приёмка успевает его сменить
+// между чтением и записью. Блокировка реентерабельна в рамках транзакции, поэтому ранний
+// вызов (RBAC-гард saveAct) не мешает повторному в reconcileShipmentAcceptedWithin.
+// Prisma не даёт row-lock API — только raw (в интерактивной транзакции идёт по тому же
+// соединению).
+async function lockShipmentStatusWithin(
+  tx: Prisma.TransactionClient,
+  shipmentId: number,
+): Promise<ShipmentStatus | null> {
+  const locked = await tx.$queryRaw<{ status: ShipmentStatus }[]>`
+    SELECT status FROM "Shipment" WHERE id = ${shipmentId} FOR UPDATE
+  `;
+  return locked[0]?.status ?? null;
+}
+
 // Пересчёт статуса машины по BR-13: «accepted ⟺ все позиции приняты». Зовётся из ЛЮБОЙ
 // операции над актами (saveAct / откаты) в их транзакции.
 //
-// SELECT … FOR UPDATE по строке машины — до подсчёта, и это принципиально: параллельная
-// приёмка блокируется на этой строке до нашего коммита, а её count выполнится уже
-// СЛЕДУЮЩИМ statement'ом, то есть со свежим снапшотом READ COMMITTED, где наш акт виден.
+// Блокировка строки машины (lockShipmentStatusWithin) — до подсчёта, и это принципиально:
+// параллельная приёмка блокируется на этой строке до нашего коммита, а её count выполнится
+// уже СЛЕДУЮЩИМ statement'ом, то есть со свежим снапшотом READ COMMITTED, где наш акт виден.
 // Без блокировки обе транзакции видели «ещё есть непринятые» и машина навсегда оставалась
-// arrived при всех принятых позициях (П-9). Prisma не даёт row-lock API — только raw
-// (в интерактивной транзакции он идёт по тому же соединению).
+// arrived при всех принятых позициях (П-9).
 //
 // Идемпотентно: статус уже соответствует → ни update, ни ChangeLog. Обратный переход
 // (accepted → arrived) закрывает случай «позиций стало больше / откат акта».
@@ -234,10 +250,7 @@ async function reconcileShipmentAcceptedWithin(
   tx: Prisma.TransactionClient,
   shipmentId: number,
 ): Promise<ChangeEntry[]> {
-  const locked = await tx.$queryRaw<{ status: ShipmentStatus }[]>`
-    SELECT status FROM "Shipment" WHERE id = ${shipmentId} FOR UPDATE
-  `;
-  const current = locked[0]?.status;
+  const current = await lockShipmentStatusWithin(tx, shipmentId);
   if (current == null) return []; // машины нет — решает вызывающий
 
   // Последовательно, не Promise.all: внутри транзакции все запросы идут по ОДНОМУ
@@ -321,7 +334,24 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           shipment: {
             select: { id: true, arrival_date: true, departure_date: true },
           },
-          acceptanceAct: { select: { id: true, settlement_percent: true } },
+          // Снимок «до» — для дифа в ChangeLog (BR-16): при пересохранении нужно знать
+          // прежние № акта, брак и категории, иначе правка уходит в журнал безадресной
+          // строкой «Изменено».
+          acceptanceAct: {
+            select: {
+              id: true,
+              settlement_percent: true,
+              act_number: true,
+              brak_percent: true,
+              calibreResults: {
+                select: {
+                  calibre_range_id: true,
+                  percent: true,
+                  contract_line_id: true,
+                },
+              },
+            },
+          },
         },
       });
       if (!item) return { ok: false as const, error: "Позиция не найдена" };
@@ -337,6 +367,22 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       // Поэтому пересохранение акта (проценты/брак/settlement_percent) остаётся штатным.
       if (item.actual_weight_kg == null) {
         return { ok: false as const, error: "Сначала внесите фактический вес" };
+      }
+
+      const isNew = item.acceptanceAct == null;
+
+      // RBAC правки (acceptance-ux-2). Машина уже принята (зона 3) → правка акта меняет
+      // деньги закрытой партии, это зона admin, как revertAct. Оператор правит свою
+      // приёмку, только пока машина arrived (зона 2) — там акт ещё «в работе».
+      // Гард по СТАТУСУ МАШИНЫ из БД под блокировкой, а не по флагу с клиента: статус
+      // и есть граница зон (BR-26), а блокировка закрывает окно «машина стала accepted
+      // между проверкой роли и записью».
+      const shipmentStatus = await lockShipmentStatusWithin(tx, item.shipment.id);
+      if (!isNew && shipmentStatus === "accepted" && user.role !== "admin") {
+        return {
+          ok: false as const,
+          error: "Правка акта принятой машины — только администратор",
+        };
       }
 
       // BR-7: строка должна быть того же фермера и культуры.
@@ -365,6 +411,8 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       // Вход гарда BR-33 (подпись + is_accepted + строка). Для simple остаётся пустым —
       // конфликта «нестандарт со строкой» там не бывает.
       let conflictCalibres: SettlementConflictCalibre[] = [];
+      // Подписи категорий — заполняются в калибр-ветке, нужны и ниже, в дифе ChangeLog.
+      let calibreLabelById = new Map<number, string>();
 
       if (isCalibre) {
         // Калибр (BR-10, одноступенчато): Σ% категорий + brak% = 100% от факта;
@@ -375,7 +423,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
         }
         const ranges = item.culture.calibreScheme?.ranges ?? [];
         const acceptedById = new Map(ranges.map((r) => [r.id, r.is_accepted]));
-        const labelById = new Map(
+        calibreLabelById = new Map(
           ranges.map((r) => [
             r.id,
             calibreRangeLabel(
@@ -385,6 +433,7 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
             ),
           ]),
         );
+        const labelById = calibreLabelById;
 
         for (const c of calibres) {
           if (!acceptedById.has(c.calibreRangeId)) {
@@ -508,7 +557,6 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
       const season = seasonYearOf(refDate);
       const storedActNumber = withSeasonPrefix(actNumber, season);
 
-      const isNew = item.acceptanceAct == null;
       // BR-33: пишем колонку, только если поле прислано (иначе значение сохраняется).
       const settlementData =
         settlementProvided
@@ -549,6 +597,62 @@ export async function saveAct(input: SaveActInput): Promise<ActionResult> {
           newValue: storedActNumber,
         },
       ];
+
+      // Диф пересохранения (BR-16: запись на КАЖДОЕ изменённое поле). Раньше правка
+      // существующего акта оставляла в журнале только безадресное «Изменено», и понять
+      // ЧТО изменилось было нельзя. Для нового акта дифа нет — есть запись «created».
+      const before = item.acceptanceAct;
+      if (before != null) {
+        if (before.act_number !== storedActNumber) {
+          entries.push({
+            entity: ACT,
+            entityId: shipmentItemId,
+            field: "act_number",
+            oldValue: before.act_number,
+            newValue: storedActNumber,
+          });
+        }
+        // brak_percent nullable: «не задан» трактуем как 0% — та же трактовка, что в
+        // computeAcceptedKg. Иначе первое пересохранение старого акта давало бы ложную
+        // запись null→0.
+        const beforeBrak = before.brak_percent ?? new Prisma.Decimal(0);
+        if (!beforeBrak.equals(new Prisma.Decimal(brakPercent))) {
+          entries.push({
+            entity: ACT,
+            entityId: shipmentItemId,
+            field: "brak_percent",
+            oldValue: beforeBrak.toString(),
+            newValue: String(brakPercent),
+          });
+        }
+        // Категории заменяются целиком (deleteMany+createMany выше) — что реально
+        // изменилось, видно только из сравнения снимков. Одна сводная запись на набор.
+        const toSnapshot = (
+          rows: {
+            calibre_range_id: number;
+            percent: Prisma.Decimal;
+            contract_line_id: number | null;
+          }[],
+        ): CalibreSnapshot[] =>
+          rows.map((r) => ({
+            calibreRangeId: r.calibre_range_id,
+            percent: r.percent.toNumber(),
+            contractLineId: r.contract_line_id,
+          }));
+        const calibreDiff = diffCalibreResults(
+          toSnapshot(before.calibreResults),
+          toSnapshot(calibreData),
+          (id) => calibreLabelById.get(id) ?? String(id),
+        );
+        if (calibreDiff != null) {
+          entries.push({
+            entity: ACT,
+            entityId: shipmentItemId,
+            field: "calibres",
+            newValue: calibreDiff,
+          });
+        }
+      }
 
       // BR-33: правка процента к оплате — в аудит, в ТОЙ ЖЕ транзакции.
       if (settlementChanged) {

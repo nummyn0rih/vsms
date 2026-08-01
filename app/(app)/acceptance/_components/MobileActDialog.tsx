@@ -89,6 +89,9 @@ export function MobileActDialog({
   // Появился акт → поле веса read-only (то же правило, что в AcceptanceActDialog):
   // расход ингредиентов уже списан по этому весу, правку отклоняет setActualWeight.
   const weightLocked = context.existing != null;
+  // Правка существующего акта (вход «Изменить акт» из зоны 3) — тот же диалог и тот же
+  // saveAct, отличаются только подписи. Read-only веса не ослабляется.
+  const isEdit = context.existing != null;
   const [savedWeight, setSavedWeight] = useState<number | null>(context.actualKg);
   const [weightStr, setWeightStr] = useState(
     context.actualKg != null ? String(context.actualKg) : "",
@@ -320,7 +323,7 @@ export function MobileActDialog({
     });
     setSubmitting(false);
     if (res.ok) {
-      toast.success("Позиция принята");
+      toast.success(isEdit ? "Акт изменён" : "Позиция принята");
       onOpenChange(false);
       router.refresh();
     } else {
@@ -389,7 +392,7 @@ export function MobileActDialog({
         <button type="button" className="icon-btn" onClick={() => onOpenChange(false)}>
           <X />
         </button>
-        <span className="title">Акт приёмки</span>
+        <span className="title">{isEdit ? "Правка акта" : "Акт приёмки"}</span>
       </div>
 
       <div className="actsheet-body">
@@ -706,7 +709,8 @@ export function MobileActDialog({
           onClick={onSubmit}
           disabled={blockReason != null || submitting}
         >
-          <Check className="size-[17px]" /> Принять позицию
+          <Check className="size-[17px]" />{" "}
+          {isEdit ? "Сохранить изменения" : "Принять позицию"}
         </button>
       </div>
     </div>
