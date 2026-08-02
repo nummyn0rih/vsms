@@ -84,6 +84,9 @@ export function ContractFormDialog(props: Props) {
       notes: row?.notes ?? "",
       lines: row
         ? row.lines.map((l) => ({
+            // id строки уходит на сервер и держит её привязки: сохранение — диф по id,
+            // а не пересоздание набора. У новых строк поля нет (EMPTY_LINE).
+            id: String(l.id),
             culture_id: String(l.culture_id),
             label: l.label,
             volume_tons: l.volume_tons,
@@ -118,9 +121,11 @@ export function ContractFormDialog(props: Props) {
           form.setError(field as keyof ContractInput, { message: messages[0] });
         }
       }
-    } else {
-      toast.error(res.error);
     }
+    // Тост показываем ВСЕГДА: zod.flatten() схлопывает путь lines.0.price_per_kg в ключ
+    // "lines", а отказ по занятой строке («нельзя удалить: есть принятые позиции») приходит
+    // вообще без fieldErrors — без тоста причина отказа терялась бы.
+    toast.error(res.error);
   }
 
   return (
@@ -249,7 +254,11 @@ export function ContractFormDialog(props: Props) {
                 </p>
 
                 {fields.map((f, i) => (
+                  // ВНИМАНИЕ: f.id — ключ react-hook-form (uuid), а НЕ id строки контракта:
+                  // useFieldArray перезаписывает поле keyName в возвращаемых fields. Сам id
+                  // строки живёт в значениях формы (скрытый инпут ниже) и уходит на сервер.
                   <div key={f.id} className="grid gap-2 rounded border p-2">
+                    <input type="hidden" {...form.register(`lines.${i}.id`)} />
                     <div className="flex items-end gap-2">
                       <FormField
                         control={form.control}
