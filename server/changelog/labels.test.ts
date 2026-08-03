@@ -33,6 +33,7 @@ const WRITTEN_ENTITIES = [
   "PackagingNorm",
   "TripWeightNorm",
   "Contract",
+  "ContractLine",
   "Shipment",
   "ShipmentItem",
   "AcceptanceAct",
@@ -47,6 +48,7 @@ describe("подписи сущностей", () => {
     expect(entityLabel("AcceptanceAct")).toBe("Акт приёмки");
     expect(entityLabel("StockMovement")).toBe("Движение склада");
     expect(entityLabel("WeeklyPlanScope")).toBe("Состав недели");
+    expect(entityLabel("ContractLine")).toBe("Строка контракта");
   });
 
   it("неизвестная сущность возвращается как есть, без падения", () => {
@@ -54,7 +56,7 @@ describe("подписи сущностей", () => {
     expect(entityLabel("")).toBe("");
   });
 
-  it("словарь покрывает все 19 значений, которые пишет logChange", () => {
+  it("словарь покрывает все 20 значений, которые пишет logChange", () => {
     const missing = WRITTEN_ENTITIES.filter((e) => !(e in ENTITY_LABELS));
     expect(missing).toEqual([]);
     expect(Object.keys(ENTITY_LABELS)).toHaveLength(WRITTEN_ENTITIES.length);
@@ -71,6 +73,18 @@ describe("подписи полей (два яруса)", () => {
   it("точечный ключ Entity.field перебивает сквозной", () => {
     expect(fieldLabel("Shipment", "status")).toBe("Статус машины");
     expect(fieldLabel("MaterialShipment", "status")).toBe("Статус рейса");
+    // Появление/уход строки контракта — не «Создано»/«Удалено» вообще.
+    expect(fieldLabel("ContractLine", "created")).toBe("Строка добавлена");
+    expect(fieldLabel("ContractLine", "deleted")).toBe("Строка удалена");
+  });
+
+  it("поля строки контракта берут сквозные подписи домена", () => {
+    expect(fieldLabel("ContractLine", "price_per_kg")).toBe("Цена, ₽/кг");
+    expect(fieldLabel("ContractLine", "volume_tons")).toBe("Объём, т");
+    expect(fieldLabel("ContractLine", "label")).toBe("Метка");
+    expect(fieldLabel("ContractLine", "culture_id")).toBe("Культура");
+    // Сводка «N строк(а)» больше не пишется, но исторические записи прода читаемы.
+    expect(fieldLabel("Contract", "lines")).toBe("Строки контракта");
   });
 
   it("без точечного ключа падаем на сквозную подпись поля", () => {
@@ -180,6 +194,8 @@ describe("ссылки на объект", () => {
     );
     // Конверсии плана логируются по культуре, а не по строке плана.
     expect(entityIdHint("WeeklyPlan", "convert_days_to_week")).toBe("id культуры");
+    // «Строка контракта · 42» иначе читается как контракт 42.
+    expect(entityIdHint("ContractLine", "price_per_kg")).toContain("строки контракта");
     expect(entityIdHint("WeeklyPlan", "target_tons")).toBeNull();
     expect(entityIdHint("Farmer", "name")).toBeNull();
   });

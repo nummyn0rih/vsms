@@ -23,6 +23,10 @@ const decimalPositive = (msg: string) =>
 // Одна строка контракта. label опционален («стандарт», «нестандарт >12»). Дубли культур
 // НЕ запрещаем (BR-5) — нет refine на уникальность culture_id.
 export const contractLineSchema = z.object({
+  // id существующей строки (у новых пусто). Строкой, как все id формы. Сохранение строк —
+  // ДИФ по этому id, и он же единственное, что удерживает привязки ShipmentItem/CalibreResult
+  // при правке: пересоздание строк осиротило бы их (и падало о Restrict).
+  id: z.string().trim().optional(),
   culture_id: z.string().trim().min(1, "Выберите культуру"),
   label: z.string().trim().optional(),
   volume_tons: decimalPositive("Объём должен быть больше 0"),

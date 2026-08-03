@@ -6,7 +6,7 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
-import { logChange } from "@/server/changelog";
+import { logChange, type ChangeEntry } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
   contractSchema,
@@ -19,7 +19,7 @@ import {
   type SeasonOption,
   type CultureOption,
 } from "./schema";
-import { persistContractLines } from "./lines";
+import { ContractLinesError, persistContractLines } from "./lines";
 import { getContractExecution } from "./execution";
 
 const ENTITY = "Contract";
@@ -32,6 +32,12 @@ function isRestrictError(e: unknown): boolean {
     e instanceof Prisma.PrismaClientKnownRequestError &&
     (e.code === "P2003" || e.code === "P2014")
   );
+}
+
+// Строка занята приёмкой — ожидаемый исход с адресным текстом, а не поломка: в лог не
+// шумим и сообщение отдаём как есть (эталон — toValidationFail в shipments/actions.ts).
+function toLinesFail(e: unknown): { ok: false; error: string } | null {
+  return e instanceof ContractLinesError ? { ok: false, error: e.message } : null;
 }
 
 export async function listContracts(params?: {
@@ -206,16 +212,13 @@ export async function createContract(
         },
       });
 
-      const linesSummary = await persistContractLines(
-        tx,
-        created.id,
-        parsed.data.lines,
-      );
+      // Снимок «до» пуст → диф даёт только создание, по записи на строку (id известны).
+      const lines = await persistContractLines(tx, created.id, parsed.data.lines);
 
       await logChange(
         [
           { entity: ENTITY, entityId: created.id, field: "created", newValue: String(created.id) },
-          { entity: ENTITY, entityId: created.id, field: "lines", newValue: linesSummary },
+          ...lines.entries,
         ],
         Number(user.id),
         tx,
@@ -225,6 +228,8 @@ export async function createContract(
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
+    const linesFail = toLinesFail(e);
+    if (linesFail) return linesFail;
     if (isRestrictError(e)) {
       return { ok: false, error: "Строка используется в отгрузках/приёмке, удалить нельзя" };
     }
@@ -279,24 +284,26 @@ export async function updateContract(
         },
       });
 
-      // Полная замена набора строк (deleteMany + createMany).
-      const linesSummary = await persistContractLines(tx, id, parsed.data.lines);
+      // Диф строк по id: правки точечные, id строк не меняются (на них держатся привязки
+      // ShipmentItem/CalibreResult). Записи журнала — по строке и полю, сводки больше нет.
+      const lines = await persistContractLines(tx, id, parsed.data.lines);
 
-      const entries = changes.map((c) => ({ entity: ENTITY, entityId: id, ...c }));
-      entries.push({
-        entity: ENTITY,
-        entityId: id,
-        field: "lines",
-        oldValue: null,
-        newValue: linesSummary,
-      });
-      await logChange(entries, Number(user.id), tx);
+      const entries: ChangeEntry[] = [
+        ...changes.map((c) => ({ entity: ENTITY, entityId: id, ...c })),
+        ...lines.entries,
+      ];
+      // Сохранение без единой правки не оставляет следа (иначе аудит зашумляется), а
+      // logChange на пустом списке пишет warn — поэтому зовём его только по делу.
+      if (entries.length > 0) await logChange(entries, Number(user.id), tx);
     });
 
     revalidatePath(PATH);
     return { ok: true };
   } catch (e) {
+    const linesFail = toLinesFail(e);
+    if (linesFail) return linesFail;
     if (isRestrictError(e)) {
+      // Страховка на гонку: ссылка появилась между гардом и удалением.
       return { ok: false, error: "Строка используется в отгрузках/приёмке, удалить нельзя" };
     }
     return failWithLog(e, "Не удалось сохранить");

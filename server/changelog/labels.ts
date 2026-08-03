@@ -11,7 +11,7 @@ import { FACTORY_TZ, parseDateUTC } from "@/server/shipments/workdays";
 
 // ---------------------------------------------------------------- сущности
 
-// Все 19 фактических значений ChangeLog.entity (константы ENTITY в server/*/actions.ts,
+// Все 20 фактических значений ChangeLog.entity (константы ENTITY в server/*/actions.ts,
 // server/plan/schema.ts, server/norms/schema.ts + инлайн "StockMovement" в inventory/).
 export const ENTITY_LABELS: Record<string, string> = {
   Farmer: "Поставщик",
@@ -26,6 +26,7 @@ export const ENTITY_LABELS: Record<string, string> = {
   PackagingNorm: "Норма тары",
   TripWeightNorm: "Норма веса рейса",
   Contract: "Контракт",
+  ContractLine: "Строка контракта",
   Shipment: "Отгрузка",
   ShipmentItem: "Позиция отгрузки",
   AcceptanceAct: "Акт приёмки",
@@ -139,7 +140,11 @@ export const FIELD_LABELS: Record<string, string> = {
   "AcceptanceAct.deleted": "Акт удалён",
   "AcceptanceAct.movements": "Движения по акту",
   "AcceptanceAct.calibres": "Категории калибра",
+  // Строки контракта пишутся по-строчно (entity ContractLine). Ключ Contract.lines оставлен
+  // ради ИСТОРИЧЕСКИХ записей со сводкой «N строк(а)» — новых таких больше не появляется.
   "Contract.lines": "Строки контракта",
+  "ContractLine.created": "Строка добавлена",
+  "ContractLine.deleted": "Строка удалена",
   "SeasonConfig.season_year": "Год сезона",
   "AlertRule.item_id": "Номенклатура (тара/ингредиент)",
 };
@@ -209,12 +214,14 @@ export function entityHref(entity: string, entityId: number): string | null {
 }
 
 /**
- * Что на самом деле лежит в entity_id, когда это не id одноимённой таблицы.
- * Две такие ловушки в писателе: акт приёмки логируется по позиции отгрузки
- * (приёмка позиционная, BR-13/26), а конверсии плана — по культуре.
+ * Что на самом деле лежит в entity_id, когда это не id одноимённой таблицы (или когда
+ * его легко принять за чужой). Две ловушки в писателе: акт приёмки логируется по позиции
+ * отгрузки (приёмка позиционная, BR-13/26), а конверсии плана — по культуре. Третий
+ * случай — строка контракта: id свой, но «Строка контракта · 42» читается как контракт 42.
  */
 export function entityIdHint(entity: string, field: string): string | null {
   if (entity === "AcceptanceAct") return "id позиции отгрузки (акт привязан к позиции)";
+  if (entity === "ContractLine") return "id строки контракта, а не контракта";
   if (
     entity === "WeeklyPlan" &&
     (field === "convert_days_to_week" || field === "convert_week_to_days")

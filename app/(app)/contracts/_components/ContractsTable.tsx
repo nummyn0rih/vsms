@@ -123,16 +123,21 @@ export function ContractsTable({
 function EditContractButton({ id, options }: { id: number; options: Options }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<ContractDetail | null>(null);
+  // Ремонтирует форму: defaultValues (в т.ч. id строк) захватываются один раз при монтаже.
+  const [rev, setRev] = useState(0);
 
+  // Деталь грузим при КАЖДОМ открытии, а не один раз: сохранение — диф по id строк, и
+  // после добавления строки в кеше остался бы её вид без id. Второе сохранение подряд
+  // прочло бы это как «строку удалили и завели новую» — привязки бы поехали.
+  // router.refresh() состояние клиентских компонентов не сбрасывает.
   async function onClick() {
-    if (!detail) {
-      const d = await getContract(id);
-      if (!d) {
-        toast.error("Контракт не найден");
-        return;
-      }
-      setDetail(d);
+    const d = await getContract(id);
+    if (!d) {
+      toast.error("Контракт не найден");
+      return;
     }
+    setDetail(d);
+    setRev((r) => r + 1);
     setOpen(true);
   }
 
@@ -148,6 +153,7 @@ function EditContractButton({ id, options }: { id: number; options: Options }) {
       </Button>
       {detail && (
         <ContractFormDialog
+          key={rev}
           mode="edit"
           row={detail}
           open={open}
