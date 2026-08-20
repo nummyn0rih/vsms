@@ -1088,6 +1088,9 @@ a.an-cbar:hover { background: var(--canvas-soft); text-decoration: none; }
 
 /* селектор культуры — паттерн .an-season* */
 .an-cultsel { position: relative; }
+/* Фильтр «Поставщик» в шапке профиля культуры: общий .filter — 40px, соседи по шапке
+   (.an-cult-btn/.an-season-btn) — 38px. Выравниваем высоту, токены те же. */
+.an-phead .filter { height: 38px; }
 .an-cult-btn {
   height: 38px; padding: 0 12px; border-radius: 6px;
   border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);

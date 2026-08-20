@@ -33,12 +33,17 @@ export function CultureAreaChart({
   color,
   cultureName,
   hasPlan,
+  planCultureWide = false,
   height = 200,
 }: {
   data: Point[];
   color: string;
   cultureName: string;
   hasPlan: boolean;
+  /** Фильтр по поставщикам активен: факт отфильтрован, а план — нет (WeeklyPlan по фермерам
+   * не разбит). Меняет ТОЛЬКО подпись легенды: общий план рядом с отфильтрованным фактом
+   * без пометки вводил бы в заблуждение. Ряды и цвета не трогаем. */
+  planCultureWide?: boolean;
   height?: number; // только ради печатного A4: на экране дефолт не трогаем
 }) {
   if (data.length === 0) {
@@ -145,7 +150,9 @@ export function CultureAreaChart({
               className="sw"
               style={{ height: 0, borderTop: "2px dashed #a1a1a1", borderRadius: 0 }}
             />
-            плановый темп (WeeklyPlan)
+            {planCultureWide
+              ? "плановый темп (по культуре целиком)"
+              : "плановый темп (WeeklyPlan)"}
           </span>
         )}
       </div>

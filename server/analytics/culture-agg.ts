@@ -290,3 +290,46 @@ export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggrega
     calibre: categoryShares(items),
   };
 }
+
+// ===== Фильтр по поставщикам (профиль культуры) =====
+// Режем НАБОР ПОЗИЦИЙ на входе агрегации, а не готовый результат: тогда недели, брак,
+// доли категорий и доли поставщиков пересчитываются одной и той же реализацией, и
+// инвариант «Σ долей видимых строк = 100%» держится тождественно (sharePct считается от
+// acceptedKgTotal ТОГО ЖЕ набора). Второго набора агрегаций не заводить.
+
+// «1,2,3» из ?suppliers= → [1,2]: мусор, дубли и непозитивные — вон. Общий парсер экрана
+// и печатного листа, чтобы фильтр в URL читался обоими одинаково.
+export function parseSupplierIds(raw: string | string[] | undefined): number[] {
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (!s) return [];
+  const out = new Set<number>();
+  for (const part of s.split(",")) {
+    const n = Number(part.trim());
+    if (Number.isInteger(n) && n > 0) out.add(n);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+// Пустой список = все поставщики (поведение экрана без фильтра).
+export function filterItemsBySuppliers(
+  items: CultureItem[],
+  supplierIds: number[],
+): CultureItem[] {
+  if (supplierIds.length === 0) return items;
+  const sel = new Set(supplierIds);
+  return items.filter((i) => sel.has(i.farmerId));
+}
+
+// Опции комбобокса — из НЕотфильтрованных позиций культуры (иначе выбранный поставщик
+// схлопывает список до себя и снять выбор нечем). count — число позиций сезона (.ct).
+export function supplierOptionsOf(
+  items: CultureItem[],
+): { id: number; name: string; count: number }[] {
+  const byId = new Map<number, { id: number; name: string; count: number }>();
+  for (const i of items) {
+    const cur = byId.get(i.farmerId) ?? { id: i.farmerId, name: i.farmerName, count: 0 };
+    cur.count += 1;
+    byId.set(i.farmerId, cur);
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
