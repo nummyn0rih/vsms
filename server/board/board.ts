@@ -9,11 +9,7 @@ import {
 import { loadWeekShipments } from "@/server/shipments/feed-loader";
 import { calcIngredientConsumption } from "@/server/acceptance/ingredients";
 import { getTareBalances, getIngredientBalances } from "@/server/inventory/balances";
-import {
-  parseDateUTC,
-  subtractWorkdays,
-  type SeasonWorkdays,
-} from "@/server/shipments/workdays";
+import { shiftCalendarDaysISO, TRIP_DAYS } from "@/server/shipments/workdays";
 import { getPlanWeek } from "@/server/plan/board";
 import type {
   BoardCard,
@@ -28,9 +24,10 @@ import type {
 // Максимальный reuse: карточки/чипы/тара — из ленты (feed.ts), прогресс и колонки
 // (рабочие дни) — из плана (getPlanWeek). Новых агрегаций тары/культур НЕ вводим.
 
-// Отправление = прибытие − 2 РАБОЧИХ дня (через workdays.ts), НЕ из БД.
-function departureISO(arrivalISO: string, cfg: SeasonWorkdays | null): string {
-  return subtractWorkdays(parseDateUTC(arrivalISO), 2, cfg).toISOString().slice(0, 10);
+// Отправление НОВОЙ отгрузки этого дня = прибытие − 2 КАЛЕНДАРНЫХ дня (BR-12, тот же
+// хелпер, что и в форме). Рабочие дни завода тут ни при чём — они только про прибытие.
+function departureISO(arrivalISO: string): string {
+  return shiftCalendarDaysISO(arrivalISO, -TRIP_DAYS);
 }
 
 // Разбивка машины по фермерам (порядок первого появления) — строки .frows карточки.
@@ -158,11 +155,7 @@ function computeCardDeficit(
   };
 }
 
-function toCard(
-  fs: FeedShipment,
-  cfg: SeasonWorkdays | null,
-  ctx: DeficitContext,
-): BoardCard {
+function toCard(fs: FeedShipment, ctx: DeficitContext): BoardCard {
   const locked = fs.status === "arrived" || fs.status === "accepted";
   const send = buildSendPreview(fs.items); // переиспользуем и для totals, и для дефицита
   return {
@@ -172,7 +165,9 @@ function toCard(
     farmers: farmerRows(fs),
     driverName: fs.driverName,
     transportCompanyName: fs.transportCompanyName,
-    departureDate: fs.arrivalDate ? departureISO(fs.arrivalDate, cfg) : null,
+    // Показываем СОХРАНЁННОЕ отправление: у старых машин (правило «рабочих дней») и у
+    // вручную поправленной даты расчёт от прибытия дал бы не то, что лежит в БД.
+    departureDate: fs.departureDate ?? (fs.arrivalDate ? departureISO(fs.arrivalDate) : null),
     arrivalDate: fs.arrivalDate,
     cultures: summarizeCultures([fs]).cultures,
     tare: send.totals,
@@ -199,10 +194,10 @@ export async function getBoardWeek({
     ...new Set(shipments.flatMap((s) => s.items.map((i) => i.cultureId))),
   ];
 
-  const [plan, cfg, tareBal, ingBal, recipes, tripNorms] = await Promise.all([
-    // Прогресс по культурам + рабочие дни (колонки) + недельный итог.
+  const [plan, tareBal, ingBal, recipes, tripNorms] = await Promise.all([
+    // Прогресс по культурам + рабочие дни (колонки) + недельный итог. SeasonConfig
+    // отдельно не читаем: рабочие дни нужны только для колонок, их даёт getPlanWeek.
     getPlanWeek({ seasonYear, isoYear, isoWeek }),
-    prisma.seasonConfig.findUnique({ where: { season_year: seasonYear } }),
     // Балансы фермеров (Σ движений) — переиспользуем агрегацию инвентаря (B5-2).
     getTareBalances(),
     getIngredientBalances(),
@@ -270,8 +265,8 @@ export async function getBoardWeek({
       weekdayName: d.weekdayName,
       daySubtotalKg: summarizeCultures(dayShipments).totalKg,
       machineCount: dayShipments.length,
-      addDepartureISO: departureISO(d.date, cfg),
-      cards: dayShipments.map((fs) => toCard(fs, cfg, deficitCtx)),
+      addDepartureISO: departureISO(d.date),
+      cards: dayShipments.map((fs) => toCard(fs, deficitCtx)),
     };
   });
 

@@ -57,7 +57,7 @@ export type BoardColumn = {
   weekdayName: string; // полное имя дня (короткое — на клиенте)
   daySubtotalKg: number; // Σ плановых весов машин дня
   machineCount: number;
-  addDepartureISO: string; // отправление новой отгрузки этого дня (приб − 2 раб. дня) для «+ Отгрузка»
+  addDepartureISO: string; // отправление новой отгрузки дня (приб − 2 календарных дня, BR-12) для «+ Отгрузка»
   cards: BoardCard[];
 };
 

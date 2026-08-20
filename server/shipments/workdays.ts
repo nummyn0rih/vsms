@@ -20,6 +20,27 @@ export function parseDateUTC(s: string): Date {
   return new Date(`${s}T00:00:00Z`);
 }
 
+// Транзит фермер→завод в днях (BR-12/BR-31). Единственный источник числа «2».
+export const TRIP_DAYS = 2;
+
+/**
+ * Календарный сдвиг даты на N дней — арифметика в UTC, без таймзон.
+ * BR-12: дата ОТПРАВЛЕНИЯ = прибытие − TRIP_DAYS КАЛЕНДАРНЫХ дней. Рабочие дни завода
+ * (isFactoryWorkday/subtractWorkdays) ограничивают только ПРИБЫТИЕ: грузит и отправляет
+ * фермер, завод в этом не участвует, поэтому отправление в выходной завода — норма.
+ * Считать отправление рабочими днями было ошибкой (пн 27.07 → пт 24.07 вместо сб 25.07).
+ */
+export function shiftCalendarDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+// То же для YYYY-MM-DD — строковые места (форма и сервер считают одинаково).
+export function shiftCalendarDaysISO(iso: string, days: number): string {
+  return shiftCalendarDays(parseDateUTC(iso), days).toISOString().slice(0, 10);
+}
+
 // Заводская таймзона; менять здесь. Все «какое сегодня число» считаются в ней — иначе
 // сервер (на Vercel это UTC) и браузер расходятся в дате с 00:00 до 03:00 МСК.
 export const FACTORY_TZ = "Europe/Moscow";
@@ -120,8 +141,9 @@ export function workdaysOfWeek(
   return days;
 }
 
-// Отнять n РАБОЧИХ дней от даты (отправление = прибытие − 2 рабочих дня, B5).
-// Шагаем назад по календарю, считаем только рабочие дни. Дата в UTC.
+// Отнять n РАБОЧИХ дней завода от даты: шагаем назад по календарю, считаем только
+// рабочие дни. Дата в UTC. К дате ОТПРАВЛЕНИЯ НЕ применяется (BR-12: отправление —
+// календарный сдвиг, см. shiftCalendarDays); это инструмент для всего, что про завод.
 export function subtractWorkdays(
   date: Date,
   n: number,
