@@ -153,9 +153,12 @@ export default async function PrintCultureAnalyticsPage({
               {kpi.seasonSharePct != null && <span className="u">%</span>}
             </div>
             <div className="sub">
+              {/* Подпись — та же, что на экране: при фильтре числитель считается по ВЫБРАННЫМ. */}
               {kpi.seasonSharePct == null
                 ? "в сезоне ничего не принято"
-                : "от всего принятого за сезон"}
+                : filtered
+                  ? "выбранных — от всего принятого за сезон"
+                  : "от всего принятого за сезон"}
             </div>
           </div>
         </div>
