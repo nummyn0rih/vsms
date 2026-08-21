@@ -18,9 +18,11 @@ import type {
   SettlementBatch,
   SettlementLine,
 } from "@/server/farmers/settlement-agg";
+import { PENDING_STATUS, UNPAID_REASON } from "@/server/farmers/settlement-labels";
 import { periodColumnSuffix } from "@/server/farmers/settlement-period";
 import { EmptyState } from "./EmptyState";
 import { ProgressCell } from "./ProgressCell";
+import { settlementPrintHref } from "./settlement-print-href";
 
 // Расчётный лист по фермеру. Лист показывает НАЧИСЛЕНО, а не долг: сущности платежей
 // и авансов в системе нет, поэтому колонок «оплачено»/«остаток» здесь быть не может.
@@ -223,20 +225,6 @@ function LineRows({
   );
 }
 
-const UNPAID_REASON: Record<string, string> = {
-  no_line: "нет строки контракта",
-  foreign_line: "строка другого контракта или сезона",
-  no_weight: "нет перевески",
-};
-
-const PENDING_STATUS: Record<string, string> = {
-  planned: "запланирована",
-  sent: "в пути",
-  arrived: "прибыла, не принята",
-  // Аномалия данных: отгрузка принята, а акта у позиции нет — считать по ней нечего.
-  accepted: "принята, но акта нет",
-};
-
 // Ожидающих приёмки бывает много (весь будущий план сезона), поэтому по умолчанию
 // блок свёрнут: на листе важен счётчик «эти машины в расчёт не вошли», а список —
 // по требованию.
@@ -318,9 +306,34 @@ export function SettlementPanel({ data }: { data: FarmerSettlement }) {
           {/* При period=сезон подпись периода и так «Сезон N» — второй раз не повторяем. */}
           {!period.isSeason && ` · сезон ${data.season}`} · {period.label}
         </span>
-        <span className="ml-auto font-mono text-[11px] text-muted-foreground">
-          сформирован {fmtDate(data.generatedAt)}
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="font-mono text-[11px] text-muted-foreground">
+            сформирован {fmtDate(data.generatedAt)}
+          </span>
+          {/* Печать — bare-роут /print/*, PDF даёт браузерное «Сохранить как PDF».
+              href строится из НОРМАЛИЗОВАННОГО data.period, не из сырого URL.
+              Свод без партий — ручной режим ?detail=0, второй кнопки нет. */}
+          <a
+            href={settlementPrintHref(data)}
+            target="_blank"
+            rel="noopener"
+            className="btn btn-sm"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            Печать
+          </a>
+        </div>
       </div>
 
       {nothingInPeriod && (

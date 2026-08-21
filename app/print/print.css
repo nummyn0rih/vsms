@@ -598,6 +598,175 @@ table.dt tfoot .lead {
   font-size: 10px;
 }
 
+/* --- Лист «Расчёт с поставщиком» (settlement-print): печатная копия вкладки
+   «Расчёты» карточки фермера. Префикс .st-print, по образцу .an-print — второго
+   CSS-файла не заводим. Цвет на листе только у чипов культур (Culture.color):
+   печать ч/б, янтарная плашка «без привязки» с экрана стала бы серой кашей
+   (DESIGN-PRINT: «цвет культуры — максимум чип, никаких заливок строк»). */
+
+/* Подзаголовок колонки: «за сезон» / суффикс периода из periodColumnSuffix. */
+.st-print .dt thead th .sub {
+  display: block;
+  font-size: 7.5px;
+  letter-spacing: 0.04em;
+  color: var(--mute);
+  font-weight: 400;
+}
+
+/* Мелкие приписки в ячейке: label строки контракта, счётчик партий, % принятого. */
+.st-print .st-lbl,
+.st-print .st-sub {
+  font-size: 9.5px;
+  color: var(--mute);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.st-print .st-lbl {
+  margin-left: 6px;
+}
+/* Чип «цена не задана» — тот же вид, что .wk-badge на других листах. */
+.st-print .st-flag {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--mute);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+  padding: 0 4px;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+/* Перевыполнение (>100%) — жирным, значение НЕ обрезается (как на экране). */
+.st-print .st-over {
+  font-weight: 600;
+  color: var(--ink);
+}
+/* Число, по которому платят, — акцентом (на экране это зелёный; на бумаге — вес). */
+.st-print .st-paid {
+  font-weight: 600;
+}
+
+/* Шапку строки контракта не отрываем от её партий; саму группу не защищаем
+   break-inside: у фермера с десятком партий она законно длиннее страницы. */
+.st-print .dt tbody.st-lgrp > tr:first-child {
+  break-after: avoid;
+}
+
+/* Партии строки контракта — вложенная подтаблица в подложке. */
+.st-print .st-bwrap > td {
+  padding: 0;
+  background: var(--canvas-soft);
+  border-bottom: 1px solid var(--hairline);
+}
+.st-print table.st-batches {
+  width: 100%;
+  border-collapse: collapse;
+}
+.st-print .st-batches thead th {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7.5px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--mute);
+  text-align: left;
+  padding: 5px 7px 4px;
+  white-space: nowrap;
+}
+.st-print .st-batches tbody td {
+  font-size: 10px;
+  line-height: 14px;
+  padding: 3px 7px;
+  vertical-align: top;
+}
+.st-print .st-batches th.r,
+.st-print .st-batches td.r {
+  text-align: right;
+}
+/* Разделитель между партиями — на группе, а не на каждой строке: у партии их две
+   (числа + пояснение), и нижняя рамка резала бы пояснение от своих чисел. */
+.st-print .st-batches tbody.st-bgrp + tbody.st-bgrp > tr:first-child > td {
+  border-top: 1px solid var(--hairline);
+}
+.st-print .st-batches tbody.st-bgrp {
+  break-inside: avoid;
+}
+/* Пояснение к партии целиком: нестандарт · брак · деление на строки контракта. */
+.st-print .st-batches tr.st-bnote td {
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--mute);
+  padding: 0 7px 4px;
+}
+
+/* Заголовок секции («Без привязки к контракту», «Ожидают приёмки»). */
+.st-print .st-sec {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 14px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--hairline-strong);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  break-after: avoid;
+}
+.st-print .st-sec-meta {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--mute);
+}
+.st-print .st-sec + table.dt {
+  margin-top: 4px;
+}
+
+/* Период без принятых поставок: объяснение над таблицей, иначе нули читаются как сбой. */
+.st-print .st-note {
+  margin-top: 12px;
+  padding: 6px 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas-soft);
+  font-size: 10.5px;
+  color: var(--body);
+}
+
+/* Фермер без строк контракта и поставок — лист объясняет пустоту, а не печатает нули. */
+.st-print .st-empty {
+  margin-top: 46px;
+  padding: 26px 20px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 8px;
+  text-align: center;
+}
+.st-print .st-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.st-print .st-empty-sub {
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--mute);
+}
+
+/* Сноски листа — те же, что на экране. */
+.st-print .st-notes {
+  margin: 14px 0 0;
+  padding-left: 14px;
+  font-size: 9.5px;
+  line-height: 13px;
+  color: var(--mute);
+}
+.st-print .st-notes li + li {
+  margin-top: 2px;
+}
+
 /* ================= PRINT ================= */
 @media print {
   @page {
