@@ -43,17 +43,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { shiftCalendarDaysISO, TRIP_DAYS } from "@/server/shipments/workdays";
 import { StatusBadge } from "./shipment-status";
 import { useShipmentItemField } from "./useShipmentItemField";
 
-// Сдвиг даты YYYY-MM-DD на N дней (через UTC, чтобы не плыло от таймзоны). BR-12: ±2.
-const TRIP_DAYS = 2;
-function shiftDate(s: string, days: number): string {
-  if (!s) return "";
-  const d = new Date(`${s}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+// BR-12: вторая дата = ±2 КАЛЕНДАРНЫХ дня. Хелпер общий с сервером (workdays.ts —
+// чистый модуль, prisma не тянет), иначе форма и сохранённое значение разойдутся.
 
 type CommonProps = {
   options: ShipmentOptions;
@@ -135,14 +130,14 @@ export function ShipmentFormDialog(props: Props) {
   function onDepartureChange(value: string) {
     form.setValue("departure_date", value);
     if (value && !form.getValues("arrival_date")) {
-      form.setValue("arrival_date", shiftDate(value, TRIP_DAYS));
+      form.setValue("arrival_date", shiftCalendarDaysISO(value, TRIP_DAYS));
     }
   }
 
   function onArrivalChange(value: string) {
     form.setValue("arrival_date", value);
     if (value && !form.getValues("departure_date")) {
-      form.setValue("departure_date", shiftDate(value, -TRIP_DAYS));
+      form.setValue("departure_date", shiftCalendarDaysISO(value, -TRIP_DAYS));
     }
   }
 

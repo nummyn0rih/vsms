@@ -11,8 +11,11 @@ import {
   parseWeekParam,
   seasonWeekBounds,
   seasonYearOf,
+  shiftCalendarDays,
+  shiftCalendarDaysISO,
   subtractWorkdays,
   todayLocalISO,
+  TRIP_DAYS,
   weekdayName,
   workdaysOfWeek,
   type SeasonWorkdays,
@@ -163,6 +166,8 @@ describe("isFactoryWorkday — BR-18", () => {
   });
 });
 
+// subtractWorkdays — про рабочие дни ЗАВОДА (колонки, прибытие). К дате ОТПРАВЛЕНИЯ
+// не применяется: она календарная (BR-12, блок ниже). Тесты фиксируют саму функцию.
 describe("workdaysOfWeek / subtractWorkdays", () => {
   it("летняя неделя даёт 6 рабочих дней, зимняя — 5", () => {
     const summer = workdaysOfWeek(2026, 29, cfgDefault); // 13–19 июля
@@ -186,6 +191,49 @@ describe("workdaysOfWeek / subtractWorkdays", () => {
     expect(subtractWorkdays(from, 2, cfgDefault).toISOString().slice(0, 10)).toBe(
       "2026-07-10", // Сб 11-е и Пт 10-е — оба рабочие
     );
+  });
+});
+
+// BR-12/BR-31: дата отправления = прибытие − 2 КАЛЕНДАРНЫХ дня. Рабочие дни завода
+// ограничивают только ПРИБЫТИЕ — грузит и отправляет фермер. Даты-эталоны сверены
+// нативным Date: 25.07.2026 Сб · 26.07.2026 Вс · 27.07.2026 Пн · 28.07.2026 Вт.
+describe("дата отправления — календарный сдвиг (BR-12/BR-31)", () => {
+  const departureOf = (arrivalISO: string) =>
+    shiftCalendarDaysISO(arrivalISO, -TRIP_DAYS);
+
+  it("прибытие пн 27.07.2026 → отправление сб 25.07.2026", () => {
+    expect(departureOf("2026-07-27")).toBe("2026-07-25");
+  });
+
+  it("на тех же данных рабочие дни давали пт 24.07 — регресс прод-дефекта", () => {
+    // Шестидневка: из понедельника шаг сб → пт, воскресенье перепрыгивалось.
+    expect(subtractWorkdays(parseDateUTC("2026-07-27"), 2, cfgDefault).toISOString().slice(0, 10)).toBe(
+      "2026-07-24",
+    );
+    expect(departureOf("2026-07-27")).not.toBe("2026-07-24");
+  });
+
+  it("прибытие вт 28.07.2026 → отправление вс 26.07.2026 — выходной завода это норма", () => {
+    const departure = departureOf("2026-07-28");
+    expect(departure).toBe("2026-07-26");
+    // Воскресенье нерабочее для завода, и на отправление это не влияет.
+    expect(isFactoryWorkday(parseDateUTC(departure), cfgDefault)).toBe(false);
+  });
+
+  it("переход через год: 01.01.2027 → 30.12.2026, через месяц: 01.03 → 27.02", () => {
+    expect(departureOf("2027-01-01")).toBe("2026-12-30");
+    expect(departureOf("2026-03-01")).toBe("2026-02-27"); // февраль 2026 — 28 дней
+  });
+
+  it("shiftCalendarDays не мутирует вход и держит UTC-полночь", () => {
+    const arrival = parseDateUTC("2026-07-27");
+    const departure = shiftCalendarDays(arrival, -TRIP_DAYS);
+    expect(arrival.toISOString()).toBe("2026-07-27T00:00:00.000Z");
+    expect(departure.toISOString()).toBe("2026-07-25T00:00:00.000Z");
+  });
+
+  it("сдвиг вперёд симметричен: отправление + 2 = прибытие (ввод любой из дат)", () => {
+    expect(shiftCalendarDaysISO("2026-07-25", TRIP_DAYS)).toBe("2026-07-27");
   });
 });
 

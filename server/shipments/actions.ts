@@ -29,8 +29,9 @@ import {
   isFactoryWorkday,
   parseDateUTC,
   seasonYearOf,
-  subtractWorkdays,
+  shiftCalendarDaysISO,
   todayLocalISO,
+  TRIP_DAYS,
   weekdayName,
 } from "./workdays";
 
@@ -241,7 +242,8 @@ export async function createWholeMachines(
       }
     }
 
-    // Каждый день: не в прошлом + рабочий день завода. departure = прибытие − 2 раб. дня.
+    // Каждый день: не в прошлом + рабочий день завода (BR-11 — только про ПРИБЫТИЕ).
+    // departure = прибытие − 2 КАЛЕНДАРНЫХ дня (BR-12), выходной завода тут допустим.
     const today = todayLocalISO();
     const cfgBySeason = new Map<number, Awaited<ReturnType<typeof prisma.seasonConfig.findUnique>>>();
     const plan: { arrival: string; departure: string }[] = [];
@@ -265,8 +267,7 @@ export async function createWholeMachines(
           error: `${formatRu(day)} — ${weekdayName(arrivalDate)}, нерабочий день завода`,
         };
       }
-      const departure = subtractWorkdays(arrivalDate, 2, cfg).toISOString().slice(0, 10);
-      plan.push({ arrival: day, departure });
+      plan.push({ arrival: day, departure: shiftCalendarDaysISO(day, -TRIP_DAYS) });
     }
 
     const createdCount = await withUniqueRetry(

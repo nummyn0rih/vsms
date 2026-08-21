@@ -9,9 +9,9 @@ import { logChange } from "@/server/changelog";
 import type { ActionResult } from "@/lib/action-result";
 import {
   parseDateUTC,
-  seasonYearOf,
-  subtractWorkdays,
+  shiftCalendarDays,
   todayLocalISO,
+  TRIP_DAYS,
 } from "@/server/shipments/workdays";
 import { getBoardWeek } from "./board";
 import type { BoardWeek } from "./schema";
@@ -38,7 +38,7 @@ export async function loadBoardWeek(args: {
 }
 
 // Перенос отгрузки на другой рабочий день (B5-1b, drag&drop доски). admin-only.
-// planned: прибытие = targetDate, отправление = targetDate − 2 рабочих дня.
+// planned: прибытие = targetDate, отправление = targetDate − 2 КАЛЕНДАРНЫХ дня (BR-31).
 // sent: отправление НЕ меняем, прибытие = targetDate (гард: прибытие > отправления).
 // arrived/accepted — перенос запрещён. Прошлый день — запрещён для всех.
 export async function moveShipmentToDay(
@@ -65,10 +65,6 @@ export async function moveShipmentToDay(
     const oldArrival = sh.arrival_date ? isoOf(sh.arrival_date) : null;
     if (oldArrival === targetDateISO) return { ok: true }; // no-op
 
-    const cfg = await prisma.seasonConfig.findUnique({
-      where: { season_year: seasonYearOf(target) },
-    });
-
     let newDeparture = sh.departure_date;
     const changes: Parameters<typeof logChange>[0] = [
       {
@@ -86,8 +82,9 @@ export async function moveShipmentToDay(
         return { ok: false, error: "Прибытие не может быть раньше отправления" };
       }
     } else {
-      // planned: пересчитываем отправление = прибытие − 2 рабочих дня.
-      newDeparture = subtractWorkdays(target, 2, cfg);
+      // planned: пересчитываем отправление = прибытие − 2 КАЛЕНДАРНЫХ дня (BR-12/BR-31).
+      // Рабочие дни завода тут не участвуют: отправление в выходной завода — норма.
+      newDeparture = shiftCalendarDays(target, -TRIP_DAYS);
       changes.push({
         entity: ENTITY,
         entityId: shipmentId,

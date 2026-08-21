@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getCultureAnalytics } from "@/server/analytics/culture";
+import { parseSupplierIds } from "@/server/analytics/culture-agg";
 import { currentSeasonWeek } from "@/server/shipments/workdays";
 import { fmtInt, fmtPct1, fmtTons } from "@/lib/format";
 import { CultureAreaChart } from "@/app/(app)/analytics/culture/[id]/_components/CultureAreaChart";
@@ -13,6 +14,8 @@ import { PrintSheet } from "../../../_components/PrintSheet";
 // /analytics/culture/[id]. Read-only, источник — ТОТ ЖЕ getCultureAnalytics, что у экрана:
 // второй выборки и второй агрегации не заводим, поэтому числа сходятся тождественно.
 // Компоненты графиков/таблиц переиспользуются с экрана, но без drill-down ссылок.
+// Фильтр поставщиков наследуется с экрана (?suppliers=1,2,3) — лист печатает ровно то,
+// что видно на экране, а выбранные имена выводит в строке «Фильтры».
 // Культура — в пути, сезон — в ?season= (дефолт текущий). PDF — «Сохранить как PDF»
 // браузера, PDF-библиотек в проекте нет.
 // Высота графиков на листе: экранные 200px не дают уместить весь профиль в одну
@@ -35,11 +38,17 @@ export default async function PrintCultureAnalyticsPage({
   const parsed = raw ? Number(raw) : NaN;
   const season = Number.isInteger(parsed) ? parsed : currentSeasonWeek().seasonYear;
 
-  const data = await getCultureAnalytics({ season, cultureId });
+  const supplierIds = parseSupplierIds(sp.suppliers);
+
+  const data = await getCultureAnalytics({ season, cultureId, supplierIds });
   if (!data) notFound();
 
   const { culture, kpi } = data;
   const isCalibre = culture.acceptanceType === "calibre";
+  const filtered = data.supplierFilter.active;
+  // Имена — из тех же строк таблицы (второй выборки фермеров не заводим). Выбранный
+  // поставщик без позиций в строках не появится — его в отчёте и печатать нечем.
+  const supplierNames = data.bySupplier.map((s) => s.farmerName).join(" · ");
 
   const weeks = data.acceptanceByWeek;
   const period = weeks.length
@@ -48,7 +57,9 @@ export default async function PrintCultureAnalyticsPage({
 
   // Без «лист 1/1»: число строк таблицы поставщиков переменное, и у культуры с десятком
   // фермеров лист законно уходит на вторую страницу (прецедент — лист «Отгрузки»).
-  const footPage = `Профиль культуры · ${culture.name} · сезон ${season} · поставщиков: ${data.bySupplier.length}`;
+  const footPage =
+    `Профиль культуры · ${culture.name} · сезон ${season} · поставщиков: ${data.bySupplier.length}` +
+    (filtered ? " · фильтр по поставщикам" : "");
 
   return (
     <PrintSheet
@@ -61,6 +72,13 @@ export default async function PrintCultureAnalyticsPage({
         <>
           Приёмка — {isCalibre ? "по калибру" : "по весу"} · серии —{" "}
           <b>Culture.color</b> · брак — янтарь · категории — размерным порядком
+          {filtered && (
+            <>
+              {" · поставщики: "}
+              <b>{supplierNames || "выбранные — без позиций"}</b>
+              {" · плановый темп — по культуре целиком"}
+            </>
+          )}
         </>
       }
       footTotal={
@@ -135,9 +153,12 @@ export default async function PrintCultureAnalyticsPage({
               {kpi.seasonSharePct != null && <span className="u">%</span>}
             </div>
             <div className="sub">
+              {/* Подпись — та же, что на экране: при фильтре числитель считается по ВЫБРАННЫМ. */}
               {kpi.seasonSharePct == null
                 ? "в сезоне ничего не принято"
-                : "от всего принятого за сезон"}
+                : filtered
+                  ? "выбранных — от всего принятого за сезон"
+                  : "от всего принятого за сезон"}
             </div>
           </div>
         </div>
@@ -149,7 +170,11 @@ export default async function PrintCultureAnalyticsPage({
               <div className="an-card-title">Динамика приёмки по неделям</div>
               <div className="an-card-unit">
                 т · ISO-недели · факт по перевеске и принятый
-                {data.hasPlanLine ? " · план пунктиром" : ""}
+                {data.hasPlanLine
+                  ? data.planCultureWide
+                    ? " · план — по культуре целиком"
+                    : " · план пунктиром"
+                  : ""}
               </div>
             </div>
             <div className="an-card-body">
@@ -163,6 +188,7 @@ export default async function PrintCultureAnalyticsPage({
                 color={culture.color}
                 cultureName={culture.name}
                 hasPlan={data.hasPlanLine}
+                planCultureWide={data.planCultureWide}
                 height={PRINT_CHART_H}
               />
             </div>

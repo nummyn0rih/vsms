@@ -4,6 +4,8 @@ import { getContractExecution } from "@/server/contracts/execution";
 import { calibreRangeLabel, computeAcceptedKg } from "@/server/acceptance/accepted";
 import {
   aggregateCultureItems,
+  filterItemsBySuppliers,
+  supplierOptionsOf,
   KG_PER_TON,
   type CategoryShare,
   type CultureItem,
@@ -74,6 +76,14 @@ export type CultureAnalytics = {
   }[];
   categoryPctTotal: CategoryShare[]; // те же доли по культуре целиком — для строки «Итого»
   calibre: CategoryShare[] | null;
+  // Опции фильтра «Поставщик» — фермеры с позициями ЭТОЙ культуры в сезоне. Считаются
+  // ДО фильтра (иначе выбранный поставщик схлопывает список до себя, и снять выбор нечем).
+  supplierOptions: { id: number; name: string; count: number }[];
+  supplierFilter: { ids: number[]; active: boolean };
+  // WeeklyPlan ведётся на культуру/неделю и по фермерам НЕ разбит (BR-20…22), поэтому при
+  // активном фильтре плановый темп остаётся ОБЩИМ. Пересчитать его нечем, а показывать
+  // без подписи рядом с отфильтрованным фактом нельзя — флаг переключает подписи легенды.
+  planCultureWide: boolean;
   cultures: {
     id: number;
     name: string;
@@ -86,9 +96,12 @@ export type CultureAnalytics = {
 export async function getCultureAnalytics({
   season,
   cultureId,
+  supplierIds = [],
 }: {
   season: number;
   cultureId: number;
+  /** Фильтр по поставщикам (?suppliers=). Пустой список = все, текущее поведение. */
+  supplierIds?: number[];
 }): Promise<CultureAnalytics | null> {
   await requireRole("admin", "operator", "user");
 
@@ -131,7 +144,7 @@ export async function getCultureAnalytics({
     },
   });
 
-  const items: CultureItem[] = [];
+  const allCultureItems: CultureItem[] = [];
   for (const it of rawItems) {
     const seasonDate = it.shipment.arrival_date ?? it.shipment.departure_date;
     if (!seasonDate || seasonYearOf(seasonDate) !== season) continue;
@@ -151,7 +164,7 @@ export async function getCultureAnalytics({
         rangeId: cr.calibreRange.id,
       };
     });
-    items.push({
+    allCultureItems.push({
       shipmentId: it.shipment_id,
       farmerId: it.farmer.id,
       farmerName: it.farmer.name,
@@ -165,11 +178,19 @@ export async function getCultureAnalytics({
     });
   }
 
-  // === 2) Всё, что считается из позиций (объём/брак/недели/поставщики/калибр) ===
+  // === 2) Фильтр по поставщикам — на ВХОДЕ агрегации, не постфактум ===
+  // Резать готовый результат нельзя: недели, брак, доли категорий и доля поставщика в
+  // культуре тогда разъедутся между собой. Отфильтровав набор позиций, получаем все
+  // производные одной и той же реализацией (Σ долей видимых строк = 100% тождественно).
+  const supplierOptions = supplierOptionsOf(allCultureItems);
+  const supplierSel = new Set(supplierIds);
+  const items = filterItemsBySuppliers(allCultureItems, supplierIds);
+
+  // === 3) Всё, что считается из позиций (объём/брак/недели/поставщики/калибр) ===
   const agg = aggregateCultureItems(items);
   const { acceptedKgTotal, weekTons } = agg;
 
-  // === 3) Плановый темп по неделям (WeeklyPlan культуры в сезоне) ===
+  // === 4) Плановый темп по неделям (WeeklyPlan культуры в сезоне) ===
   // Дневные строки (date != null) сворачиваем в свою ISO-неделю, недельные берём как есть.
   const planRows = await prisma.weeklyPlan.findMany({
     where: { season_year: season, culture_id: cultureId },
@@ -203,7 +224,7 @@ export async function getCultureAnalytics({
       pct: agg.weekBrakPct.get(`${w.isoYear}-${w.isoWeek}`)!.pct,
     }));
 
-  // === 4) План/выполнение по контрактам (строки ЭТОЙ культуры) ===
+  // === 5) План/выполнение по контрактам (строки ЭТОЙ культуры) ===
   // getContractExecution скоупит accepted на фермера, поэтому идём по фермерам и мержим
   // строки культуры. Сужаем список ДО фермеров, у которых есть строка контракта именно
   // по этой культуре (иначе — десятки лишних тяжёлых вызовов на культуру, где контракт
@@ -218,6 +239,9 @@ export async function getCultureAnalytics({
   let execAcceptedKgTotal = 0; // принято по строкам контракта (scoped) — база «Выполнения»
   const execByFarmer = new Map<number, { acceptedKg: number; targetKg: number }>();
   for (const { farmer_id } of farmersWithLine) {
+    // Фильтр по поставщикам сужает и «Заявлено»/«Выполнение»: KPI обязан считаться по тем
+    // же фермерам, что и «Принято». Побочно экономит вызовы getContractExecution.
+    if (supplierSel.size > 0 && !supplierSel.has(farmer_id)) continue;
     const exec = await getContractExecution({ farmerId: farmer_id, season });
     const lines = exec.lines.filter((l) => l.cultureId === cultureId);
     if (lines.length === 0) continue;
@@ -228,7 +252,7 @@ export async function getCultureAnalytics({
     execByFarmer.set(farmer_id, { acceptedKg: acc, targetKg: tgt });
   }
 
-  // === 5) По поставщикам ===
+  // === 6) По поставщикам ===
   // ⚠ ТРИ БАЗЫ ВЕСА В ОДНОЙ СТРОКЕ — источники РАЗНЫЕ, не сливать (DOMAIN §1, BR-33):
   //   «Принято»    — принятый вес из скана позиций культуры (broad, как KPI «Принято»);
   //   «К оплате»   — ОПЛАЧИВАЕМЫЙ вес (принятый + доплата BR-33) по ТЕМ ЖЕ позициям;
@@ -250,7 +274,10 @@ export async function getCultureAnalytics({
     };
   });
 
-  // === 6) Доля в сезоне — Σ принятого всех культур (та же формула) ===
+  // === 7) Доля в сезоне — Σ принятого всех культур (та же формула) ===
+  // Знаменатель — весь сезон (все культуры, все фермеры) и при фильтре НЕ сужается;
+  // числитель — уже отфильтрованный acceptedKgTotal. То есть при активном фильтре это
+  // доля объёма ВЫБРАННЫХ поставщиков по этой культуре в сезоне (так и подписано на плитке).
   const allItems = await prisma.shipmentItem.findMany({
     where: { acceptanceAct: { isNot: null } },
     select: {
@@ -281,10 +308,10 @@ export async function getCultureAnalytics({
     seasonAcceptedKg += acc ?? 0;
   }
 
-  // === 7) Калибр — доли категорий; null = simple-культура (блок не рендерится) ===
+  // === 8) Калибр — доли категорий; null = simple-культура (блок не рендерится) ===
   const calibre = culture.acceptance_type === "calibre" ? agg.calibre : null;
 
-  // === 8) Списки для селекторов ===
+  // === 9) Списки для селекторов ===
   const cultureRows = await prisma.culture.findMany({
     where: { OR: [{ active: true }, { id: cultureId }] },
     select: { id: true, name: true, color: true, acceptance_type: true },
@@ -321,6 +348,9 @@ export async function getCultureAnalytics({
     bySupplier,
     categoryPctTotal: agg.calibre, // тот же расчёт, но нужен и для simple-культур
     calibre,
+    supplierOptions,
+    supplierFilter: { ids: supplierIds, active: supplierIds.length > 0 },
+    planCultureWide: supplierIds.length > 0,
     cultures: cultureRows.map((c) => ({
       id: c.id,
       name: c.name,

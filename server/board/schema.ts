@@ -2,7 +2,8 @@ import type { CultureTotal, FeedShipment } from "@/server/shipments/feed";
 
 // Типы вида «Доска» (B5-1). Чистый модуль (без prisma) — можно импортировать в
 // client-компоненты. Карточка стоит в колонке дня своего arrival_date; колонки —
-// рабочие дни недели (BR-18). Отправление = прибытие − 2 рабочих дня (computed).
+// рабочие дни недели (BR-18). Отправление = прибытие − 2 КАЛЕНДАРНЫХ дня (BR-12):
+// рабочие дни завода ограничивают только прибытие.
 
 // Разбивка машины по фермерам — для строк .frows карточки-машины (B5-1b).
 export type BoardFarmerRow = {
@@ -38,7 +39,8 @@ export type BoardCard = {
   farmers: BoardFarmerRow[]; // 1 → одно-фермерская карточка; >1 → карточка-машина
   driverName: string | null;
   transportCompanyName: string | null;
-  departureDate: string | null; // computed: arrival − 2 рабочих дня (не из БД)
+  // Сохранённое в БД отправление; если его нет — прибытие − 2 календарных дня (BR-12).
+  departureDate: string | null;
   arrivalDate: string | null;
   cultures: CultureTotal[]; // чипы культур (цвет + плановый вес), объединённые по машине
   tare: { boxes: number; barrels: number }; // итог тары машины (рассчитанные позиции)
@@ -57,7 +59,7 @@ export type BoardColumn = {
   weekdayName: string; // полное имя дня (короткое — на клиенте)
   daySubtotalKg: number; // Σ плановых весов машин дня
   machineCount: number;
-  addDepartureISO: string; // отправление новой отгрузки этого дня (приб − 2 раб. дня) для «+ Отгрузка»
+  addDepartureISO: string; // отправление новой отгрузки дня (приб − 2 календарных дня, BR-12) для «+ Отгрузка»
   cards: BoardCard[];
 };
 

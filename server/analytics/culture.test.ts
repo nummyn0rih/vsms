@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateCultureItems,
   categoryShares,
+  filterItemsBySuppliers,
+  parseSupplierIds,
+  supplierOptionsOf,
   type CultureItem,
 } from "./culture-agg";
 
@@ -10,6 +13,7 @@ import {
 // и доли категорий калибра. Всё, что ходит в БД, — в scripts/culture-analytics-verify.ts.
 
 const W = new Date("2026-07-15T00:00:00Z"); // среда, ISO-неделя 29
+const W2 = new Date("2026-07-22T00:00:00Z"); // среда, ISO-неделя 30
 
 // Категории калибра фикстур. id намеренно вразнобой относительно размеров: порядок
 // показа обязан идти от границ, а не от порядка ввода в форме культуры.
@@ -238,5 +242,104 @@ describe("недельные тонны: приёмка и перевеска", 
       item({ actualKg: 2000, shipmentId: 2 }),
     ]);
     expect(week(a).actualTons).toBeCloseTo(2, 9);
+  });
+});
+
+describe("фильтр по поставщикам (профиль культуры)", () => {
+  // Три фермера, разные объёмы и категории — чтобы отфильтрованный набор нельзя было
+  // спутать с полным ни по одной производной величине.
+  const full: CultureItem[] = [
+    item({ actualKg: 10000, farmerId: 1, farmerName: "Ф1", shipmentId: 1 }),
+    item({ actualKg: 6000, farmerId: 2, farmerName: "Ф2", shipmentId: 2, brakPercent: 10 }),
+    item({ actualKg: 4000, farmerId: 3, farmerName: "Ф3", shipmentId: 3, arrival: W2 }),
+  ];
+
+  it("Σ долей = 100% на отфильтрованном наборе (видимые строки)", () => {
+    const a = aggregateCultureItems(filterItemsBySuppliers(full, [1, 2]));
+    expect(a.bySupplier.map((s) => s.farmerId)).toEqual([1, 2]);
+    expect(sumShare(a.bySupplier)).toBeCloseTo(100, 9);
+  });
+
+  it("один выбранный → одна строка с долей 100%", () => {
+    const a = aggregateCultureItems(filterItemsBySuppliers(full, [2]));
+    expect(a.bySupplier).toHaveLength(1);
+    expect(a.bySupplier[0].sharePct).toBe(100);
+    expect(a.farmersCount).toBe(1);
+  });
+
+  it("пустой список ids = все поставщики (поведение экрана без фильтра)", () => {
+    expect(filterItemsBySuppliers(full, [])).toBe(full);
+    expect(sumShare(aggregateCultureItems(full).bySupplier)).toBeCloseTo(100, 9);
+  });
+
+  it("неизвестный id → пустой набор, без NaN", () => {
+    const a = aggregateCultureItems(filterItemsBySuppliers(full, [99]));
+    expect(a.bySupplier).toEqual([]);
+    expect(a.positionsCount).toBe(0);
+    expect(a.acceptedKgTotal).toBe(0);
+    expect(a.avgBrakPct).toBeNull();
+    expect(a.calibre).toEqual([]);
+  });
+
+  it("KPI отфильтрованного набора = сумма строк выбранных поставщиков из полного", () => {
+    const all = aggregateCultureItems(full);
+    const picked = all.bySupplier.filter((s) => s.farmerId === 1 || s.farmerId === 3);
+    const a = aggregateCultureItems(filterItemsBySuppliers(full, [1, 3]));
+    expect(a.acceptedKgTotal).toBeCloseTo(
+      picked.reduce((s, r) => s + r.acceptedKg, 0),
+      9,
+    );
+    expect(a.paidKgTotal).toBeCloseTo(
+      picked.reduce((s, r) => s + r.paidKg, 0),
+      9,
+    );
+    // База меньше полной — иначе фильтр ничего не отрезал бы.
+    expect(a.acceptedKgTotal).toBeLessThan(all.acceptedKgTotal);
+  });
+
+  it("недели и брак считаются только по выбранным", () => {
+    const a = aggregateCultureItems(filterItemsBySuppliers(full, [3]));
+    // Ф3 приехал на другой неделе — неделя Ф1/Ф2 из набора уходит целиком.
+    expect([...a.weekTons.keys()]).toEqual(["2026-30"]);
+    expect(a.avgBrakPct).toBe(0); // брак 10% был только у Ф2
+    expect(aggregateCultureItems(filterItemsBySuppliers(full, [2])).avgBrakPct).toBe(10);
+  });
+
+  it("категории калибра на отфильтрованном наборе: размерный порядок и 100% факта", () => {
+    const items: CultureItem[] = [
+      item({
+        actualKg: 1000,
+        farmerId: 1,
+        calibres: [cal(CAT.big, 30), cal(CAT.small, 40), cal(CAT.mid, 30)],
+      }),
+      // Чужие позиции с ДРУГИМ распределением: попади они в базу — доли поехали бы.
+      item({ actualKg: 5000, farmerId: 2, calibres: [cal(CAT.big, 100)] }),
+    ];
+    const cats = aggregateCultureItems(filterItemsBySuppliers(items, [1])).calibre;
+    expect(cats.map((c) => c.label)).toEqual(["6–9 см", "9–12 см", ">12 см"]);
+    expect(cats.map((c) => c.pct)).toEqual([40, 30, 30]);
+  });
+
+  it("опции фильтра строятся по полному набору и не зависят от выбора", () => {
+    expect(supplierOptionsOf(full)).toEqual([
+      { id: 1, name: "Ф1", count: 1 },
+      { id: 2, name: "Ф2", count: 1 },
+      { id: 3, name: "Ф3", count: 1 },
+    ]);
+    // Несколько позиций одного фермера — одна опция со счётчиком.
+    expect(
+      supplierOptionsOf([...full, item({ actualKg: 100, farmerId: 1, farmerName: "Ф1" })]),
+    ).toEqual([
+      { id: 1, name: "Ф1", count: 2 },
+      { id: 2, name: "Ф2", count: 1 },
+      { id: 3, name: "Ф3", count: 1 },
+    ]);
+  });
+
+  it("parseSupplierIds: мусор, дубли и непозитивные отбрасываются", () => {
+    expect(parseSupplierIds("1,2,2,x,-3, 4 ")).toEqual([1, 2, 4]);
+    expect(parseSupplierIds(undefined)).toEqual([]);
+    expect(parseSupplierIds("")).toEqual([]);
+    expect(parseSupplierIds(["3,1", "9"])).toEqual([1, 3]); // берём первое значение
   });
 });
