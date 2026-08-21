@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtInt, fmtPct1, fmtTons } from "@/lib/format";
+import { downloadXlsxBook } from "@/lib/xlsx-export";
 import type {
   FarmerSettlement,
   SettlementBatch,
@@ -23,6 +24,7 @@ import { periodColumnSuffix } from "@/server/farmers/settlement-period";
 import { EmptyState } from "./EmptyState";
 import { ProgressCell } from "./ProgressCell";
 import { settlementPrintHref } from "./settlement-print-href";
+import { buildSettlementBook, settlementFileName } from "./settlement-xlsx";
 
 // Расчётный лист по фермеру. Лист показывает НАЧИСЛЕНО, а не долг: сущности платежей
 // и авансов в системе нет, поэтому колонок «оплачено»/«остаток» здесь быть не может.
@@ -333,6 +335,32 @@ export function SettlementPanel({ data }: { data: FarmerSettlement }) {
             </svg>
             Печать
           </a>
+          {/* Excel — та же книга из data, что видна на экране: второй загрузки нет,
+              строки собирает чистый settlement-xlsx.ts (в компоненте — ни одной формулы). */}
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() =>
+              downloadXlsxBook({
+                sheets: buildSettlementBook(data),
+                fileName: settlementFileName(data),
+              })
+            }
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Excel
+          </button>
         </div>
       </div>
 
