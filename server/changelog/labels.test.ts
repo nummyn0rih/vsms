@@ -95,6 +95,25 @@ describe("подписи полей (два яруса)", () => {
     );
   });
 
+  it("смена водителя читается обеими записями (driver-change, BR-34)", () => {
+    // Точечная смена пишет driver_id и — если причину ввели — driver_change_reason.
+    // Обе сущности, оба поля: подпись не должна утечь в сырой ключ.
+    expect(fieldLabel("Shipment", "driver_id")).toBe("Водитель");
+    expect(fieldLabel("MaterialShipment", "driver_id")).toBe("Водитель");
+    expect(fieldLabel("Shipment", "driver_change_reason")).toBe(
+      "Причина смены водителя",
+    );
+    expect(fieldLabel("MaterialShipment", "driver_change_reason")).toBe(
+      "Причина смены водителя",
+    );
+    // Значение driver_id — id водителя: словаря значений для него нет, резолв
+    // id → имя в журнале сюда не входит (отдельная задача), поэтому число как есть.
+    expect(formatValue("Shipment", "driver_id", "17")).toBe("17");
+    expect(formatValue("Shipment", "driver_change_reason", "поломка тягача")).toBe(
+      "поломка тягача",
+    );
+  });
+
   it("неизвестное поле возвращается как есть", () => {
     expect(fieldLabel("Shipment", "zzz_field")).toBe("zzz_field");
     expect(fieldLabel("ZzzUnknown", "zzz_field")).toBe("zzz_field");

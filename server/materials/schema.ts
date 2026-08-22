@@ -137,6 +137,17 @@ export const materialShipmentSchema = z
 
 export type MaterialShipmentInput = z.infer<typeof materialShipmentSchema>;
 
+// driver-change (BR-34): точечная смена водителя рейса на любом статусе, без отката.
+// Зеркало server/shipments/schema.ts → changeDriverSchema; схемы намеренно не общие
+// (сущности разные, экономия — две строки, а связность доменов выросла бы).
+export const changeMaterialDriverSchema = z.object({
+  materialShipmentId: z.number().int().positive(),
+  driverId: z.number().int().positive(),
+  reason: z.string().trim().max(200, "Причина — не длиннее 200 символов").optional(),
+});
+
+export type ChangeMaterialDriverInput = z.infer<typeof changeMaterialDriverSchema>;
+
 // --- View-типы для клиента (Decimal/Date → string) ---
 
 export type MaterialItemRow = {

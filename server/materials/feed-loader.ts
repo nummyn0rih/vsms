@@ -33,6 +33,7 @@ export async function getMaterialShipments(
       items: { include: itemInclude, orderBy: { id: "asc" } },
       driver: {
         select: {
+          id: true,
           full_name: true,
           phone: true,
           info: true,
@@ -91,6 +92,7 @@ export async function getMaterialShipments(
       totalCount,
       departureDate: toDateStr(t.departure_date),
       arrivalDate: toDateStr(t.arrival_date),
+      driverId: t.driver.id,
       driverName: t.driver.full_name,
       transportCompanyName: t.driver.transportCompany.name,
       driverPhone: t.driver.phone,

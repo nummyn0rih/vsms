@@ -110,6 +110,9 @@ export async function getFarmerSettlement(params: {
       color: it.culture.color,
       status: it.shipment.status,
       plannedKg: it.planned_weight_kg.toNumber(),
+      // Факт позиции — отдельно от exec: перевеска существует и без акта приёмки
+      // (статус arrived), и секция «Ожидают приёмки» показывает именно её.
+      actualKg: it.actual_weight_kg != null ? it.actual_weight_kg.toNumber() : null,
       exec: act
         ? {
             actualKg: it.actual_weight_kg,

@@ -72,6 +72,11 @@ export type SheetItem = {
   color: string;
   status: SheetItemStatus;
   plannedKg: number;
+  // ⚠ НЕ ДУБЛИКАТ exec.actualKg и не сливать с ним: exec — вход движка расчётов
+  // (Prisma.Decimal, существует ТОЛЬКО при наличии акта), здесь — факт позиции для листа
+  // (number), доступный и без акта. Поле обязательное сознательно: опциональное легко
+  // забыть в новом маппере, и перевеска снова молча станет null.
+  actualKg: number | null; // ShipmentItem.actual_weight_kg — факт позиции НЕЗАВИСИМО от наличия акта
   exec: ExecItem | null; // null = акта приёмки нет → позиция ждёт приёмки
 };
 
@@ -246,7 +251,9 @@ export function buildSettlementSheet(input: {
           color: it.color,
           status: it.status,
           plannedKg: it.plannedKg,
-          actualKg: null,
+          // Перевеска бывает и до акта (статус arrived): факт — свойство позиции,
+          // а не акта, поэтому берётся из item, а не из exec (которого здесь нет).
+          actualKg: it.actualKg,
         });
       }
       continue;

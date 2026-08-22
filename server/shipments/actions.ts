@@ -6,11 +6,13 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
-import { logChange } from "@/server/changelog";
+import { logChange, type ChangeEntry } from "@/server/changelog";
 import { retryFailMessage, withUniqueRetry } from "@/server/db/retry";
 import type { ActionResult } from "@/lib/action-result";
 import {
   shipmentSchema,
+  changeDriverSchema,
+  type ChangeDriverInput,
   type ShipmentInput,
   type ShipmentDetail,
   type ShipmentItemRow,
@@ -415,6 +417,94 @@ export async function updateShipment(
     return { ok: true };
   } catch (e) {
     return toValidationFail(e) ?? failWithLog(e, "Не удалось сохранить");
+  }
+}
+
+// driver-change (BR-34): точечная смена водителя рейса, БЕЗ отката статуса. Живёт
+// рядом с updateShipment, а не вместо него: updateShipment правит шапку целиком и
+// потому справедливо заперт в planned (правка состава/весов десинхронит плечи тары).
+// Водитель к складу отношения не имеет — ни одна из четырёх баз веса, ни движения,
+// ни выполнение контракта, ни стоимость от него не зависят, поэтому СТАТУС ЗДЕСЬ НЕ
+// ПРОВЕРЯЕТСЯ. Вместе с водителем меняется и ТК рейса (ТК — атрибут водителя, акт
+// читает её живьём: server/acceptance/act.ts).
+export async function changeShipmentDriver(
+  input: ChangeDriverInput,
+): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const parsed = changeDriverSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "Проверьте поля формы",
+        fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+      };
+    }
+    const { shipmentId, driverId, reason } = parsed.data;
+
+    const shipment = await prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { id: true, driver_id: true },
+    });
+    if (!shipment) return { ok: false, error: "Отгрузка не найдена" };
+
+    // Пустой диф не логируем (BR-16 требует запись на ИЗМЕНЕНИЕ; logChange на пустом
+    // списке ещё и шумит warn'ом). Выходим до транзакции.
+    if (shipment.driver_id === driverId) return { ok: true };
+
+    // Новый водитель — только активный. Действующая привязка при этом сохраняется,
+    // даже если текущий водитель архивный: правило FK-Select про ПОКАЗ текущего
+    // значения, а не про выбор нового.
+    const driver = await prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { id: true, active: true },
+    });
+    if (!driver) return { ok: false, error: "Водитель не найден" };
+    if (!driver.active) {
+      return { ok: false, error: "Водитель архивный — выберите активного" };
+    }
+
+    const trimmedReason = reason?.trim() || null;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.shipment.update({
+        where: { id: shipmentId },
+        data: { driver_id: driverId },
+      });
+
+      const entries: ChangeEntry[] = [
+        {
+          entity: ENTITY,
+          entityId: shipmentId,
+          field: "driver_id",
+          oldValue:
+            shipment.driver_id != null ? String(shipment.driver_id) : null,
+          newValue: String(driverId),
+        },
+      ];
+      // Причина необязательна: кейсы разные (поломка тягача · ротация · опечатка),
+      // и «12 → 17» через месяц ничего не объясняет. Хранится отдельной записью.
+      if (trimmedReason) {
+        entries.push({
+          entity: ENTITY,
+          entityId: shipmentId,
+          field: "driver_change_reason",
+          oldValue: null,
+          newValue: trimmedReason,
+        });
+      }
+      await logChange(entries, Number(user.id), tx);
+    });
+
+    // Склад не трогали → revalidateStockDashboards() НЕ зовём. Ревалидируем места
+    // показа водителя: лента, доска планировщика (BoardView) и приёмка.
+    revalidatePath(PATH);
+    revalidatePath("/planner");
+    revalidatePath("/acceptance");
+    return { ok: true };
+  } catch (e) {
+    return failWithLog(e, "Не удалось сменить водителя");
   }
 }
 

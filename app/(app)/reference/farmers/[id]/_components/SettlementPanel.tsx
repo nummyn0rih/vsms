@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fmtInt, fmtPct1, fmtTons } from "@/lib/format";
+import { fmtInt, fmtPct1, fmtPercent, fmtPrice, fmtTons } from "@/lib/format";
 import { downloadXlsxBook } from "@/lib/xlsx-export";
 import type {
   FarmerSettlement,
@@ -46,11 +46,6 @@ const dateFmt = new Intl.DateTimeFormat("ru-RU", {
 
 function fmtDate(d: string | null): string {
   return d ? dateFmt.format(new Date(`${d}T00:00:00Z`)) : "—";
-}
-
-// Проценты акта хранятся как Decimal(5,2): 97 → «97», 97.5 → «97,5».
-function fmtPercent(n: number): string {
-  return String(n).replace(".", ",");
 }
 
 function CultureDot({ color }: { color: string }) {
@@ -187,7 +182,7 @@ function LineRows({
             )}
           </span>
         </TableCell>
-        <TableCell className="text-right tabular-nums">{line.pricePerKg}</TableCell>
+        <TableCell className="text-right tabular-nums">{fmtPrice(line.pricePerKg)}</TableCell>
         <TableCell className="text-right tabular-nums text-muted-foreground">
           {fmtTons(line.season.targetKg / 1000)}
         </TableCell>

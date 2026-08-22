@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { fmtInt, fmtPct1, fmtTons } from "@/lib/format";
+import { fmtInt, fmtPct1, fmtPercent, fmtPrice, fmtTons } from "@/lib/format";
 import { getFarmerSettlement } from "@/server/farmers/settlement";
 import type { SettlementLine } from "@/server/farmers/settlement-agg";
 import { PENDING_STATUS, UNPAID_REASON } from "@/server/farmers/settlement-labels";
@@ -34,12 +34,6 @@ const dateFmt = new Intl.DateTimeFormat("ru-RU", {
 
 function fmtDate(d: string | null): string {
   return d ? dateFmt.format(new Date(`${d}T00:00:00Z`)) : "—";
-}
-
-// Цена ₽/кг и процент корректировки — Decimal(…,2): 30 → «30», 97.5 → «97,5».
-// Разделитель приводим к запятой, как у остальных чисел листа; значение не меняется.
-function fmtDec(n: number): string {
-  return String(n).replace(".", ",");
 }
 
 function one(v: string | string[] | undefined): string | undefined {
@@ -113,7 +107,7 @@ function BatchTable({
               </td>
               {showAdjust && (
                 <td className="r num">
-                  {b.settlementPercent != null ? fmtDec(b.settlementPercent) : "—"}
+                  {b.settlementPercent != null ? fmtPercent(b.settlementPercent) : "—"}
                 </td>
               )}
               <td className="r num">{fmtInt(b.countedKg)}</td>
@@ -337,7 +331,7 @@ export default async function PrintSettlementPage({
                         <span className="st-sub"> · {l.batches.length}</span>
                       )}
                     </td>
-                    <td className="r num">{fmtDec(l.pricePerKg)}</td>
+                    <td className="r num">{fmtPrice(l.pricePerKg)}</td>
                     <td className="r num dim">{fmtTons(l.season.targetKg / 1000)}</td>
                     <td className={`r num${idle ? " dim" : ""}`}>
                       {fmtTons(l.countedKg / 1000)}
@@ -461,6 +455,7 @@ export default async function PrintSettlementPage({
                   <th>Культура</th>
                   <th>Статус</th>
                   <th className="r">План, кг</th>
+                  <th className="r">Факт, кг</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,6 +467,11 @@ export default async function PrintSettlementPage({
                     </td>
                     <td className="dim">{PENDING_STATUS[p.status]}</td>
                     <td className="r num dim">{fmtInt(p.plannedKg)}</td>
+                    {/* Перевеска позиционная: у части ожидающих факта ещё нет («—»).
+                        Построчная справка — в мету секции и в итоги листа НЕ суммируется. */}
+                    <td className="r num dim">
+                      {p.actualKg != null ? fmtInt(p.actualKg) : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

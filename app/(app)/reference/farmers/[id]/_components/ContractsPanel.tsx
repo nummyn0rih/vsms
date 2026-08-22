@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText } from "lucide-react";
 
 import type { FarmerCard } from "@/server/farmers/card";
+import { fmtPrice } from "@/lib/format";
 import {
   Table,
   TableBody,
@@ -90,7 +91,9 @@ export function ContractsPanel({ card }: { card: FarmerCard }) {
                     <TableCell>
                       <ProgressCell pct={l.pct} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{l.price_per_kg}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {fmtPrice(Number(l.price_per_kg))}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {fmtNum(l.costRub)}
                       {/* BR-33: «Принято» — тонны выполнения, стоимость — от
