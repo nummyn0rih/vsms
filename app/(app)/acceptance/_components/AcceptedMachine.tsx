@@ -400,6 +400,17 @@ export function AcceptedMachine({
                 transportCompanyName={machine.transportCompanyName}
                 phone={machine.driverPhone}
                 info={machine.driverInfo}
+                change={
+                  machine.driverId != null
+                    ? {
+                        kind: "shipment",
+                        id: machine.id,
+                        currentDriverId: machine.driverId,
+                        // Зона 3 — машины со всеми принятыми позициями (BR-13).
+                        status: "accepted",
+                      }
+                    : undefined
+                }
               />
             </div>
           ) : (

@@ -164,6 +164,16 @@ export function MachineRow({
             transportCompanyName={shipment.transportCompanyName}
             phone={shipment.driverPhone}
             info={shipment.driverInfo}
+            change={
+              shipment.driverId != null
+                ? {
+                    kind: "shipment",
+                    id: shipment.id,
+                    currentDriverId: shipment.driverId,
+                    status: shipment.status,
+                  }
+                : undefined
+            }
           />
         ) : (
           <span className="text-[13px] italic text-muted-foreground">

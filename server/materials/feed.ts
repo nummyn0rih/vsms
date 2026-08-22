@@ -39,6 +39,8 @@ export type MaterialTrip = {
   totalCount: number; // всего позиций
   departureDate: string | null;
   arrivalDate: string | null;
+  // driver-change: id нужен модалке водителя для точечной смены (BR-34).
+  driverId: number;
   driverName: string | null;
   transportCompanyName: string | null;
   driverPhone: string | null;

@@ -132,6 +132,14 @@ export function MaterialTripCard({
             transportCompanyName={trip.transportCompanyName}
             phone={trip.driverPhone}
             info={trip.driverInfo}
+            change={{
+              kind: "material",
+              id: trip.id,
+              currentDriverId: trip.driverId,
+              // Сырой статус БД: у рейсов материалов accepted не бывает
+              // (derivedStatus добавляет только UI-состояние "partial").
+              status: trip.status,
+            }}
           />
         ) : (
           <span className="text-[13px] italic text-muted-foreground">

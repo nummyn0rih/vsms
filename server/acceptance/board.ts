@@ -42,6 +42,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
         },
         driver: {
           select: {
+            id: true,
             full_name: true,
             phone: true,
             info: true,
@@ -88,6 +89,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
         },
         driver: {
           select: {
+            id: true,
             full_name: true,
             phone: true,
             info: true,
@@ -146,6 +148,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       status: s.status as "sent" | "arrived",
       departureDate: toDateStr(s.departure_date),
       arrivalDate: toDateStr(s.arrival_date),
+      driverId: s.driver?.id ?? null,
       driverName: s.driver?.full_name ?? null,
       transportCompanyName: s.driver?.transportCompany.name ?? null,
       driverPhone: s.driver?.phone ?? null,
@@ -290,6 +293,7 @@ export async function getAcceptanceBoard(): Promise<AcceptanceBoard> {
       code: s.code,
       departureDate: toDateStr(s.departure_date),
       arrivalDate: toDateStr(s.arrival_date),
+      driverId: s.driver?.id ?? null,
       driverName: s.driver?.full_name ?? null,
       transportCompanyName: s.driver?.transportCompany.name ?? null,
       driverPhone: s.driver?.phone ?? null,

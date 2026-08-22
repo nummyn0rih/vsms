@@ -121,6 +121,16 @@ export function AcceptanceMachine({
             transportCompanyName={machine.transportCompanyName}
             phone={machine.driverPhone}
             info={machine.driverInfo}
+            change={
+              machine.driverId != null
+                ? {
+                    kind: "shipment",
+                    id: machine.id,
+                    currentDriverId: machine.driverId,
+                    status: machine.status,
+                  }
+                : undefined
+            }
           />
         ) : (
           <span className="text-[13px] italic text-muted-foreground">

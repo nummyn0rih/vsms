@@ -80,6 +80,9 @@ export const FIELD_LABELS: Record<string, string> = {
   farmer_id: "Поставщик",
   culture_id: "Культура",
   driver_id: "Водитель",
+  // driver-change: причина точечной смены водителя — необязательная вторая запись
+  // рядом с driver_id (у самого рейса поля reason нет, как и у ручных операций тары).
+  driver_change_reason: "Причина смены водителя",
   transport_company_id: "Транспортная компания",
   contract_line_id: "Строка контракта",
   source_farmer_id: "Откуда (поставщик)",

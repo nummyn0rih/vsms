@@ -6,12 +6,14 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { failWithLog } from "@/server/action-result";
-import { logChange } from "@/server/changelog";
+import { logChange, type ChangeEntry } from "@/server/changelog";
 import { retryFailMessage, withUniqueRetry } from "@/server/db/retry";
 import type { ActionResult } from "@/lib/action-result";
 import { parseDateUTC } from "@/server/shipments/workdays";
 import {
   materialShipmentSchema,
+  changeMaterialDriverSchema,
+  type ChangeMaterialDriverInput,
   type MaterialShipmentInput,
   type MaterialItemInput,
   type MaterialDetail,
@@ -248,6 +250,82 @@ export async function updateMaterialShipment(
     return { ok: true };
   } catch (e) {
     return failWithLog(e, "Не удалось сохранить");
+  }
+}
+
+// driver-change (BR-34): смена водителя рейса тары/ингредиентов на любом статусе, без
+// отката. Зеркало changeShipmentDriver (server/shipments/actions.ts) — намеренная копия,
+// а не общий хелпер: сущности разные, а связность двух доменов ради двух строк не нужна.
+// Отличие от отгрузок: MaterialShipment.driver_id NOT NULL → старое значение есть всегда.
+export async function changeMaterialShipmentDriver(
+  input: ChangeMaterialDriverInput,
+): Promise<ActionResult> {
+  try {
+    const user = await requireRole("admin");
+
+    const parsed = changeMaterialDriverSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "Проверьте поля формы",
+        fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+      };
+    }
+    const { materialShipmentId, driverId, reason } = parsed.data;
+
+    const trip = await prisma.materialShipment.findUnique({
+      where: { id: materialShipmentId },
+      select: { id: true, driver_id: true },
+    });
+    if (!trip) return { ok: false, error: "Рейс не найден" };
+
+    // Пустой диф в журнал не пишем.
+    if (trip.driver_id === driverId) return { ok: true };
+
+    // Новый водитель — только активный (текущая привязка к архивному сохраняется).
+    const driver = await prisma.driver.findUnique({
+      where: { id: driverId },
+      select: { id: true, active: true },
+    });
+    if (!driver) return { ok: false, error: "Водитель не найден" };
+    if (!driver.active) {
+      return { ok: false, error: "Водитель архивный — выберите активного" };
+    }
+
+    const trimmedReason = reason?.trim() || null;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.materialShipment.update({
+        where: { id: materialShipmentId },
+        data: { driver_id: driverId },
+      });
+
+      const entries: ChangeEntry[] = [
+        {
+          entity: ENTITY,
+          entityId: materialShipmentId,
+          field: "driver_id",
+          oldValue: String(trip.driver_id),
+          newValue: String(driverId),
+        },
+      ];
+      if (trimmedReason) {
+        entries.push({
+          entity: ENTITY,
+          entityId: materialShipmentId,
+          field: "driver_change_reason",
+          oldValue: null,
+          newValue: trimmedReason,
+        });
+      }
+      await logChange(entries, Number(user.id), tx);
+    });
+
+    // Плечи склада не тронуты → revalidateStockDashboards() не зовём.
+    revalidatePath(PATH);
+    return { ok: true };
+  } catch (e) {
+    return failWithLog(e, "Не удалось сменить водителя");
   }
 }
 

@@ -64,6 +64,18 @@ export const shipmentSchema = z
 
 export type ShipmentInput = z.infer<typeof shipmentSchema>;
 
+// driver-change (BR-34): точечная смена водителя рейса на любом статусе, без отката.
+// Вход не из RHF (кнопка в модалке водителя), поэтому id — числами, а не строками.
+// Снятие водителя тут невозможно: driverId обязателен (на sent+ водитель обязателен,
+// на planned для этого есть обычная форма).
+export const changeDriverSchema = z.object({
+  shipmentId: z.number().int().positive(),
+  driverId: z.number().int().positive(),
+  reason: z.string().trim().max(200, "Причина — не длиннее 200 символов").optional(),
+});
+
+export type ChangeDriverInput = z.infer<typeof changeDriverSchema>;
+
 // --- View-типы для клиента (Decimal/Date → string) ---
 
 export type ShipmentItemRow = {
