@@ -461,6 +461,7 @@ export default async function PrintSettlementPage({
                   <th>Культура</th>
                   <th>Статус</th>
                   <th className="r">План, кг</th>
+                  <th className="r">Факт, кг</th>
                 </tr>
               </thead>
               <tbody>
@@ -472,6 +473,11 @@ export default async function PrintSettlementPage({
                     </td>
                     <td className="dim">{PENDING_STATUS[p.status]}</td>
                     <td className="r num dim">{fmtInt(p.plannedKg)}</td>
+                    {/* Перевеска позиционная: у части ожидающих факта ещё нет («—»).
+                        Построчная справка — в мету секции и в итоги листа НЕ суммируется. */}
+                    <td className="r num dim">
+                      {p.actualKg != null ? fmtInt(p.actualKg) : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

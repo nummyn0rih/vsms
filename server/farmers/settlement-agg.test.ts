@@ -68,6 +68,7 @@ function item(p: Partial<SheetItem> & { itemId: number }): SheetItem {
     color: p.color ?? "#2f6f3e",
     status: p.status ?? "accepted",
     plannedKg: p.plannedKg ?? 7000,
+    actualKg: p.actualKg ?? null,
     exec: p.exec !== undefined ? p.exec : exec(),
   };
 }
@@ -488,6 +489,25 @@ describe("buildSettlementSheet — краевые случаи и служебн
     expect(s.pending).toHaveLength(1);
     expect(s.pending[0].status).toBe("accepted");
     expect(s.totals.countedKg).toBe(0);
+  });
+
+  // Инвариант: факт — свойство ПОЗИЦИИ (перевеска), а не акта. Позиция, взвешенная до
+  // приёмки, обязана показать факт в «Ожидают приёмки»; отсутствие акта его не отменяет.
+  it("факт позиции доходит до «Ожидают приёмки» и не зависит от наличия акта", () => {
+    const s = sheet({
+      lines: [line({ lineId: L69, volumeTons: D(10) })],
+      items: [
+        item({ itemId: 7, status: "arrived", exec: null, plannedKg: 15000, actualKg: 13945 }),
+        item({ itemId: 8, status: "planned", exec: null, plannedKg: 5000, date: "2026-08-11" }),
+      ],
+    });
+    expect(s.pending.map((p) => p.itemId)).toEqual([7, 8]);
+    expect(s.pending[0].actualKg).toBe(13945);
+    // Перевески не было — факта нет; UI печатает «—», Excel оставляет ячейку пустой.
+    expect(s.pending[1].actualKg).toBeNull();
+    // Ожидающие в расчёт не входят: факт не должен просочиться в суммы листа.
+    expect(s.totals.countedKg).toBe(0);
+    expect(s.totals.paidKg).toBe(0);
   });
 
   it("ожидающие приёмки фильтруются периодом вместе со всем остальным", () => {
