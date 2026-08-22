@@ -13,6 +13,7 @@ import {
   findSettlementConflict,
   settlementConflictMessage,
 } from "@/server/acceptance/accepted";
+import { fmtPrice } from "@/lib/format";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import {
   Select,
@@ -53,7 +54,7 @@ const dayMonthFmt = new Intl.DateTimeFormat("ru-RU", {
 
 function priceLabel(line: ActContext["contractLines"][number], cultureName: string) {
   const name = line.label?.trim() || cultureName;
-  return `${name} · ${Number(line.pricePerKg)} ₽/кг`;
+  return `${name} · ${fmtPrice(Number(line.pricePerKg))} ₽/кг`;
 }
 
 function rangeText(r: ActCalibreRange): string | null {

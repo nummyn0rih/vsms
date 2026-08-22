@@ -11,6 +11,7 @@ import {
   actNumbersSummary,
   computeAcceptedPercent,
 } from "@/server/acceptance/accepted";
+import { fmtPrice } from "@/lib/format";
 import { RoleGate } from "@/components/auth/RoleGate";
 import { formatWeight } from "@/app/(app)/shipments/_components/shipment-actions";
 import { DriverModal } from "@/app/(app)/shipments/_components/DriverModal";
@@ -265,7 +266,7 @@ function Position({
           )}
           {pos.pricePerKg != null && (
             <span className="whitespace-nowrap tabular-nums text-[#4d4d4d]">
-              {pos.pricePerKg} <span className="text-muted-foreground">₽/кг</span>
+              {fmtPrice(pos.pricePerKg)} <span className="text-muted-foreground">₽/кг</span>
             </span>
           )}
         </div>
@@ -274,7 +275,7 @@ function Position({
             <span className="mb-0.5 block text-[11.5px] tabular-nums text-[#1d8e75]">
               {/* База денег — оплачиваемый вес (принятый + доплата BR-33). */}
               {kg(pos.settlementPercent != null ? pos.paidKg : pos.acceptedKg)} кг ×{" "}
-              {pos.pricePerKg} ₽
+              {fmtPrice(pos.pricePerKg)} ₽
               {pos.surchargeKg > 0 && (
                 <span className="ml-1 text-muted-foreground">
                   (вкл. доплату {kg(pos.surchargeKg)} кг)
@@ -316,7 +317,7 @@ function Position({
           {ns.pricePerKg != null ? (
             <span className="ml-auto whitespace-nowrap text-right">
               <span className="mr-2 tabular-nums text-[11.5px] text-muted-foreground">
-                {kg(ns.kg)} кг × {ns.pricePerKg} ₽
+                {kg(ns.kg)} кг × {fmtPrice(ns.pricePerKg)} ₽
               </span>
               <span className="font-semibold tabular-nums text-[#171717]">
                 {rub(ns.costRub)}

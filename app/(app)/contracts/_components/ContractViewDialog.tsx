@@ -5,6 +5,7 @@ import { Eye } from "lucide-react";
 
 import { getContractView } from "@/server/contracts/actions";
 import type { ContractDetailView } from "@/server/contracts/schema";
+import { fmtPrice } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -97,7 +98,7 @@ export function ContractViewDialog({ id }: { id: number }) {
                       {l.volume_tons}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {l.price_per_kg}
+                      {fmtPrice(Number(l.price_per_kg))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {Math.round(l.acceptedKg).toLocaleString("ru-RU")}

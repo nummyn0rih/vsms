@@ -8,6 +8,7 @@ import type {
   PackagingNormOption,
   ContractLineOption,
 } from "@/server/shipments/schema";
+import { fmtPrice } from "@/lib/format";
 import type { ComboboxOption } from "@/components/ui/combobox";
 
 // Единая точка истины каскада позиции отгрузки (B3 срез 1, рефактор B2.5):
@@ -75,7 +76,7 @@ export function filterContractLines(args: {
   );
   const lineOptions: ComboboxOption[] = matching.map((l) => ({
     value: String(l.id),
-    label: `${l.label ?? `строка #${l.id}`} · ${l.price_per_kg} ₽/кг`,
+    label: `${l.label ?? `строка #${l.id}`} · ${fmtPrice(Number(l.price_per_kg))} ₽/кг`,
   }));
   if (lineId && !lineOptions.some((o) => o.value === lineId)) {
     const num = Number(lineId);
