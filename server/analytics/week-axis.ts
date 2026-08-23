@@ -5,6 +5,11 @@ import { isoWeek, isoWeekRange } from "@/server/shipments/workdays";
 // ./dashboard, который импортирует prisma на верхнем уровне: юнит-тест ядра тянул бы за
 // собой клиент БД. Тела перенесены вербатим; dashboard их ре-экспортирует.
 
+// Порог показа недельного графика: меньше четырёх точек — линия рисует шум как тренд.
+// Общий для «Качества» и «Аналитики» карточки поставщика: «тот же порог» не должен
+// существовать в двух копиях, иначе одна из вкладок однажды поедет.
+export const MIN_WEEKS_FOR_CHART = 4;
+
 export function weekLabel(week: number): string {
   return `W${String(week).padStart(2, "0")}`;
 }

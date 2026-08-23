@@ -13,7 +13,7 @@ import {
   type CultureItem,
 } from "@/server/analytics/culture-agg";
 import type { CultureItemFull } from "@/server/analytics/culture-items";
-import { weekLabel } from "@/server/analytics/week-axis";
+import { MIN_WEEKS_FOR_CHART, weekLabel } from "@/server/analytics/week-axis";
 import { isoWeek } from "@/server/shipments/workdays";
 
 // Чистое ядро вкладки «Качество» карточки поставщика — БЕЗ prisma, чтобы считаться
@@ -46,8 +46,6 @@ const MIN_SUPPLIERS_FOR_RANK = 3;
 const MIN_BATCHES_FOR_OUTLIER = 4;
 /** Во сколько раз брак партии должен превысить средний брак фермера по культуре. */
 const OUTLIER_FACTOR = 1.5;
-/** Меньше четырёх недель — линия по трём точкам показывает шум как тренд. */
-const MIN_WEEKS_FOR_CHART = 4;
 
 export type QualityVerdict = "better" | "same" | "worse";
 

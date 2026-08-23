@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 // Общее пустое состояние вкладок карточки (нет контрактов / отгрузок / балансов).
@@ -5,10 +6,13 @@ export function EmptyState({
   icon: Icon,
   title,
   description,
+  children,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
+  /** Действие под описанием (ссылка «завести контракт» и т.п.). Необязательно. */
+  children?: ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg border bg-muted/20 px-6 py-14 text-center">
@@ -17,6 +21,7 @@ export function EmptyState({
       </div>
       <h3 className="text-[15px] font-semibold tracking-tight">{title}</h3>
       <p className="max-w-[380px] text-sm text-muted-foreground">{description}</p>
+      {children}
     </div>
   );
 }

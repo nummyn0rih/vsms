@@ -26,3 +26,11 @@ export function fmtPrice(n: number): string {
 export function fmtPercent(n: number): string {
   return fmtPrice(n);
 }
+
+// Дни (медиана интервала между поставками): целое — целым, половина — с запятой.
+// 4→«4», 4.5→«4,5». Медиана на чётном числе интервалов даёт .5, и округлять её нельзя:
+// «4» и «5» дня — разный разговор с поставщиком. Правило совпадает с ценой, поэтому
+// делегируем — второго тела не заводим.
+export function fmtDays(n: number): string {
+  return fmtPrice(Math.round(n * 10) / 10);
+}

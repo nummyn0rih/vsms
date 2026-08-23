@@ -11,9 +11,12 @@ import {
   type SettlementPeriodKind,
 } from "@/server/farmers/settlement-period";
 
-// Переключатель периода расчётного листа. Состояние — ТОЛЬКО в URL
-// (?period=&from=&to=), без localStorage: конвенция проекта, лист должен переживать
-// перезагрузку и пересылаться ссылкой.
+// Переключатель периода. Состояние — ТОЛЬКО в URL (?period=&from=&to=), без localStorage:
+// конвенция проекта, лист должен переживать перезагрузку и пересылаться ссылкой.
+//
+// Один компонент на две вкладки карточки («Расчёты» и «Аналитика») — проп `tab` говорит,
+// какую вкладку удерживать в URL при смене периода. Второй переключатель не заводим:
+// разъехавшиеся правила разбора периода — это разные числа на соседних вкладках.
 //
 // Вся арифметика периодов — в чистом settlement-period.ts (покрыт юнит-тестами);
 // здесь только запись параметров. Импорт именно оттуда, а не из settlement-agg:
@@ -29,9 +32,11 @@ const KINDS: { kind: SettlementPeriodKind; label: string }[] = [
 export function SettlementPeriodBar({
   period,
   today,
+  tab = "settlement",
 }: {
   period: SettlementPeriod;
   today: string; // todayLocalISO() с сервера — браузер не должен считать «сегодня» сам
+  tab?: "settlement" | "analytics";
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,7 +47,7 @@ export function SettlementPeriodBar({
 
   function push(next: { period?: string; from?: string | null; to?: string | null }) {
     const sp = new URLSearchParams(params.toString());
-    sp.set("tab", "settlement");
+    sp.set("tab", tab);
     if (next.period) sp.set("period", next.period);
     for (const key of ["from", "to"] as const) {
       const value = next[key];

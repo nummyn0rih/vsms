@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getFarmerCard } from "@/server/farmers/card";
 import { getFarmerQuality } from "@/server/farmers/quality";
+import { getFarmerAnalytics } from "@/server/farmers/analytics";
 import { getFarmerSettlement } from "@/server/farmers/settlement";
 import { FarmerCardHeader } from "./_components/FarmerCardHeader";
 import { FarmerCardTabs } from "./_components/FarmerCardTabs";
@@ -10,6 +11,7 @@ import { ContractsPanel } from "./_components/ContractsPanel";
 import { SettlementPanel } from "./_components/SettlementPanel";
 import { SettlementPeriodBar } from "./_components/SettlementPeriodBar";
 import { QualityPanel } from "./_components/QualityPanel";
+import { AnalyticsPanel } from "./_components/AnalyticsPanel";
 import { ShipmentsPanel } from "./_components/ShipmentsPanel";
 import { BalancesPanel } from "./_components/BalancesPanel";
 
@@ -60,6 +62,19 @@ export default async function FarmerCardPage({
       ? await getFarmerQuality({ farmerId, season: card.farmer.season })
       : null;
 
+  // «Аналитика» — тем же приёмом. Период у неё общий с «Расчётами» (?period=&from=&to=,
+  // один resolveSettlementPeriod), поэтому переключение вкладок период не сбрасывает.
+  const analytics =
+    tab === "analytics"
+      ? await getFarmerAnalytics({
+          farmerId,
+          season: card.farmer.season,
+          period: one(sp.period),
+          from: one(sp.from),
+          to: one(sp.to),
+        })
+      : null;
+
   return (
     <div>
       <FarmerCardHeader card={card} />
@@ -80,6 +95,18 @@ export default async function FarmerCardPage({
         shipmentsPanel={<ShipmentsPanel card={card} />}
         balancesPanel={<BalancesPanel card={card} />}
         qualityPanel={quality && <QualityPanel data={quality} />}
+        analyticsPanel={
+          analytics && (
+            <div className="flex flex-col gap-4">
+              <SettlementPeriodBar
+                period={analytics.period}
+                today={analytics.generatedAt}
+                tab="analytics"
+              />
+              <AnalyticsPanel data={analytics} />
+            </div>
+          )
+        }
       />
     </div>
   );

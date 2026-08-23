@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { getContractExecution } from "@/server/contracts/execution";
-import { computeAcceptedKg } from "@/server/acceptance/accepted";
 import {
   aggregateCultureItems,
   filterItemsBySuppliers,
@@ -12,7 +11,8 @@ import {
 } from "@/server/analytics/culture-agg";
 import { cultureItemSelect, toCultureItems } from "@/server/analytics/culture-items";
 import { buildWeekAxis, weekLabel } from "@/server/analytics/week-axis";
-import { isoWeek, seasonYearOf, currentSeasonWeek } from "@/server/shipments/workdays";
+import { getSeasonAcceptedKg } from "@/server/analytics/season-total";
+import { isoWeek, currentSeasonWeek } from "@/server/shipments/workdays";
 import { listSeasons } from "@/server/seasons/actions";
 
 export type { CategoryShare, CultureItem };
@@ -222,35 +222,9 @@ export async function getCultureAnalytics({
   // Знаменатель — весь сезон (все культуры, все фермеры) и при фильтре НЕ сужается;
   // числитель — уже отфильтрованный acceptedKgTotal. То есть при активном фильтре это
   // доля объёма ВЫБРАННЫХ поставщиков по этой культуре в сезоне (так и подписано на плитке).
-  const allItems = await prisma.shipmentItem.findMany({
-    where: { acceptanceAct: { isNot: null } },
-    select: {
-      actual_weight_kg: true,
-      shipment: { select: { arrival_date: true, departure_date: true } },
-      acceptanceAct: {
-        select: {
-          brak_percent: true,
-          calibreResults: {
-            select: { percent: true, calibreRange: { select: { is_accepted: true } } },
-          },
-        },
-      },
-    },
-  });
-  let seasonAcceptedKg = 0;
-  for (const it of allItems) {
-    const d = it.shipment.arrival_date ?? it.shipment.departure_date;
-    if (!d || seasonYearOf(d) !== season) continue;
-    const acc = computeAcceptedKg(
-      it.actual_weight_kg ? it.actual_weight_kg.toNumber() : null,
-      it.acceptanceAct!.brak_percent ? it.acceptanceAct!.brak_percent.toNumber() : null,
-      it.acceptanceAct!.calibreResults.map((cr) => ({
-        percent: cr.percent.toNumber(),
-        isAccepted: cr.calibreRange.is_accepted,
-      })),
-    );
-    seasonAcceptedKg += acc ?? 0;
-  }
+  // Выборка и формула — в общем season-total.ts: тот же знаменатель нужен вкладке
+  // «Аналитика» карточки поставщика, и раздваивать его нельзя.
+  const seasonAcceptedKg = await getSeasonAcceptedKg(season);
 
   // === 8) Калибр — доли категорий; null = simple-культура (блок не рендерится) ===
   const calibre = culture.acceptance_type === "calibre" ? agg.calibre : null;

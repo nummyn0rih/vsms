@@ -12,6 +12,7 @@ const TABS = [
   "shipments",
   "balances",
   "quality",
+  "analytics",
 ] as const;
 type TabValue = (typeof TABS)[number];
 
@@ -24,6 +25,7 @@ export function FarmerCardTabs({
   shipmentsPanel,
   balancesPanel,
   qualityPanel,
+  analyticsPanel,
 }: {
   mainPanel: ReactNode;
   contractsPanel: ReactNode;
@@ -31,6 +33,7 @@ export function FarmerCardTabs({
   shipmentsPanel: ReactNode;
   balancesPanel: ReactNode;
   qualityPanel: ReactNode;
+  analyticsPanel: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -56,12 +59,7 @@ export function FarmerCardTabs({
         <TabsTrigger value="shipments">Отгрузки</TabsTrigger>
         <TabsTrigger value="balances">Тара / ингредиенты</TabsTrigger>
         <TabsTrigger value="quality">Качество</TabsTrigger>
-        <TabsTrigger value="analytics" disabled title="Появится в v2">
-          Аналитика
-          <span className="ml-1 rounded border px-1 py-px font-mono text-[9.5px] text-muted-foreground uppercase">
-            скоро
-          </span>
-        </TabsTrigger>
+        <TabsTrigger value="analytics">Аналитика</TabsTrigger>
       </TabsList>
       <TabsContent value="main">{mainPanel}</TabsContent>
       <TabsContent value="contracts">{contractsPanel}</TabsContent>
@@ -69,6 +67,7 @@ export function FarmerCardTabs({
       <TabsContent value="shipments">{shipmentsPanel}</TabsContent>
       <TabsContent value="balances">{balancesPanel}</TabsContent>
       <TabsContent value="quality">{qualityPanel}</TabsContent>
+      <TabsContent value="analytics">{analyticsPanel}</TabsContent>
     </Tabs>
   );
 }
