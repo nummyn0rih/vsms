@@ -5,7 +5,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const TABS = ["main", "contracts", "settlement", "shipments", "balances"] as const;
+const TABS = [
+  "main",
+  "contracts",
+  "settlement",
+  "shipments",
+  "balances",
+  "quality",
+] as const;
 type TabValue = (typeof TABS)[number];
 
 // Вкладки карточки фермера: активная — в URL (?tab=), без localStorage (конвенция
@@ -16,12 +23,14 @@ export function FarmerCardTabs({
   settlementPanel,
   shipmentsPanel,
   balancesPanel,
+  qualityPanel,
 }: {
   mainPanel: ReactNode;
   contractsPanel: ReactNode;
   settlementPanel: ReactNode;
   shipmentsPanel: ReactNode;
   balancesPanel: ReactNode;
+  qualityPanel: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -46,12 +55,7 @@ export function FarmerCardTabs({
         <TabsTrigger value="settlement">Расчёты</TabsTrigger>
         <TabsTrigger value="shipments">Отгрузки</TabsTrigger>
         <TabsTrigger value="balances">Тара / ингредиенты</TabsTrigger>
-        <TabsTrigger value="quality" disabled title="Появится в v2">
-          Качество
-          <span className="ml-1 rounded border px-1 py-px font-mono text-[9.5px] text-muted-foreground uppercase">
-            скоро
-          </span>
-        </TabsTrigger>
+        <TabsTrigger value="quality">Качество</TabsTrigger>
         <TabsTrigger value="analytics" disabled title="Появится в v2">
           Аналитика
           <span className="ml-1 rounded border px-1 py-px font-mono text-[9.5px] text-muted-foreground uppercase">
@@ -64,6 +68,7 @@ export function FarmerCardTabs({
       <TabsContent value="settlement">{settlementPanel}</TabsContent>
       <TabsContent value="shipments">{shipmentsPanel}</TabsContent>
       <TabsContent value="balances">{balancesPanel}</TabsContent>
+      <TabsContent value="quality">{qualityPanel}</TabsContent>
     </Tabs>
   );
 }

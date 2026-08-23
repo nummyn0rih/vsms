@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/server/auth/session";
 import { getContractExecution } from "@/server/contracts/execution";
-import { calibreRangeLabel, computeAcceptedKg } from "@/server/acceptance/accepted";
+import { computeAcceptedKg } from "@/server/acceptance/accepted";
 import {
   aggregateCultureItems,
   filterItemsBySuppliers,
@@ -10,7 +10,8 @@ import {
   type CategoryShare,
   type CultureItem,
 } from "@/server/analytics/culture-agg";
-import { buildWeekAxis, weekLabel } from "@/server/analytics/dashboard";
+import { cultureItemSelect, toCultureItems } from "@/server/analytics/culture-items";
+import { buildWeekAxis, weekLabel } from "@/server/analytics/week-axis";
 import { isoWeek, seasonYearOf, currentSeasonWeek } from "@/server/shipments/workdays";
 import { listSeasons } from "@/server/seasons/actions";
 
@@ -112,71 +113,14 @@ export async function getCultureAnalytics({
   if (!culture) return null;
 
   // === 1) Принятые позиции культуры — ОДНА выборка для KPI/недель/брака/поставщиков ===
+  // Выборка и маппинг — общие с разрезом «культуры внутри фермера» (culture-items.ts):
+  // второй копии тех же полей быть не должно, иначе числа вкладок разъедутся.
   const rawItems = await prisma.shipmentItem.findMany({
     where: { culture_id: cultureId, acceptanceAct: { isNot: null } },
-    select: {
-      id: true,
-      shipment_id: true,
-      actual_weight_kg: true,
-      farmer: { select: { id: true, name: true } },
-      shipment: { select: { arrival_date: true, departure_date: true } },
-      acceptanceAct: {
-        select: {
-          brak_percent: true,
-          settlement_percent: true, // BR-33: нужен для оплачиваемого веса («К оплате»)
-          calibreResults: {
-            select: {
-              percent: true,
-              calibreRange: {
-                // id и границы нужны показу: размерный порядок категорий (compareCalibreRanges).
-                select: {
-                  id: true,
-                  label: true,
-                  min_cm: true,
-                  max_cm: true,
-                  is_accepted: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
+    select: cultureItemSelect,
   });
 
-  const allCultureItems: CultureItem[] = [];
-  for (const it of rawItems) {
-    const seasonDate = it.shipment.arrival_date ?? it.shipment.departure_date;
-    if (!seasonDate || seasonYearOf(seasonDate) !== season) continue;
-    const actualKg = it.actual_weight_kg ? it.actual_weight_kg.toNumber() : null;
-    const brakPercent = it.acceptanceAct!.brak_percent
-      ? it.acceptanceAct!.brak_percent.toNumber()
-      : null;
-    const calibres = it.acceptanceAct!.calibreResults.map((cr) => {
-      const minCm = cr.calibreRange.min_cm ? cr.calibreRange.min_cm.toNumber() : null;
-      const maxCm = cr.calibreRange.max_cm ? cr.calibreRange.max_cm.toNumber() : null;
-      return {
-        label: calibreRangeLabel(minCm, maxCm, cr.calibreRange.label),
-        isAccepted: cr.calibreRange.is_accepted,
-        percent: cr.percent.toNumber(),
-        minCm,
-        maxCm,
-        rangeId: cr.calibreRange.id,
-      };
-    });
-    allCultureItems.push({
-      shipmentId: it.shipment_id,
-      farmerId: it.farmer.id,
-      farmerName: it.farmer.name,
-      arrival: it.shipment.arrival_date,
-      actualKg,
-      brakPercent,
-      settlementPercent: it.acceptanceAct!.settlement_percent
-        ? it.acceptanceAct!.settlement_percent.toNumber()
-        : null,
-      calibres,
-    });
-  }
+  const allCultureItems: CultureItem[] = toCultureItems(rawItems, season);
 
   // === 2) Фильтр по поставщикам — на ВХОДЕ агрегации, не постфактум ===
   // Резать готовый результат нельзя: недели, брак, доли категорий и доля поставщика в

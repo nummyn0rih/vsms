@@ -2,6 +2,7 @@ import {
   compareCalibreRanges,
   type CalibreOrderKey,
   computeAcceptedKg,
+  computeNonStandardPercent,
   computeSettlement,
   computeWeightedBrak,
 } from "@/server/acceptance/accepted";
@@ -32,6 +33,46 @@ type BrakRow = { actualKg: number; brakPercent: number };
 function weightedBrakOrNull(rows: BrakRow[]): number | null {
   const den = rows.reduce((s, r) => s + r.actualKg, 0);
   return den > 0 ? computeWeightedBrak(rows) : null;
+}
+
+// Строка базы брака из позиции. Позиция БЕЗ перевески в базу не входит вовсе (знаменатель —
+// фактический вес), а не считается нулём; брак без акта-процента — 0.
+// ⚠ Единственное место, где строится эта пара: агрегатор и brakPctOfItems обязаны отбирать
+// позиции одинаково, иначе «брак у него» и «брак у остальных» посчитаются разными правилами.
+function brakRowOf(i: CultureItem): BrakRow | null {
+  return i.actualKg != null
+    ? { actualKg: i.actualKg, brakPercent: i.brakPercent ?? 0 }
+    : null;
+}
+
+// Взвешенный по факт. весу брак произвольного НАБОРА позиций; null = базы нет.
+// Тождественно равен bySupplier[].brakPct для набора позиций одного поставщика —
+// поэтому бенчмарк «у остальных» считается ровно тем же выражением, что «у него».
+export function brakPctOfItems(items: CultureItem[]): number | null {
+  const rows: BrakRow[] = [];
+  for (const i of items) {
+    const r = brakRowOf(i);
+    if (r) rows.push(r);
+  }
+  return weightedBrakOrNull(rows);
+}
+
+// Σ непринятых КАТЕГОРИЙ калибра, взвешенная фактическим весом («не в зачёт, %»).
+// null = ни у одной позиции набора категорий нет (simple-приёмка): там «не в зачёт» —
+// это брак, и он показывается отдельным числом. Формула доли одной позиции — общая
+// с расчётным листом (computeNonStandardPercent), второй копии нет.
+export function nonStandardPctOfItems(items: CultureItem[]): number | null {
+  let den = 0;
+  let num = 0;
+  let hasCalibre = false;
+  for (const i of items) {
+    if (i.actualKg == null) continue;
+    den += i.actualKg;
+    if (i.calibres.length === 0) continue;
+    hasCalibre = true;
+    num += (i.actualKg * computeNonStandardPercent(i.calibres)) / 100;
+  }
+  return hasCalibre && den > 0 ? (num / den) * 100 : null;
 }
 
 // Принятая позиция культуры (загрузчик маппит из Prisma-результата). Чистое DTO —
@@ -212,10 +253,7 @@ export function aggregateCultureItems(items: CultureItem[]): CultureItemsAggrega
     acceptedKgTotal += acceptedKg;
     const paidKg = paidKgOf(i, acceptedKg);
     paidKgTotal += paidKg;
-    const brakRow: BrakRow | null =
-      i.actualKg != null
-        ? { actualKg: i.actualKg, brakPercent: i.brakPercent ?? 0 }
-        : null;
+    const brakRow = brakRowOf(i);
     if (brakRow) brakRowsAll.push(brakRow);
 
     // недели — по дате прибытия (позиции без неё в динамику не идут)
@@ -311,13 +349,25 @@ export function parseSupplierIds(raw: string | string[] | undefined): number[] {
 }
 
 // Пустой список = все поставщики (поведение экрана без фильтра).
-export function filterItemsBySuppliers(
-  items: CultureItem[],
+// Дженерик по T: разрез «Качество» кладёт сюда CultureItemFull (с № акта и датой партии),
+// и после фильтра эти поля обязаны остаться — иначе переговорный лист нечем строить.
+export function filterItemsBySuppliers<T extends CultureItem>(
+  items: T[],
   supplierIds: number[],
-): CultureItem[] {
+): T[] {
   if (supplierIds.length === 0) return items;
   const sel = new Set(supplierIds);
   return items.filter((i) => sel.has(i.farmerId));
+}
+
+// База бенчмарка «все, КРОМЕ него» — дополнение к filterItemsBySuppliers([farmerId]).
+// ⚠ Отдельная функция, а не items.filter(...) по месту: у базы сравнения должно быть одно
+// имя и один тест, иначе она разъедется между вкладками «Качество» и «Аналитика».
+export function excludeSupplier<T extends CultureItem>(
+  items: T[],
+  farmerId: number,
+): T[] {
+  return items.filter((i) => i.farmerId !== farmerId);
 }
 
 // Опции комбобокса — из НЕотфильтрованных позиций культуры (иначе выбранный поставщик
