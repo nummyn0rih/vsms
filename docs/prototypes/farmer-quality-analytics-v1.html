@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VSMS · Карточка поставщика — вкладки «Качество» и «Аналитика» (v1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{--canvas:#fff;--canvas-soft:#fafafa;--canvas-soft-2:#f5f5f5;--hairline:#ebebeb;--hairline-strong:#a1a1a1;--ink:#171717;--body:#4d4d4d;--mute:#888;--link:#0070f3;--link-deep:#0761d1;
+    --cult-tomato:#D4322C;--cult-cucumber:#2F9E44;--cult-pepper:#E8730C;--cult-squash:#7C3AED;
+    --graf-1:#2f2f2f;--graf-2:#bdbdbd;--grid:#ebebeb;--track:#f0f0f0;
+    --brak:#cf9a3e;--brak-deep:#9a6a12;--brak-soft:#f6ecd6;
+    --worse:#8a6a2f;--better:#3f6b52;--worse-bg:#f7f1e4;--better-bg:#eaf4ee}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:"Geist",Inter,system-ui,-apple-system,sans-serif;background:var(--canvas-soft);color:var(--ink);-webkit-font-smoothing:antialiased;font-feature-settings:"ss01";letter-spacing:-0.01em}
+  a{color:var(--link);text-decoration:none}
+  a:hover{color:var(--link-deep);text-decoration:underline}
+  .mono{font-family:"Geist Mono",ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:0}
+  .tnum{font-variant-numeric:tabular-nums}
+  .dash{color:var(--hairline-strong)}
+
+  .doc{max-width:1320px;margin:0 auto;padding:56px 40px 120px}
+  .doc-head{margin-bottom:44px}
+  .doc-eyebrow{font-family:"Geist Mono",monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--mute);margin:0 0 10px}
+  .doc-title{font-size:32px;font-weight:600;letter-spacing:-0.045em;margin:0}
+  .doc-lead{margin:12px 0 0;color:var(--body);font-size:15px;line-height:23px;max-width:900px;letter-spacing:-0.01em}
+  .doc-lead b{color:var(--ink);font-weight:600}
+  .group{margin-top:54px}
+  .group-label{display:flex;align-items:center;gap:12px;margin:0 0 26px}
+  .group-label .gl-txt{font-family:"Geist Mono",monospace;font-size:12px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink);white-space:nowrap}
+  .group-label .gl-line{flex:1;height:1px;background:var(--hairline)}
+  .frame{margin-bottom:40px}
+  .frame-cap{display:flex;align-items:baseline;gap:14px;margin-bottom:13px}
+  .frame-num{font-family:"Geist Mono",monospace;font-size:12px;color:var(--mute);padding-top:1px;flex-shrink:0}
+  .frame-name{font-size:15px;font-weight:600;letter-spacing:-0.025em}
+  .frame-desc{font-size:13px;color:var(--mute);letter-spacing:-0.01em;margin-top:3px;line-height:18px;max-width:920px}
+  .frame-desc b{color:var(--body);font-weight:600}
+  .stage{background:var(--canvas);border:1px solid var(--hairline);border-radius:12px;box-shadow:0 1px 1px #00000005,0 2px 2px #0000000a;overflow:hidden}
+  .stage-note{font-family:"Geist Mono",monospace;font-size:11px;color:var(--mute);padding:9px 18px;border-top:1px dashed var(--hairline);background:var(--canvas-soft);display:flex;align-items:center;gap:8px;line-height:15px}
+  .stage-note svg{width:13px;height:13px;flex-shrink:0;opacity:.8}
+
+  /* card chrome */
+  .cardtop{display:flex;align-items:center;gap:10px;padding:12px 22px;border-bottom:1px solid var(--hairline)}
+  .crumb{font-size:13px;color:var(--mute);display:flex;align-items:center;gap:7px;letter-spacing:-0.01em}
+  .crumb a{color:var(--mute)}
+  .crumb a:hover{color:var(--ink);text-decoration:none}
+  .crumb .sep{color:var(--hairline-strong)}
+  .crumb .cur{color:var(--body)}
+  .cardtop .spacer{flex:1}
+  .fhead{padding:18px 24px 2px}
+  .fhead-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+  .fname{font-size:26px;font-weight:600;letter-spacing:-0.04em;line-height:30px}
+  .status{display:inline-flex;align-items:center;gap:7px;height:24px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;letter-spacing:-0.01em;margin-top:4px;border:1px solid #cdeee4;background:#eafaf5;color:#1d8e75}
+  .status .dot{width:7px;height:7px;border-radius:50%;background:#29bc9b}
+  .fhead .spacer{flex:1}
+  .gen{font-family:"Geist Mono",monospace;font-size:11px;color:var(--mute);text-align:right;line-height:16px;padding-top:6px}
+  .gen b{color:var(--body);font-weight:500}
+  .psub{margin-top:9px;font-size:13px;color:var(--mute);letter-spacing:-0.01em;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .psub .ro{display:inline-flex;align-items:center;gap:6px}
+  .psub .ro svg{width:12px;height:12px;opacity:.8}
+  .psub .sep{width:1px;height:12px;background:var(--hairline)}
+  .psub b{color:var(--body);font-weight:500}
+
+  /* tabs */
+  .tabs{display:flex;align-items:center;gap:2px;padding:6px 24px 0;margin-top:14px;border-bottom:1px solid var(--hairline);flex-wrap:wrap}
+  .tab{position:relative;border:0;background:transparent;cursor:pointer;font-family:inherit;font-size:14px;font-weight:500;letter-spacing:-0.02em;color:var(--mute);padding:9px 13px 13px;border-radius:6px 6px 0 0;display:inline-flex;align-items:center;gap:7px}
+  .tab:hover{color:var(--ink);background:var(--canvas-soft)}
+  .tab.active{color:var(--ink)}
+  .tab.active::after{content:"";position:absolute;left:6px;right:6px;bottom:-1px;height:2px;background:var(--ink);border-radius:2px}
+  .tab.new{color:var(--ink)}
+  .tab .nb{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:0.03em;text-transform:uppercase;color:var(--brak-deep);border:1px solid var(--brak);background:var(--brak-soft);border-radius:4px;padding:1px 5px}
+  .tab:disabled{cursor:default}
+  .panel{padding:20px 24px 24px;display:none}
+  .panel.show{display:block}
+  .panel-static{padding:20px 24px 24px}
+  .sec-label{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:0.04em;text-transform:uppercase;color:var(--mute);margin:0 0 12px;display:flex;align-items:center;gap:8px}
+  .sec-label .ln{flex:1;height:1px;background:var(--hairline)}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px}
+  .kpis.five{grid-template-columns:repeat(5,1fr)}
+  @media(max-width:980px){.kpis,.kpis.five{grid-template-columns:repeat(2,1fr)}}
+  .kpi{border:1px solid var(--hairline);border-radius:8px;background:var(--canvas-soft);padding:13px 15px;min-width:0}
+  .kpi .k{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute);line-height:14px}
+  .kpi .v{font-size:26px;font-weight:600;letter-spacing:-0.04em;margin-top:7px;display:flex;align-items:baseline;gap:4px;line-height:1}
+  .kpi .v .u{font-size:13px;font-weight:400;color:var(--mute);letter-spacing:-0.01em}
+  .kpi .v.sm{font-size:20px}
+  .kpi .sub{font-size:12px;color:var(--mute);margin-top:6px;letter-spacing:-0.01em;line-height:16px}
+  .kpi .sub b{color:var(--body);font-weight:500}
+  .kpi.muted .v{color:var(--hairline-strong)}
+  .kpi.brak .v{color:var(--brak-deep)}
+
+  /* cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}
+  .cards.wide{grid-template-columns:1fr}
+  @media(max-width:980px){.cards{grid-template-columns:1fr}}
+  .card{border:1px solid var(--hairline);border-radius:10px;background:var(--canvas);overflow:hidden;box-shadow:0 1px 1px #00000005,0 2px 2px #0000000a;display:flex;flex-direction:column}
+  .card-head{padding:14px 18px 12px;border-bottom:1px solid var(--hairline);display:flex;align-items:flex-start;gap:12px}
+  .card-head .ch-l{min-width:0;flex:1}
+  .card-title{font-size:14px;font-weight:600;letter-spacing:-0.025em;display:flex;align-items:center;gap:8px}
+  .card-unit{font-family:"Geist Mono",monospace;font-size:11px;color:var(--mute);margin-top:4px;letter-spacing:0;line-height:15px}
+  .card-hint{font-family:"Geist Mono",monospace;font-size:10px;color:var(--mute);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;white-space:nowrap}
+  .card-body{padding:16px 18px 18px;flex:1}
+  .cchip{width:15px;height:15px;border-radius:5px;flex-shrink:0;display:inline-block}
+
+  /* main table «По культурам» */
+  .ctbl{width:100%;border-collapse:collapse;font-size:13.5px}
+  .ctbl thead th{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute);font-weight:400;text-align:right;padding:0 10px 10px 0;border-bottom:1px solid var(--hairline);line-height:14px;vertical-align:bottom}
+  .ctbl thead th.l{text-align:left}
+  .ctbl thead th:last-child{padding-right:0}
+  .ctbl tbody td{padding:11px 10px 11px 0;border-bottom:1px solid var(--hairline);text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-0.01em;vertical-align:middle}
+  .ctbl tbody td:last-child{padding-right:0}
+  .ctbl td.l{text-align:left}
+  .ctbl tfoot td{padding:11px 10px 2px 0;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:-0.02em;border-top:2px solid var(--hairline)}
+  .ctbl tfoot td.l{text-align:left;color:var(--mute);font-weight:500;font-size:12px}
+  .ctbl tr.exp-row>td{border-bottom:none}
+  .cultcell{display:flex;align-items:center;gap:10px;min-width:0}
+  .cultcell .nm{font-weight:500;letter-spacing:-0.02em}
+  .cultcell .kind{font-family:"Geist Mono",monospace;font-size:10px;color:var(--mute)}
+  .exp-btn{width:22px;height:22px;border-radius:5px;border:1px solid var(--hairline);background:var(--canvas);display:grid;place-items:center;cursor:pointer;flex-shrink:0;color:var(--mute);padding:0}
+  .exp-btn:hover{background:var(--canvas-soft);color:var(--ink)}
+  .exp-btn svg{width:12px;height:12px;transition:transform .14s ease}
+  .exp-btn.open svg{transform:rotate(90deg)}
+  .brak-v{color:var(--brak-deep);font-weight:500}
+  .peer-v{color:var(--body)}
+  .delta{display:inline-flex;align-items:center;gap:5px;font-family:"Geist Mono",monospace;font-size:11.5px;border-radius:5px;padding:2px 7px;border:1px solid var(--hairline);background:var(--canvas-soft);color:var(--body)}
+  .delta.worse{color:var(--worse);background:var(--worse-bg);border-color:#e6d9bd}
+  .delta.better{color:var(--better);background:var(--better-bg);border-color:#cfe3d7}
+  .delta svg{width:11px;height:11px}
+  .pos{font-family:"Geist Mono",monospace;font-size:12px;color:var(--body)}
+  .pos .of{color:var(--mute)}
+  .why{border-bottom:1px dotted var(--hairline-strong);cursor:help;color:var(--mute)}
+
+  /* mini calibre stack in a row */
+  .mstack{display:flex;height:16px;border-radius:4px;overflow:hidden;border:1px solid var(--hairline);min-width:150px}
+  .mstack .s{min-width:2px}
+  .mstack .s.reject{background:repeating-linear-gradient(45deg,var(--brak) 0 5px,var(--brak-deep) 5px 10px)}
+  .mstack .s.brak{background:var(--brak)}
+  .mstack-legend{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:14px}
+  .mstack-legend span{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--body);letter-spacing:-0.01em}
+  .mstack-legend .sw{width:16px;height:9px;border-radius:2px;flex-shrink:0}
+  .mstack-legend .sw.reject{background:repeating-linear-gradient(45deg,var(--brak) 0 4px,var(--brak-deep) 4px 8px)}
+
+  /* expansion: партии */
+  .lots{background:var(--canvas-soft);border:1px solid var(--hairline);border-radius:9px;margin:2px 0 14px;overflow:hidden}
+  .lots-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--hairline);background:var(--canvas)}
+  .lots-head .t{font-size:12.5px;font-weight:600;letter-spacing:-0.02em}
+  .lots-head .d{font-size:12px;color:var(--mute);letter-spacing:-0.01em}
+  .lots-head .spacer{flex:1}
+  .ltbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .ltbl th{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute);font-weight:400;text-align:right;padding:9px 12px 8px 0;border-bottom:1px solid var(--hairline)}
+  .ltbl th.l{text-align:left;padding-left:14px}
+  .ltbl th:last-child{padding-right:14px}
+  .ltbl td{padding:9px 12px 9px 0;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--hairline);color:var(--body)}
+  .ltbl td.l{text-align:left;padding-left:14px}
+  .ltbl td:last-child{padding-right:14px}
+  .ltbl tbody tr:last-child td{border-bottom:none}
+  .ltbl .act{font-family:"Geist Mono",monospace;color:var(--link)}
+  .ltbl .dt{font-family:"Geist Mono",monospace;color:var(--ink)}
+  .ltbl .cats{font-family:"Geist Mono",monospace;font-size:11px;color:var(--mute);text-align:left}
+  .ltbl tr.hi td{background:var(--brak-soft)}
+
+  /* period bar */
+  .pbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;border:1px solid var(--hairline);border-radius:9px;background:var(--canvas-soft);padding:9px 12px;margin-bottom:22px}
+  .pseg{display:flex;align-items:center;gap:3px}
+  .pseg button{height:30px;padding:0 11px;border-radius:6px;border:1px solid transparent;background:transparent;font-family:inherit;font-size:13px;font-weight:500;letter-spacing:-0.02em;color:var(--body);cursor:pointer}
+  .pseg button:hover{background:var(--canvas)}
+  .pseg button.on{background:var(--canvas);border-color:var(--hairline);color:var(--ink);box-shadow:0 1px 1px #0000000a}
+  .pbar .spacer{flex:1}
+  .pbar .plabel{font-size:13px;font-weight:500;letter-spacing:-0.02em;min-width:150px;text-align:right}
+  .pbar .nav{width:28px;height:28px;border-radius:6px;border:1px solid var(--hairline);background:var(--canvas);display:grid;place-items:center;color:var(--mute);cursor:pointer;padding:0}
+  .pbar .nav svg{width:14px;height:14px}
+  .pbar .url{font-family:"Geist Mono",monospace;font-size:10px;color:var(--mute)}
+
+  /* machines-left table */
+  .mtbl{width:100%;border-collapse:collapse;font-size:13.5px}
+  .mtbl thead th{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute);font-weight:400;text-align:right;padding:0 10px 10px 0;border-bottom:1px solid var(--hairline);line-height:14px;vertical-align:bottom}
+  .mtbl thead th.l{text-align:left}
+  .mtbl thead th:last-child,.mtbl td:last-child{padding-right:0}
+  .mtbl tbody td{padding:11px 10px 11px 0;border-bottom:1px solid var(--hairline);text-align:right;font-variant-numeric:tabular-nums}
+  .mtbl td.l{text-align:left}
+  .mtbl tbody tr:last-child td{border-bottom:none}
+  .mtbl .trucks{font-weight:600;letter-spacing:-0.02em}
+  .mtot{display:flex;align-items:baseline;gap:14px;padding:2px 2px 18px}
+  .mtot .n{font-size:44px;font-weight:600;letter-spacing:-0.045em;line-height:1}
+  .mtot .n .u{font-size:18px;font-weight:400;color:var(--mute)}
+  .mtot .meta{font-size:12.5px;color:var(--mute);line-height:17px;letter-spacing:-0.01em;max-width:340px}
+  .mtot .meta b{color:var(--body);font-weight:500}
+
+  /* rhythm */
+  .rhythm{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:720px){.rhythm{grid-template-columns:1fr}}
+  .rh{border:1px solid var(--hairline);border-radius:8px;padding:12px 14px;background:var(--canvas-soft)}
+  .rh .k{font-family:"Geist Mono",monospace;font-size:10px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute)}
+  .rh .v{font-size:20px;font-weight:600;letter-spacing:-0.035em;margin-top:6px;display:flex;align-items:baseline;gap:4px}
+  .rh .v .u{font-size:12px;font-weight:400;color:var(--mute)}
+  .rh .sub{font-size:12px;color:var(--mute);margin-top:4px;line-height:16px}
+  .gaps{display:flex;align-items:flex-end;gap:4px;height:34px;margin-top:10px}
+  .gaps i{flex:1;background:var(--graf-2);border-radius:2px}
+  .gaps i.now{background:var(--graf-1)}
+
+  /* share bars */
+  .shares{display:flex;flex-direction:column;gap:12px}
+  .shrow{display:grid;grid-template-columns:150px 1fr 88px;align-items:center;gap:12px;font-size:13px}
+  @media(max-width:720px){.shrow{grid-template-columns:120px 1fr 78px}}
+  .shrow .nm{display:flex;align-items:center;gap:8px;letter-spacing:-0.02em;color:var(--body)}
+  .shrow .trk{height:9px;border-radius:5px;background:var(--track);position:relative;overflow:hidden}
+  .shrow .trk .fl{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+  .shrow .pc{font-family:"Geist Mono",monospace;font-size:12px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .shrow .pc .sm{color:var(--mute)}
+
+  /* svg chart primitives */
+  .chart-svg{display:block;width:100%;height:auto}
+  .chart-svg text{font-family:"Geist Mono",monospace;font-variant-numeric:tabular-nums}
+  .ax-lbl{font-size:10.5px;fill:var(--mute)}
+  .ax-lbl.x{font-family:"Geist",sans-serif;letter-spacing:-0.02em}
+  .gridline{stroke:var(--grid);stroke-width:1}
+  .axisline{stroke:var(--hairline-strong);stroke-width:1;opacity:.55}
+  .planline{stroke:var(--hairline-strong);stroke-width:1.25;stroke-dasharray:4 4;opacity:.7;fill:none}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px}
+  .legend span{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--body);letter-spacing:-0.01em;line-height:16px}
+  .legend .sw{width:20px;height:8px;border-radius:2px;flex-shrink:0}
+  .legend .sw.dash{width:20px;height:0;border-top:2px dashed var(--hairline-strong);border-radius:0}
+
+  /* weeks fallback table */
+  .wtbl{width:100%;border-collapse:collapse;font-size:13px}
+  .wtbl th{font-family:"Geist Mono",monospace;font-size:9.5px;letter-spacing:0.03em;text-transform:uppercase;color:var(--mute);font-weight:400;text-align:right;padding:0 10px 8px 0;border-bottom:1px solid var(--hairline)}
+  .wtbl th.l{text-align:left}
+  .wtbl td{padding:9px 10px 9px 0;text-align:right;font-variant-numeric:tabular-nums;border-bottom:1px solid var(--hairline);color:var(--body)}
+  .wtbl td.l{text-align:left;font-family:"Geist Mono",monospace;color:var(--ink)}
+  .wtbl tbody tr:last-child td{border-bottom:none}
+  .wtbl th:last-child,.wtbl td:last-child{padding-right:0}
+
+  /* notes / empties */
+  .fine{font-size:12px;color:var(--mute);line-height:18px;letter-spacing:-0.01em;display:flex;gap:9px;align-items:flex-start;margin-top:6px}
+  .fine svg{width:13px;height:13px;flex-shrink:0;margin-top:2px;opacity:.8}
+  .fine b{color:var(--body);font-weight:500}
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 18px;gap:9px;min-height:150px}
+  .empty .ic{width:40px;height:40px;border-radius:10px;background:var(--canvas-soft);border:1px solid var(--hairline);display:grid;place-items:center;color:var(--hairline-strong)}
+  .empty .ic svg{width:19px;height:19px}
+  .empty .t{font-size:14px;font-weight:600;letter-spacing:-0.025em;color:var(--ink)}
+  .empty .d{font-size:12.5px;color:var(--mute);letter-spacing:-0.01em;max-width:420px;line-height:18px}
+  .empty .d a{font-weight:500}
+  .rowmsg{border:1px dashed var(--hairline);border-radius:8px;background:var(--canvas-soft);padding:13px 15px;font-size:13px;color:var(--body);letter-spacing:-0.01em;line-height:19px}
+  .rowmsg b{font-weight:600;color:var(--ink)}
+
+  /* decisions */
+  .decisions{margin-top:54px;border-top:1px solid var(--hairline);padding-top:28px}
+  .dec-title{font-size:16px;font-weight:600;letter-spacing:-0.03em;margin:0 0 4px}
+  .dec-sub{font-size:13px;color:var(--mute);margin:0 0 20px;letter-spacing:-0.01em}
+  .dec{border-left:2px solid var(--hairline);padding:0 0 0 16px;margin-bottom:20px}
+  .dec .q{font-size:14px;font-weight:600;letter-spacing:-0.02em;margin-bottom:5px}
+  .dec .a{font-size:13.5px;color:var(--body);line-height:20px;letter-spacing:-0.01em}
+  .dec .a b{color:var(--ink);font-weight:600}
+  .dec .tag{font-family:"Geist Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;color:var(--mute);border:1px solid var(--hairline);border-radius:4px;padding:1px 6px;margin-right:8px}
+  .dec .tag.open{color:var(--brak-deep);border-color:var(--brak);background:var(--brak-soft)}
+  .endnote{margin-top:40px;padding-top:22px;border-top:1px solid var(--hairline);font-size:12px;color:var(--mute);letter-spacing:-0.01em;line-height:19px}
+  .endnote .mono{color:var(--body)}
+</style>
+<template id="__bundler_thumbnail" data-bg-color="#fafafa">
+  <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1200" height="800" fill="#fafafa"/>
+    <rect x="240" y="150" width="300" height="26" rx="8" fill="#171717"/>
+    <rect x="240" y="210" width="140" height="8" rx="4" fill="#171717"/>
+    <rect x="400" y="210" width="140" height="8" rx="4" fill="#ebebeb"/>
+    <rect x="240" y="260" width="720" height="70" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="240" y="360" width="720" height="46" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="270" y="378" width="180" height="10" rx="5" fill="#2F9E44"/>
+    <rect x="820" y="374" width="110" height="18" rx="5" fill="#f6ecd6"/>
+    <rect x="240" y="426" width="720" height="46" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="270" y="444" width="150" height="10" rx="5" fill="#D4322C"/>
+    <rect x="820" y="440" width="110" height="18" rx="5" fill="#f6ecd6"/>
+    <rect x="240" y="492" width="720" height="46" rx="8" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <rect x="270" y="510" width="90" height="10" rx="5" fill="#E8730C"/>
+    <rect x="820" y="506" width="110" height="18" rx="5" fill="#eaf4ee"/>
+    <rect x="240" y="580" width="720" height="80" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="3"/>
+    <path d="M290,635 L390,610 L490,620 L590,595 L690,600 L790,585 L890,590" fill="none" stroke="#cf9a3e" stroke-width="5" stroke-linejoin="round"/>
+  </svg>
+</template>
+</head>
+<body>
+<div class="doc">
+
+  <header class="doc-head">
+    <p class="doc-eyebrow">VSMS · Карточка поставщика · вкладки «Качество» и «Аналитика» · v1</p>
+    <h1 class="doc-title">Качество и Аналитика фермера</h1>
+    <p class="doc-lead">Зеркало разреза <span class="mono">/analytics/culture/[id]</span>: там «фермеры внутри культуры», здесь — <b>культуры внутри фермера</b>. Обе вкладки дают только то, чего нет на других: <b>сравнение с другими поставщиками</b> и <b>прогноз/темп</b>. «Качество» — сезонное, отвечает «какой он поставщик»; «Аналитика» — с периодом (<span class="mono">SettlementPeriodBar</span>), отвечает «что с ним сейчас и чего ждать». Деньги остаются на «Расчётах», выполнение — на «Контрактах», список партий — на «Отгрузках». Всё считается на лету существующими формулами; бенчмарк — тот же <span class="mono">culture-agg.bySupplier</span>. Числа иллюстративные; в проде графики — Recharts.</p>
+  </header>
+
+  <!-- ============================================================ A -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">A · Вкладка «Качество» — сезон целиком, фермер с полными данными</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">A0</span>
+        <div>
+          <div class="frame-name">Качество · шапка листа + KPI + таблица «По культурам» + динамика брака</div>
+          <div class="frame-desc">Шапка как на «Расчётах»: имя · сезон · «сформировано» моно справа. KPI: принято · средний брак (взвешенный) · не в зачёт (Σ непринятых категорий, только при наличии calibre-культур) · партий с актом. Ядро — <b>таблица по культурам</b> с бенчмарком: брак у него · брак у ОСТАЛЬНЫХ · Δ · позиция (только при M ≥ 3) · доля в культуре · мини-стек категорий. <b>Строки раскрываются в партии</b> — это переговорный лист. Внизу — динамика брака по неделям (недель с актами 9 ≥ 4). Δ — без алярм-красного: инструмент разговора, не авария.</div>
+        </div>
+      </div>
+
+      <div class="stage" data-screen-label="Качество · полные данные" id="stage-q">
+        <div class="cardtop">
+          <div class="crumb"><a href="#">Справочники</a><span class="sep">/</span><a href="#">Поставщики</a><span class="sep">/</span><span class="cur">Ферма «Заречье»</span></div>
+          <div class="spacer"></div>
+        </div>
+        <div class="fhead">
+          <div class="fhead-top">
+            <div>
+              <div class="fname">Ферма «Заречье»</div>
+              <div class="psub">
+                <span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span>
+                <span class="sep"></span><span>Сезон <b>2026</b></span>
+                <span class="sep"></span><span>4 культуры · <b>27</b> партий с актом</span>
+              </div>
+            </div>
+            <span class="status"><span class="dot"></span>Активен</span>
+            <div class="spacer"></div>
+            <div class="gen">сформировано <b>23.08.2026</b><br/>данные на 22.08.2026, 21:40</div>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab" disabled>Основное</button>
+          <button class="tab" disabled>Контракты</button>
+          <button class="tab" disabled>Расчёты</button>
+          <button class="tab" disabled>Отгрузки</button>
+          <button class="tab" disabled>Тара / ингредиенты</button>
+          <button class="tab new active" data-tab="quality">Качество <span class="nb">v2</span></button>
+          <button class="tab new" data-tab="analytics">Аналитика <span class="nb">v2</span></button>
+        </div>
+
+        <!-- PANEL: Качество -->
+        <div class="panel show" data-panel="quality">
+          <div class="kpis">
+            <div class="kpi"><div class="k">Принято за сезон</div><div class="v"><span class="tnum">63,4</span><span class="u">т</span></div><div class="sub">эффективный вес · <b>19%</b> сезона</div></div>
+            <div class="kpi brak"><div class="k">Средний брак</div><div class="v"><span class="tnum">3,4</span><span class="u">%</span></div><div class="sub">взвешенный по факт. весу</div></div>
+            <div class="kpi"><div class="k">Не в зачёт</div><div class="v"><span class="tnum">11</span><span class="u">%</span></div><div class="sub">Σ непринятых категорий · только Огурцы</div></div>
+            <div class="kpi"><div class="k">Партий с актом</div><div class="v"><span class="tnum">27</span><span class="u">шт</span></div><div class="sub">из <b>29</b> поставок · 9 недель</div></div>
+          </div>
+
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head">
+                <div class="ch-l"><div class="card-title">По культурам</div><div class="card-unit">сортировка по принятому · бенчмарк — остальные поставщики этой культуры</div></div>
+                <span class="card-hint">нажмите строку → партии</span>
+              </div>
+              <div class="card-body">
+                <table class="ctbl">
+                  <thead><tr>
+                    <th class="l">Культура</th><th>Принято, т</th><th>Брак<br/>у него</th><th>Брак у<br/>остальных</th><th>Δ</th><th>Позиция<br/>по культуре</th><th>Доля в<br/>культуре</th><th class="l" style="width:200px;padding-left:16px">Категории</th>
+                  </tr></thead>
+                  <tbody>
+                    <tr data-lots="cuc">
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="kind">калибр</span></div></td>
+                      <td>28,6</td><td class="brak-v">2,6%</td><td class="peer-v">3,4%</td>
+                      <td><span class="delta better"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>−0,8 п.п.</span></td>
+                      <td><span class="pos">2 <span class="of">из 6</span></span></td><td>29%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Экстра 21% · 1-й 44% · 2-й 24% · не в зачёт 8% · брак 3%"><span class="s" style="width:21%;background:var(--cult-cucumber)"></span><span class="s" style="width:44%;background:color-mix(in srgb,var(--cult-cucumber) 70%,#fff)"></span><span class="s" style="width:24%;background:color-mix(in srgb,var(--cult-cucumber) 40%,#fff)"></span><span class="s reject" style="width:8%"></span><span class="s brak" style="width:3%"></span></div></td>
+                    </tr>
+                    <tr data-lots="tom">
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="kind">по весу</span></div></td>
+                      <td>21,2</td><td class="brak-v">4,1%</td><td class="peer-v">3,6%</td>
+                      <td><span class="delta worse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>+0,5 п.п.</span></td>
+                      <td><span class="pos">4 <span class="of">из 9</span></span></td><td>15%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Принято 95,9% · брак 4,1%"><span class="s" style="width:95.9%;background:var(--cult-tomato)"></span><span class="s brak" style="width:4.1%"></span></div></td>
+                    </tr>
+                    <tr data-lots="pep">
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-pepper)"></span><span class="nm">Перец</span><span class="kind">по весу</span></div></td>
+                      <td>9,8</td><td class="brak-v">5,2%</td><td class="peer-v">3,1%</td>
+                      <td><span class="delta worse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>+2,1 п.п.</span></td>
+                      <td><span class="pos">4 <span class="of">из 5</span></span></td><td>22%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Принято 94,8% · брак 5,2%"><span class="s" style="width:94.8%;background:var(--cult-pepper)"></span><span class="s brak" style="width:5.2%"></span></div></td>
+                    </tr>
+                    <tr data-lots="pat">
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-squash)"></span><span class="nm">Патиссоны</span><span class="kind">по весу</span></div></td>
+                      <td>3,8</td><td class="brak-v">2,0%</td><td><span class="dash">—</span></td>
+                      <td><span class="dash">—</span></td>
+                      <td><span class="why" title="Мало поставщиков для сравнения: культуру возит 2 фермера">—</span></td><td>61%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Принято 98% · брак 2%"><span class="s" style="width:98%;background:var(--cult-squash)"></span><span class="s brak" style="width:2%"></span></div></td>
+                    </tr>
+                  </tbody>
+                  <tfoot><tr><td class="l">Итого по фермеру</td><td>63,4</td><td class="brak-v">3,4%</td><td class="peer-v">3,4%</td><td class="l" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--mute);font-weight:400">≈ на уровне</td><td></td><td></td><td></td></tr></tfoot>
+                </table>
+                <div class="mstack-legend">
+                  <span><span class="sw" style="background:var(--cult-cucumber)"></span>категории калибра — тон культуры, размерный порядок</span>
+                  <span><span class="sw reject"></span>не в зачёт (непринятые категории)</span>
+                  <span><span class="sw" style="background:var(--brak)"></span>брак</span>
+                </div>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span><b>Позиция</b> — место по браку среди поставщиков культуры, показывается только при <b>M ≥ 3</b>: «2 из 2» — не рейтинг, а шум. У Патиссонов поставщиков двое → прочерк с подсказкой. <b>Δ</b> — разница со средним по ОСТАЛЬНЫМ поставщикам культуры (сам фермер из базы исключён); важен знак, а не десятые.</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Динамика брака по неделям</div><div class="card-unit">взвешенный % по всем культурам · ISO-недели · 9 недель с актами</div></div><span class="card-hint">≥ 4 недель — график</span></div>
+              <div class="card-body">
+                <svg class="chart-svg" viewBox="0 0 1200 230" role="img" aria-label="Динамика брака фермера по неделям">
+                  <line class="gridline" x1="44" y1="16" x2="1184" y2="16"/><text class="ax-lbl" x="38" y="20" text-anchor="end">8</text>
+                  <line class="gridline" x1="44" y1="65" x2="1184" y2="65"/><text class="ax-lbl" x="38" y="69" text-anchor="end">6</text>
+                  <line class="gridline" x1="44" y1="114" x2="1184" y2="114"/><text class="ax-lbl" x="38" y="118" text-anchor="end">4</text>
+                  <line class="gridline" x1="44" y1="163" x2="1184" y2="163"/><text class="ax-lbl" x="38" y="167" text-anchor="end">2</text>
+                  <line class="axisline" x1="44" y1="212" x2="1184" y2="212"/><text class="ax-lbl" x="38" y="216" text-anchor="end">0</text>
+                  <path class="planline" d="M44,128.7 L1184,128.7"/>
+                  <path d="M44,138 L186,116 L328,148 L470,99 L612,84 L754,111 L896,131 L1038,143 L1180,153" fill="none" stroke="var(--brak)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                  <g fill="var(--canvas)" stroke="var(--brak)" stroke-width="1.6"><circle cx="44" cy="138" r="3"/><circle cx="186" cy="116" r="3"/><circle cx="328" cy="148" r="3"/><circle cx="470" cy="99" r="3"/><circle cx="612" cy="84" r="3"/><circle cx="754" cy="111" r="3"/><circle cx="896" cy="131" r="3"/><circle cx="1038" cy="143" r="3"/><circle cx="1180" cy="153" r="3"/></g>
+                  <text class="ax-lbl x" x="44" y="230" text-anchor="middle">W20</text>
+                  <text class="ax-lbl x" x="186" y="230" text-anchor="middle">W21</text>
+                  <text class="ax-lbl x" x="328" y="230" text-anchor="middle">W22</text>
+                  <text class="ax-lbl x" x="470" y="230" text-anchor="middle">W23</text>
+                  <text class="ax-lbl x" x="612" y="230" text-anchor="middle">W24</text>
+                  <text class="ax-lbl x" x="754" y="230" text-anchor="middle">W25</text>
+                  <text class="ax-lbl x" x="896" y="230" text-anchor="middle">W26</text>
+                  <text class="ax-lbl x" x="1038" y="230" text-anchor="middle">W27</text>
+                  <text class="ax-lbl x" x="1180" y="230" text-anchor="middle">W28</text>
+                </svg>
+                <div class="legend"><span><span class="sw" style="background:var(--brak)"></span>брак фермера по неделе</span><span><span class="sw dash"></span>средний за сезон (3,4%)</span><span style="color:var(--mute)">пик W24 — 5,2%: три партии перца подряд, см. раскрытие строки «Перец»</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>Категории калибра берутся из <b>действующей схемы культуры</b>, а не из снимка акта: правка схемы меняет картину качества прошлых партий. Лист уходит наружу — уточнить будет не у кого.</span></div>
+        </div>
+
+        <!-- PANEL: Аналитика (тот же stage, переключение вкладкой) -->
+        <div class="panel" data-panel="analytics">
+          <div class="pbar">
+            <div class="pseg"><button class="on">Сезон</button><button>Месяц</button><button>Неделя</button><button>Период</button></div>
+            <div class="spacer"></div>
+            <span class="url">?tab=analytics&amp;period=season</span>
+            <button class="nav" aria-label="Предыдущий период"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="plabel">Сезон 2026</span>
+            <button class="nav" aria-label="Следующий период"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+
+          <div class="kpis five">
+            <div class="kpi"><div class="k">Принято за период</div><div class="v"><span class="tnum">63,4</span><span class="u">т</span></div><div class="sub">23 рейса · 27 позиций</div></div>
+            <div class="kpi"><div class="k">Темп</div><div class="v"><span class="tnum">7,0</span><span class="u">т/нед</span></div><div class="sub">за последние 4 недели <b>5,3</b></div></div>
+            <div class="kpi"><div class="k">Выполнение</div><div class="v"><span class="tnum">71</span><span class="u">%</span></div><div class="sub">по контрактам · сезон целиком</div></div>
+            <div class="kpi"><div class="k">Осталось ~машин</div><div class="v"><span class="tnum">9</span><span class="u">маш.</span></div><div class="sub">оценка консервативная — см. ниже</div></div>
+            <div class="kpi"><div class="k">Ср. вес рейса</div><div class="v sm"><span class="tnum">3,2</span><span class="u">/</span><span class="tnum">2,8</span><span class="u">т</span></div><div class="sub">план (норма) / факт</div></div>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Осталось ~N машин</div><div class="card-unit">(объём строки − принято) / средний факт. вес рейса</div></div><span class="card-hint">по культурам</span></div>
+              <div class="card-body">
+                <div class="mtot"><div class="n"><span class="tnum">9</span><span class="u">&nbsp;машин</span></div><div class="meta">до закрытия контрактных строк сезона. Считается по <b>фактическому</b> среднему весу рейса (2,8 т), а он занижен частично перевешенными машинами → <b>оценка сверху по количеству</b>, консервативная.</div></div>
+                <table class="mtbl">
+                  <thead><tr><th class="l">Культура</th><th>Строка, т</th><th>Принято, т</th><th>Осталось, т</th><th>Ср. рейс, т</th><th>~Машин</th></tr></thead>
+                  <tbody>
+                    <tr><td class="l"><div class="cultcell"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span></div></td><td>38,0</td><td>28,6</td><td>9,4</td><td>3,1</td><td class="trucks">3</td></tr>
+                    <tr><td class="l"><div class="cultcell"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span><span class="nm">Томаты</span></div></td><td>30,0</td><td>21,2</td><td>8,8</td><td>2,7</td><td class="trucks">4</td></tr>
+                    <tr><td class="l"><div class="cultcell"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-pepper)"></span><span class="nm">Перец</span></div></td><td>14,0</td><td>9,8</td><td>4,2</td><td>2,4</td><td class="trucks">2</td></tr>
+                    <tr><td class="l"><div class="cultcell"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-squash)"></span><span class="nm">Патиссоны</span></div></td><td><span class="dash">—</span></td><td>3,8</td><td><span class="dash">—</span></td><td>1,9</td><td class="trucks"><span class="dash">—</span></td></tr>
+                  </tbody>
+                </table>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>У Патиссонов <b>нет строки контракта</b> — «—», а не 0: правило уже принято на аналитике культуры. Объём есть, плана нет → прогнозировать нечего.</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Динамика приёмки по неделям</div><div class="card-unit">т эффективного веса · серии — цвет культуры</div></div><span class="card-hint">9 недель</span></div>
+              <div class="card-body">
+                <svg class="chart-svg" viewBox="0 0 620 240" role="img" aria-label="Приёмка фермера по неделям по культурам">
+                  <line class="gridline" x1="40" y1="16" x2="604" y2="16"/><text class="ax-lbl" x="34" y="20" text-anchor="end">6</text>
+                  <line class="gridline" x1="40" y1="81" x2="604" y2="81"/><text class="ax-lbl" x="34" y="85" text-anchor="end">4</text>
+                  <line class="gridline" x1="40" y1="146" x2="604" y2="146"/><text class="ax-lbl" x="34" y="150" text-anchor="end">2</text>
+                  <line class="axisline" x1="40" y1="212" x2="604" y2="212"/><text class="ax-lbl" x="34" y="216" text-anchor="end">0</text>
+                  <path d="M40,186 L110,160 L180,141 L250,120 L320,108 L390,128 L460,144 L530,158 L600,176" fill="none" stroke="var(--cult-cucumber)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>
+                  <path d="M40,199 L110,188 L180,170 L250,152 L320,138 L390,150 L460,166 L530,180 L600,190" fill="none" stroke="var(--cult-tomato)" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/>
+                  <path d="M40,208 L110,204 L180,198 L250,190 L320,182 L390,186 L460,194 L530,200 L600,204" fill="none" stroke="var(--cult-pepper)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+                  <path d="M40,211 L110,210 L180,207 L250,205 L320,203 L390,205 L460,208 L530,210 L600,211" fill="none" stroke="var(--cult-squash)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>
+                  <text class="ax-lbl x" x="40" y="230" text-anchor="middle">W20</text>
+                  <text class="ax-lbl x" x="180" y="230" text-anchor="middle">W22</text>
+                  <text class="ax-lbl x" x="320" y="230" text-anchor="middle">W24</text>
+                  <text class="ax-lbl x" x="460" y="230" text-anchor="middle">W26</text>
+                  <text class="ax-lbl x" x="600" y="230" text-anchor="middle">W28</text>
+                </svg>
+                <div class="legend"><span><span class="sw" style="background:var(--cult-cucumber)"></span>Огурцы</span><span><span class="sw" style="background:var(--cult-tomato)"></span>Томаты</span><span><span class="sw" style="background:var(--cult-pepper)"></span>Перец</span><span><span class="sw" style="background:var(--cult-squash)"></span>Патиссоны</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cards">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Ритм поставок</div><div class="card-unit">«он вообще возит или пропал»</div></div><span class="card-hint">открытый вопрос №2</span></div>
+              <div class="card-body">
+                <div class="rhythm">
+                  <div class="rh"><div class="k">Последняя поставка</div><div class="v"><span class="tnum">3</span><span class="u">дня назад</span></div><div class="sub">20.08 · акт <span class="mono">А-1184</span></div></div>
+                  <div class="rh"><div class="k">Типичный интервал</div><div class="v"><span class="tnum">4</span><span class="u">дня</span></div><div class="sub">медиана между рейсами</div></div>
+                  <div class="rh"><div class="k">Машин за период</div><div class="v"><span class="tnum">23</span><span class="u">рейса</span></div><div class="sub">2,6 рейса в неделю</div></div>
+                </div>
+                <div class="gaps" title="Интервалы между рейсами, дни"><i style="height:40%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:70%"></i><i style="height:40%"></i><i style="height:40%"></i><i style="height:85%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:55%"></i><i style="height:40%"></i><i style="height:100%"></i><i style="height:40%"></i><i style="height:55%"></i><i class="now" style="height:70%"></i></div>
+                <div class="legend"><span style="color:var(--mute)">интервалы между рейсами по порядку; тёмный — текущий разрыв (3 дня, ещё в норме)</span></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Доля фермера</div><div class="card-unit">% принятого · в каждой культуре и в сезоне</div></div><span class="card-hint">разрез из culture-agg</span></div>
+              <div class="card-body">
+                <div class="shares">
+                  <div class="shrow"><span class="nm"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-squash)"></span>Патиссоны</span><span class="trk"><span class="fl" style="width:61%;background:var(--cult-squash)"></span></span><span class="pc">61% <span class="sm">/ 2 пост.</span></span></div>
+                  <div class="shrow"><span class="nm"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-cucumber)"></span>Огурцы</span><span class="trk"><span class="fl" style="width:29%;background:var(--cult-cucumber)"></span></span><span class="pc">29% <span class="sm">/ 6 пост.</span></span></div>
+                  <div class="shrow"><span class="nm"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-pepper)"></span>Перец</span><span class="trk"><span class="fl" style="width:22%;background:var(--cult-pepper)"></span></span><span class="pc">22% <span class="sm">/ 5 пост.</span></span></div>
+                  <div class="shrow"><span class="nm"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span>Томаты</span><span class="trk"><span class="fl" style="width:15%;background:var(--cult-tomato)"></span></span><span class="pc">15% <span class="sm">/ 9 пост.</span></span></div>
+                  <div class="shrow" style="margin-top:6px;padding-top:12px;border-top:1px solid var(--hairline)"><span class="nm" style="color:var(--ink);font-weight:500">Весь сезон</span><span class="trk"><span class="fl" style="width:19%;background:var(--graf-1)"></span></span><span class="pc">19% <span class="sm">/ 63,4 из 342 т</span></span></div>
+                </div>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>61% по Патиссонам при двух поставщиках — <b>зависимость, а не заслуга</b>: это же и причина прочерка в позиции на «Качестве».</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stage-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          Обе новые вкладки кликабельны · раскрытие строк культуры — по стрелке или по строке · остальные вкладки в макете заглушены. Деньги-KPI на «Качестве» запрещены (BR-33): «к оплате» рядом с «% брака» стёрло бы границу статистики качества.
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">A1</span>
+        <div>
+          <div class="frame-name">Раскрытие строки культуры → партии (переговорный лист)</div>
+          <div class="frame-desc">То, что зачитывают фермеру: дата · № акта (моно, ссылка на акт) · факт, кг · принято, кг · принято, % · брак, % · категории строкой. Худшие партии подсвечены тоном янтаря — без светофорной заливки всей таблицы. Итог по культуре в подвале — та же цифра, что в свёрнутой строке.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Качество · партии культуры">
+        <div class="panel-static">
+          <div class="lots">
+            <div class="lots-head">
+              <span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-pepper)"></span>
+              <span class="t">Перец · партии сезона</span>
+              <span class="d">9 партий · 9,8 т принято · брак 5,2% (у остальных 3,1%)</span>
+              <div class="spacer"></div>
+              <span class="card-hint">сортировка по дате ↓</span>
+            </div>
+            <table class="ltbl">
+              <thead><tr><th class="l">Дата</th><th>№ акта</th><th>Факт, кг</th><th>Принято, кг</th><th>Принято, %</th><th>Брак, %</th><th class="l" style="padding-left:14px">Категории</th></tr></thead>
+              <tbody>
+                <tr><td class="l dt">20.08</td><td class="act">А-1184</td><td>2 420</td><td>2 302</td><td>95,1</td><td class="brak-v">4,9</td><td class="cats">принято 2 302 · брак 118</td></tr>
+                <tr><td class="l dt">16.08</td><td class="act">А-1171</td><td>2 180</td><td>2 090</td><td>95,9</td><td class="brak-v">4,1</td><td class="cats">принято 2 090 · брак 90</td></tr>
+                <tr class="hi"><td class="l dt">12.08</td><td class="act">А-1150</td><td>2 640</td><td>2 402</td><td>91,0</td><td class="brak-v">9,0</td><td class="cats">принято 2 402 · брак 238 — перегрев, обсудить</td></tr>
+                <tr class="hi"><td class="l dt">09.08</td><td class="act">А-1139</td><td>2 310</td><td>2 130</td><td>92,2</td><td class="brak-v">7,8</td><td class="cats">принято 2 130 · брак 180</td></tr>
+                <tr><td class="l dt">04.08</td><td class="act">А-1122</td><td>1 980</td><td>1 900</td><td>96,0</td><td class="brak-v">4,0</td><td class="cats">принято 1 900 · брак 80</td></tr>
+                <tr><td class="l dt">29.07</td><td class="act">А-1098</td><td>2 050</td><td>1 976</td><td>96,4</td><td class="brak-v">3,6</td><td class="cats">принято 1 976 · брак 74</td></tr>
+              </tbody>
+            </table>
+            <div class="lots-head" style="border-top:1px solid var(--hairline);border-bottom:none;background:var(--canvas-soft)">
+              <span class="d">Показано 6 из 9 · <a href="#">все партии на «Отгрузках»</a></span>
+              <div class="spacer"></div>
+              <span class="d">Итого: факт <b style="color:var(--ink)">13 580</b> кг · принято <b style="color:var(--ink)">12 800</b> кг · брак <b style="color:var(--brak-deep)">5,2%</b></span>
+            </div>
+          </div>
+          <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>Список партий как таковой живёт на «Отгрузках» — здесь он <b>подчинён качеству</b>: только веса, проценты и категории, без статусов, машин и логистики. Дублирования нет.</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ B -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">B · «Качество» — краевые состояния</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B1</span>
+        <div>
+          <div class="frame-name">Только simple-культуры · единственный поставщик (M &lt; 3) · мало недель для графика</div>
+          <div class="frame-desc">Три деградации в одном листе. KPI «Не в зачёт» <b>скрыт</b> — категорий калибра нет ни у одной культуры (плиток три, не четыре). Кабачки: фермер — единственный поставщик, колонки бенчмарка и позиции — прочерк с объяснением, а не «1 из 1». Недель с актами три → вместо линии <b>таблица недель</b> с подписью: линия по трём точкам врёт больше, чем говорит.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Качество · simple + M<3 + мало точек">
+        <div class="fhead">
+          <div class="fhead-top">
+            <div>
+              <div class="fname">КФХ Сидоренко</div>
+              <div class="psub"><span class="ro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Только просмотр</span><span class="sep"></span><span>Сезон <b>2026</b></span><span class="sep"></span><span>2 культуры · <b>7</b> партий с актом</span></div>
+            </div>
+            <div class="spacer"></div>
+            <div class="gen">сформировано <b>23.08.2026</b></div>
+          </div>
+        </div>
+        <div class="tabs"><button class="tab" disabled>Основное</button><button class="tab" disabled>Контракты</button><button class="tab" disabled>Расчёты</button><button class="tab" disabled>Отгрузки</button><button class="tab" disabled>Тара / ингредиенты</button><button class="tab active" disabled>Качество</button><button class="tab" disabled>Аналитика</button></div>
+        <div class="panel-static">
+          <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+            <div class="kpi"><div class="k">Принято за сезон</div><div class="v"><span class="tnum">14,1</span><span class="u">т</span></div><div class="sub">эффективный вес · <b>4%</b> сезона</div></div>
+            <div class="kpi brak"><div class="k">Средний брак</div><div class="v"><span class="tnum">4,6</span><span class="u">%</span></div><div class="sub">взвешенный по факт. весу</div></div>
+            <div class="kpi"><div class="k">Партий с актом</div><div class="v"><span class="tnum">7</span><span class="u">шт</span></div><div class="sub">3 недели с актами</div></div>
+          </div>
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">По культурам</div><div class="card-unit">обе культуры — приёмка по весу, категории вырождаются в «принято / брак»</div></div><span class="card-hint">калибра нет</span></div>
+              <div class="card-body">
+                <table class="ctbl">
+                  <thead><tr><th class="l">Культура</th><th>Принято, т</th><th>Брак<br/>у него</th><th>Брак у<br/>остальных</th><th>Δ</th><th>Позиция<br/>по культуре</th><th>Доля в<br/>культуре</th><th class="l" style="width:200px;padding-left:16px">Категории</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="kind">по весу</span></div></td>
+                      <td>11,3</td><td class="brak-v">4,0%</td><td class="peer-v">3,6%</td>
+                      <td><span class="delta worse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>+0,4 п.п.</span></td>
+                      <td><span class="pos">5 <span class="of">из 9</span></span></td><td>8%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Принято 96% · брак 4%"><span class="s" style="width:96%;background:var(--cult-tomato)"></span><span class="s brak" style="width:4%"></span></div></td>
+                    </tr>
+                    <tr>
+                      <td class="l"><div class="cultcell"><button class="exp-btn" aria-label="Раскрыть партии"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:#2A7CB8"></span><span class="nm">Кабачки</span><span class="kind">по весу</span></div></td>
+                      <td>2,8</td><td class="brak-v">7,0%</td>
+                      <td><span class="why" title="Сравнивать не с кем: единственный поставщик культуры в сезоне">—</span></td>
+                      <td><span class="why" title="Нет базы для Δ — остальных поставщиков нет">—</span></td>
+                      <td><span class="why" title="Мало поставщиков для сравнения (M = 1)">—</span></td><td>100%</td>
+                      <td class="l" style="padding-left:16px"><div class="mstack" title="Принято 93% · брак 7%"><span class="s" style="width:93%;background:#2A7CB8"></span><span class="s brak" style="width:7%"></span></div></td>
+                    </tr>
+                  </tbody>
+                  <tfoot><tr><td class="l">Итого по фермеру</td><td>14,1</td><td class="brak-v">4,6%</td><td class="peer-v">3,6%</td><td class="l" style="font-family:'Geist Mono',monospace;font-size:11px;color:var(--mute);font-weight:400">только Томаты</td><td></td><td></td><td></td></tr></tfoot>
+                </table>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>По Кабачкам фермер — <b>единственный поставщик</b>: бенчмарк, Δ и позиция — прочерк с подсказкой при наведении. 7% брака здесь можно сравнить только с его же прошлыми партиями (раскрытие строки), не с рынком. Итог «Брак у остальных» считается лишь по культурам, где база есть.</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Брак по неделям</div><div class="card-unit">3 недели с актами — для графика мало точек</div></div><span class="card-hint">&lt; 4 недель — таблица</span></div>
+              <div class="card-body">
+                <table class="wtbl">
+                  <thead><tr><th class="l">Неделя</th><th>Партий</th><th>Факт, кг</th><th>Принято, кг</th><th>Брак, %</th></tr></thead>
+                  <tbody>
+                    <tr><td class="l">W24</td><td>2</td><td>4 300</td><td>4 110</td><td class="brak-v">4,4</td></tr>
+                    <tr><td class="l">W26</td><td>3</td><td>6 100</td><td>5 780</td><td class="brak-v">5,2</td></tr>
+                    <tr><td class="l">W28</td><td>2</td><td>4 380</td><td>4 210</td><td class="brak-v">3,9</td></tr>
+                  </tbody>
+                </table>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>График появится с <b>4-й недели</b> с актами. У одного фермера за сезон 10–40 партий: линия по трём точкам показывает шум как тренд.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">B2</span>
+        <div>
+          <div class="frame-name">Начало сезона — контракты есть, актов ещё нет</div>
+          <div class="frame-desc">KPI не показывают нули: прочерки + текст, который объясняет. Таблица по культурам сохраняет строки контрактов (что ждём), но качественные колонки пусты — сравнивать нечего. Ссылка ведёт на «Контракты», чтобы лист не выглядел тупиком.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Качество · начало сезона">
+        <div class="panel-static">
+          <div class="kpis">
+            <div class="kpi muted"><div class="k">Принято за сезон</div><div class="v"><span class="dash">—</span></div><div class="sub">поставок ещё не было</div></div>
+            <div class="kpi muted"><div class="k">Средний брак</div><div class="v"><span class="dash">—</span></div><div class="sub">появится после первого акта</div></div>
+            <div class="kpi muted"><div class="k">Не в зачёт</div><div class="v"><span class="dash">—</span></div><div class="sub">Огурцы — приёмка по калибру</div></div>
+            <div class="kpi muted"><div class="k">Партий с актом</div><div class="v"><span class="tnum">0</span><span class="u">шт</span></div><div class="sub">из <b>0</b> поставок</div></div>
+          </div>
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">По культурам</div><div class="card-unit">строки контрактов сезона 2027 · качество появится с первыми актами</div></div><span class="card-hint">ожидаем 3 культуры</span></div>
+              <div class="card-body">
+                <table class="ctbl">
+                  <thead><tr><th class="l">Культура</th><th>Принято, т</th><th>Брак<br/>у него</th><th>Брак у<br/>остальных</th><th>Δ</th><th>Позиция<br/>по культуре</th><th>Доля в<br/>культуре</th><th class="l" style="width:200px;padding-left:16px">Категории</th></tr></thead>
+                  <tbody>
+                    <tr><td class="l"><div class="cultcell" style="padding-left:32px"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-cucumber)"></span><span class="nm">Огурцы</span><span class="kind">калибр · план 40 т</span></div></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="peer-v">3,4%</td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="l" style="padding-left:16px"><span class="dash mono" style="font-size:11px">нет актов</span></td></tr>
+                    <tr><td class="l"><div class="cultcell" style="padding-left:32px"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span><span class="nm">Томаты</span><span class="kind">по весу · план 25 т</span></div></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="peer-v">3,6%</td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="l" style="padding-left:16px"><span class="dash mono" style="font-size:11px">нет актов</span></td></tr>
+                    <tr><td class="l"><div class="cultcell" style="padding-left:32px"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-pepper)"></span><span class="nm">Перец</span><span class="kind">по весу · план 12 т</span></div></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="peer-v">3,1%</td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td><span class="dash">—</span></td><td class="l" style="padding-left:16px"><span class="dash mono" style="font-size:11px">нет актов</span></td></tr>
+                  </tbody>
+                </table>
+                <div class="rowmsg" style="margin-top:16px"><b>Сезон только начался.</b> Контракты на 77 т подписаны, приёмок ещё не было — качество считать не из чего. «Брак у остальных» показан как ориентир по культуре: с ним будет сравниваться первый же акт. Контрактные строки — на вкладке <a href="#">«Контракты»</a>.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ C -->
+  <section class="group">
+    <div class="group-label"><span class="gl-txt">C · «Аналитика» — краевые состояния</span><span class="gl-line"></span></div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C1</span>
+        <div>
+          <div class="frame-name">Фермер без контрактов — прогноза нет, но лист не сломан</div>
+          <div class="frame-desc">Без контрактных строк «Осталось ~N машин» и «Выполнение» невозможны в принципе — не нули, а объяснение. Остаётся то, что считается от фактов: принято, темп, ритм, доля. Пустота объяснена и предлагает выход (завести контракт).</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Аналитика · нет контрактов">
+        <div class="panel-static">
+          <div class="pbar">
+            <div class="pseg"><button class="on">Сезон</button><button>Месяц</button><button>Неделя</button><button>Период</button></div>
+            <div class="spacer"></div><span class="url">?tab=analytics&amp;period=season</span><span class="plabel">Сезон 2026</span>
+          </div>
+          <div class="kpis five">
+            <div class="kpi"><div class="k">Принято за период</div><div class="v"><span class="tnum">6,2</span><span class="u">т</span></div><div class="sub">4 рейса · 5 позиций</div></div>
+            <div class="kpi"><div class="k">Темп</div><div class="v"><span class="tnum">1,6</span><span class="u">т/нед</span></div><div class="sub">за 4 недели с поставками</div></div>
+            <div class="kpi muted"><div class="k">Выполнение</div><div class="v"><span class="dash">—</span></div><div class="sub">нет контрактных строк</div></div>
+            <div class="kpi muted"><div class="k">Осталось ~машин</div><div class="v"><span class="dash">—</span></div><div class="sub">нечего вычитать: плана нет</div></div>
+            <div class="kpi"><div class="k">Ср. вес рейса</div><div class="v sm"><span class="dash">—</span><span class="u">/</span><span class="tnum">1,6</span><span class="u">т</span></div><div class="sub">нормы нет / факт</div></div>
+          </div>
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Осталось ~N машин</div><div class="card-unit">требует контрактных строк</div></div></div>
+              <div class="card-body">
+                <div class="empty">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+                  <div class="t">Контрактов на сезон нет</div>
+                  <div class="d">Прогноз считается как «объём строки − принято»: без плана вычитать нечего. Фермер возит вне контракта — это видно по «Принято» и «Ритму». Чтобы появился прогноз, добавьте строку на вкладке <a href="#">«Контракты»</a>.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Ритм поставок</div><div class="card-unit">считается от фактов — работает и без контрактов</div></div></div>
+              <div class="card-body">
+                <div class="rhythm">
+                  <div class="rh"><div class="k">Последняя поставка</div><div class="v"><span class="tnum">17</span><span class="u">дней назад</span></div><div class="sub">06.08 · акт <span class="mono">А-1127</span></div></div>
+                  <div class="rh"><div class="k">Типичный интервал</div><div class="v"><span class="tnum">6</span><span class="u">дней</span></div><div class="sub">медиана между рейсами</div></div>
+                  <div class="rh"><div class="k">Машин за период</div><div class="v"><span class="tnum">4</span><span class="u">рейса</span></div><div class="sub">0,4 рейса в неделю</div></div>
+                </div>
+                <div class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>17 дней при типичном интервале 6 — <b>пропал</b>. Именно этот разрыв и есть ответ вкладки; без «Ритма» его нигде не видно.</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Доля фермера</div><div class="card-unit">% принятого</div></div></div>
+              <div class="card-body">
+                <div class="shares">
+                  <div class="shrow"><span class="nm"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:var(--cult-tomato)"></span>Томаты</span><span class="trk"><span class="fl" style="width:4%;background:var(--cult-tomato)"></span></span><span class="pc">4% <span class="sm">/ 9 пост.</span></span></div>
+                  <div class="shrow" style="margin-top:6px;padding-top:12px;border-top:1px solid var(--hairline)"><span class="nm" style="color:var(--ink);font-weight:500">Весь сезон</span><span class="trk"><span class="fl" style="width:2%;background:var(--graf-1)"></span></span><span class="pc">2% <span class="sm">/ 6,2 из 342 т</span></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="frame">
+      <div class="frame-cap">
+        <span class="frame-num">C2</span>
+        <div>
+          <div class="frame-name">Период без поставок — явная строка вместо нулей</div>
+          <div class="frame-desc">Как на «Расчётах»: выбранная неделя пустая — не «0,0 т» в пяти плитках, а одна честная строка и подсказка о ближайшей неделе с данными. Сезонные метрики (выполнение, осталось машин) остаются видны — они не зависят от периода, и это подписано.</div>
+        </div>
+      </div>
+      <div class="stage" data-screen-label="Аналитика · период без поставок">
+        <div class="panel-static">
+          <div class="pbar">
+            <div class="pseg"><button>Сезон</button><button>Месяц</button><button class="on">Неделя</button><button>Период</button></div>
+            <div class="spacer"></div>
+            <span class="url">?tab=analytics&amp;period=week&amp;from=2026-08-10</span>
+            <button class="nav" aria-label="Предыдущая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="plabel">10–16.08.2026 · W33</span>
+            <button class="nav" aria-label="Следующая неделя"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
+          <div class="rowmsg" style="margin-bottom:22px"><b>За эту неделю поставок не было.</b> Ближайшая неделя с приёмкой — <a href="#">03–09.08 (3 рейса, 7,4 т)</a>. Метрики периода не показаны, чтобы нули не читались как провал темпа.</div>
+          <div class="kpis five">
+            <div class="kpi muted"><div class="k">Принято за период</div><div class="v"><span class="dash">—</span></div><div class="sub">0 рейсов</div></div>
+            <div class="kpi muted"><div class="k">Темп</div><div class="v"><span class="dash">—</span></div><div class="sub">нет базы за неделю</div></div>
+            <div class="kpi"><div class="k">Выполнение</div><div class="v"><span class="tnum">71</span><span class="u">%</span></div><div class="sub">сезон целиком · не зависит от периода</div></div>
+            <div class="kpi"><div class="k">Осталось ~машин</div><div class="v"><span class="tnum">9</span><span class="u">маш.</span></div><div class="sub">сезон целиком · не зависит от периода</div></div>
+            <div class="kpi"><div class="k">Ср. вес рейса</div><div class="v sm"><span class="tnum">3,2</span><span class="u">/</span><span class="tnum">2,8</span><span class="u">т</span></div><div class="sub">факт — по сезону</div></div>
+          </div>
+          <div class="cards wide">
+            <div class="card">
+              <div class="card-head"><div class="ch-l"><div class="card-title">Динамика приёмки по неделям</div><div class="card-unit">период — одна пустая неделя</div></div></div>
+              <div class="card-body">
+                <div class="empty">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+                  <div class="t">Внутри одной недели графика нет</div>
+                  <div class="d">Динамика строится по неделям — в недельном периоде это одна точка. Переключитесь на <b>Месяц</b> или <b>Сезон</b>, чтобы увидеть линию.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <section class="decisions">
+    <h2 class="dec-title">Решения / вопросы</h2>
+    <p class="dec-sub">Зафиксировано при сборке v1 — на ревью подтвердить или развернуть.</p>
+
+    <div class="dec"><div class="q">Граница между вкладками</div><div class="a"><span class="tag">решено</span>«Качество» — <b>только сезон</b>, без переключателя периода: качество за неделю — это одна-две партии, шум. «Аналитика» — с периодом (<span class="mono">SettlementPeriodBar</span>, состояние в URL). Сезонные метрики на «Аналитике» подписаны как не зависящие от периода, чтобы «Выполнение 71%» не читалось как результат выбранной недели.</div></div>
+
+    <div class="dec"><div class="q">Позиция и Δ вместо рейтинга</div><div class="a"><span class="tag">решено</span>Позиция — только при <b>M ≥ 3</b>; ниже — прочерк с подсказкой «мало поставщиков для сравнения». Δ — со средним по <b>остальным</b> поставщикам (сам фермер исключён), знак важнее величины, без алярм-красного: «хуже» — приглушённый янтарь, «лучше» — приглушённый зелёный.</div></div>
+
+    <div class="dec"><div class="q">Деградация графиков</div><div class="a"><span class="tag">решено</span>Порог — <b>4 недели с актами</b>. Ниже порога вместо линии таблица недель с подписью «для графика мало точек». Одинаково на обеих вкладках.</div></div>
+
+    <div class="dec"><div class="q">Что НЕ дублируется</div><div class="a"><span class="tag">решено</span>Денег на «Качестве» нет (BR-33), выполнение по контрактам — цифрой на «Аналитике», но детализация остаётся на «Контрактах»; раскрытие партий на «Качестве» показывает только веса/проценты/категории, без статусов и логистики — полный список на «Отгрузках».</div></div>
+
+    <div class="dec"><div class="q">1 · Достаточно ли Δ и позиции для разговора?</div><div class="a"><span class="tag open">вопрос</span>Сейчас «худшие партии» видны только внутри раскрытой культуры (подсвечены тоном). Альтернатива — отдельный блок <b>«5 худших партий сезона»</b> поперёк культур: короче для разговора, но добавляет ещё один список к тем, что уже есть на «Отгрузках». Нужен?</div></div>
+
+    <div class="dec"><div class="q">2 · «Ритм поставок» — польза или метрика ради метрики?</div><div class="a"><span class="tag open">вопрос</span>Оставлен в макете (C1 показывает, зачем: «17 дней при интервале 6» = пропал). Если это читается из «Динамики приёмки» — блок убираем, останется одна плитка «последняя поставка N дней назад».</div></div>
+
+    <div class="dec"><div class="q">3 · Нужен ли период на «Качестве»?</div><div class="a"><span class="tag open">вопрос</span>Предложено сезонное. Если запрос «как он вёл себя в августе» реален — период добавляется тем же компонентом, но тогда нужен порог: при &lt; 5 партий в периоде показывать таблицу партий, а не проценты и Δ (иначе бенчмарк сравнивает шум с сезонным средним).</div></div>
+
+    <div class="dec"><div class="q">4 · «Не в зачёт» как KPI</div><div class="a"><span class="tag open">вопрос</span>Плитка показывается только при наличии calibre-культур (в B1 её нет). Но у смешанного фермера это Σ по одной культуре из четырёх — цифра честная, читается как общая. Оставить с подписью «только Огурцы» или перенести в строку таблицы?</div></div>
+  </section>
+
+  <p class="endnote">Считается на лету, ничего не хранится. Переиспользуются <span class="mono">computeWeightedBrak</span> · <span class="mono">computeAcceptedKg</span> / <span class="mono">computeAcceptedPercent</span> · <span class="mono">categoryShares</span> + <span class="mono">compareCalibreRanges</span> · <span class="mono">getContractExecution</span> · <span class="mono">getFarmerCard</span> · <span class="mono">TripWeightNorm</span>. Бенчмарк — разворот <span class="mono">culture-agg.ts / bySupplier</span>, второй агрегации нет. Год-к-году (этап G), печать/экспорт этих вкладок — вне среза. Числа иллюстративные.</p>
+</div>
+
+<script>
+(function(){
+  var stage=document.getElementById('stage-q');
+  if(!stage) return;
+  var tabs=stage.querySelectorAll('.tab[data-tab]'),panels=stage.querySelectorAll('.panel[data-panel]');
+  tabs.forEach(function(t){t.addEventListener('click',function(){
+    tabs.forEach(function(x){x.classList.toggle('active',x===t)});
+    panels.forEach(function(p){p.classList.toggle('show',p.dataset.panel===t.dataset.tab)});
+  })});
+
+  var lots={
+    cuc:{color:'var(--cult-cucumber)',title:'Огурцы · партии сезона',meta:'11 партий · 28,6 т принято · брак 2,6% (у остальных 3,4%)',cats:true,rows:[
+      ['18.08','А-1180','3 240','3 158','97,5','2,5','Экстра 22% · 1-й 45% · 2-й 23% · н/з 7%'],
+      ['14.08','А-1163','2 980','2 902','97,4','2,6','Экстра 19% · 1-й 46% · 2-й 25% · н/з 8%'],
+      ['11.08','А-1148','3 100','3 016','97,3','2,7','Экстра 24% · 1-й 42% · 2-й 24% · н/з 7%'],
+      ['07.08','А-1131','2 860','2 774','97,0','3,0','Экстра 17% · 1-й 44% · 2-й 27% · н/з 9%'],
+      ['03.08','А-1115','3 020','2 948','97,6','2,4','Экстра 25% · 1-й 43% · 2-й 22% · н/з 7%']
+    ],tot:'факт 15 200 кг · принято 14 798 кг · брак 2,6%'},
+    tom:{color:'var(--cult-tomato)',title:'Томаты · партии сезона',meta:'8 партий · 21,2 т принято · брак 4,1% (у остальных 3,6%)',cats:false,rows:[
+      ['19.08','А-1182','2 740','2 630','96,0','4,0','принято 2 630 · брак 110'],
+      ['15.08','А-1167','2 900','2 790','96,2','3,8','принято 2 790 · брак 110'],
+      ['10.08','А-1144','2 610','2 462','94,3','5,7','принято 2 462 · брак 148'],
+      ['05.08','А-1126','2 820','2 710','96,1','3,9','принято 2 710 · брак 110'],
+      ['31.07','А-1104','2 680','2 578','96,2','3,8','принято 2 578 · брак 102']
+    ],tot:'факт 13 750 кг · принято 13 170 кг · брак 4,1%'},
+    pep:{color:'var(--cult-pepper)',title:'Перец · партии сезона',meta:'9 партий · 9,8 т принято · брак 5,2% (у остальных 3,1%)',cats:false,rows:[
+      ['20.08','А-1184','2 420','2 302','95,1','4,9','принято 2 302 · брак 118'],
+      ['16.08','А-1171','2 180','2 090','95,9','4,1','принято 2 090 · брак 90'],
+      ['12.08','А-1150','2 640','2 402','91,0','9,0','принято 2 402 · брак 238 — перегрев, обсудить'],
+      ['09.08','А-1139','2 310','2 130','92,2','7,8','принято 2 130 · брак 180'],
+      ['04.08','А-1122','1 980','1 900','96,0','4,0','принято 1 900 · брак 80']
+    ],tot:'факт 13 580 кг · принято 12 800 кг · брак 5,2%',hi:[2,3]},
+    pat:{color:'var(--cult-squash)',title:'Патиссоны · партии сезона',meta:'3 партии · 3,8 т принято · брак 2,0% (сравнивать не с кем)',cats:false,rows:[
+      ['17.08','А-1175','1 320','1 294','98,0','2,0','принято 1 294 · брак 26'],
+      ['08.08','А-1136','1 280','1 254','98,0','2,0','принято 1 254 · брак 26'],
+      ['30.07','А-1101','1 280','1 252','97,8','2,2','принято 1 252 · брак 28']
+    ],tot:'факт 3 880 кг · принято 3 800 кг · брак 2,0%'}
+  };
+
+  function build(key){
+    var d=lots[key],tr=document.createElement('tr');
+    tr.className='lots-tr';
+    var td=document.createElement('td');
+    td.colSpan=8;td.style.padding='0';td.style.textAlign='left';
+    var rows=d.rows.map(function(r,i){
+      var hi=(d.hi||[]).indexOf(i)>-1?' class="hi"':'';
+      return '<tr'+hi+'><td class="l dt">'+r[0]+'</td><td class="act">'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td class="brak-v">'+r[5]+'</td><td class="cats">'+r[6]+'</td></tr>';
+    }).join('');
+    td.innerHTML='<div class="lots"><div class="lots-head"><span class="cchip" style="width:9px;height:9px;border-radius:3px;background:'+d.color+'"></span><span class="t">'+d.title+'</span><span class="d">'+d.meta+'</span><div class="spacer"></div><span class="card-hint">сортировка по дате ↓</span></div>'
+      +'<table class="ltbl"><thead><tr><th class="l">Дата</th><th>№ акта</th><th>Факт, кг</th><th>Принято, кг</th><th>Принято, %</th><th>Брак, %</th><th class="l" style="padding-left:14px">Категории</th></tr></thead><tbody>'+rows+'</tbody></table>'
+      +'<div class="lots-head" style="border-top:1px solid var(--hairline);border-bottom:none;background:var(--canvas-soft)"><span class="d">Показано '+d.rows.length+' из '+d.meta.split(' ')[0]+' · <a href="#">все партии на «Отгрузках»</a></span><div class="spacer"></div><span class="d">Итого: '+d.tot+'</span></div></div>';
+    tr.appendChild(td);
+    return tr;
+  }
+
+  stage.querySelectorAll('tr[data-lots]').forEach(function(row){
+    var btn=row.querySelector('.exp-btn'),open=false,extra=null;
+    function toggle(){
+      open=!open;
+      btn.classList.toggle('open',open);
+      row.classList.toggle('exp-row',open);
+      if(open){extra=build(row.dataset.lots);row.parentNode.insertBefore(extra,row.nextSibling);}
+      else if(extra){extra.remove();extra=null;}
+    }
+    row.addEventListener('click',function(e){if(e.target.closest('a'))return;toggle();});
+  });
+})();
+</script>
+</body>
+</html>

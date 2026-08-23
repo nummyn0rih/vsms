@@ -1,5 +1,9 @@
 import { Prisma } from "@/lib/generated/prisma/client";
-import { computeAcceptedKg, computeAcceptedPercent } from "@/server/acceptance/accepted";
+import {
+  computeAcceptedKg,
+  computeAcceptedPercent,
+  computeNonStandardPercent,
+} from "@/server/acceptance/accepted";
 import {
   ZERO,
   attributeAcceptedToLines,
@@ -212,8 +216,10 @@ function withSentinelLine(exec: ExecItem): ExecItem {
 
 // Σ % непринятых категорий (нестандарт + прочее «не в зачёт»). Для simple — 0:
 // там «не в зачёт» это брак, он показывается отдельным полем.
+// Формула — computeNonStandardPercent (ею же считает «не в зачёт» вкладка «Качество»);
+// здесь только распаковка ExecItem.
 function nonStandardPercentOf(exec: ExecItem): number {
-  return exec.calibres.filter((c) => !c.isAccepted).reduce((s, c) => s + c.percent, 0);
+  return computeNonStandardPercent(exec.calibres);
 }
 
 export function buildSettlementSheet(input: {

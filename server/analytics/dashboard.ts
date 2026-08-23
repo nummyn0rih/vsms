@@ -5,10 +5,19 @@ import { computeAcceptedKg, computeWeightedBrak } from "@/server/acceptance/acce
 import {
   seasonYearOf,
   isoWeek,
-  isoWeekRange,
   currentSeasonWeek,
 } from "@/server/shipments/workdays";
 import { listSeasons } from "@/server/seasons/actions";
+import { buildWeekAxis } from "@/server/analytics/week-axis";
+import { aggregateActualTripWeight } from "@/server/analytics/trip-weight";
+
+// Ось недель переехала в prisma-free ./week-axis (её зовут чистые ядра, которым нельзя
+// тянуть prisma). Ре-экспорт — чтобы существующие импорты из дашборда не меняли адрес.
+export { weekLabel, nextIsoWeek, buildWeekAxis } from "@/server/analytics/week-axis";
+
+// Средний фактический вес рейса переехал в prisma-free ./trip-weight по той же причине
+// (его зовёт ядро аналитики фермера). Ре-экспорт сохраняет адрес для scripts/trip-weight-verify.
+export { aggregateActualTripWeight, remainingTripsOf } from "@/server/analytics/trip-weight";
 
 // Дашборд сезона (/analytics). Read-only агрегатор: считает на лету, ничего не пишет.
 // Формулы принятого/выполнения/брака НЕ дублируются — reuse getContractExecution +
@@ -49,61 +58,6 @@ export type SeasonAnalytics = {
   tripsByTc: { tcName: string; veg: number; material: number }[];
   seasons: { seasonYear: number; isCurrent: boolean }[];
 };
-
-export function weekLabel(week: number): string {
-  return `W${String(week).padStart(2, "0")}`;
-}
-
-// Средний фактический вес овощного рейса за сезон (BR-14, §5). Вход — по одной записи
-// на овощную машину (arrived/accepted, уже отфильтрованную по сезону): список
-// actual_weight_kg её позиций (null = не взвешена). Позиции без факта не считаются нулём;
-// машина исключается целиком, только если факта нет ни у одной позиции. Чистая — тестируема.
-export function aggregateActualTripWeight(
-  trips: { itemActualsKg: (number | null)[] }[],
-): { avgActualTripWeightT: number | null; weighedTripsCount: number } {
-  let sumKg = 0;
-  let count = 0;
-  for (const t of trips) {
-    const weighed = t.itemActualsKg.filter((w): w is number => w != null);
-    if (weighed.length === 0) continue; // машина без перевески — исключаем
-    sumKg += weighed.reduce((s, w) => s + w, 0); // tripWeight = Σ факт позиций
-    count += 1;
-  }
-  return {
-    avgActualTripWeightT: count > 0 ? sumKg / count / KG_PER_TON : null,
-    weighedTripsCount: count,
-  };
-}
-
-// Следующая ISO-неделя (через дату — корректно на границе года).
-export function nextIsoWeek(
-  isoYear: number,
-  week: number,
-): { isoYear: number; isoWeek: number } {
-  const { start } = isoWeekRange(isoYear, week);
-  const d = new Date(start);
-  d.setUTCDate(d.getUTCDate() + 7);
-  return isoWeek(d);
-}
-
-// Сплошная ось ISO-недель min..max по набору присутствующих недель (дырки не пропускаем —
-// иначе график врёт по длительности пауз). Общая для дашборда и профиля культуры.
-export function buildWeekAxis(
-  weeks: { isoYear: number; isoWeek: number }[],
-): { isoYear: number; isoWeek: number; label: string }[] {
-  if (weeks.length === 0) return [];
-  const sorted = [...weeks].sort((a, b) => a.isoYear - b.isoYear || a.isoWeek - b.isoWeek);
-  const last = sorted[sorted.length - 1];
-  const axis: { isoYear: number; isoWeek: number; label: string }[] = [];
-  let cur = { isoYear: sorted[0].isoYear, isoWeek: sorted[0].isoWeek };
-  // защитный предел итераций (сезон ≤ ~60 недель)
-  for (let guard = 0; guard < 70; guard++) {
-    axis.push({ ...cur, label: weekLabel(cur.isoWeek) });
-    if (cur.isoYear === last.isoYear && cur.isoWeek === last.isoWeek) break;
-    cur = nextIsoWeek(cur.isoYear, cur.isoWeek);
-  }
-  return axis;
-}
 
 export async function getSeasonAnalytics({
   season,
